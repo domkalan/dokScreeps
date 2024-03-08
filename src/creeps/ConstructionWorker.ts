@@ -1,0 +1,137 @@
+import dokCreep, { dokCreepTask } from "./Base";
+
+export default class dokCreepConstructionWorker extends dokCreep {
+    private focusedOn: string | null = null;
+
+    protected CheckIfDepositEmpty(): boolean {
+        if (this.creepRef.store.energy <= 0) {
+            this.focusedOn = null;
+        }
+
+        return super.CheckIfDepositEmpty();
+    }
+
+    public DoWallRepair() {
+        const structuresBasic = this.util.FindCached<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75);
+        const structuresExtra = this.util.FindCached<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75 && ['container', 'link', 'constructedWall'].includes(i.structureType))
+
+        const structures: Array<Structure> = structuresBasic.concat(structuresExtra).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
+        
+        if (this.focusedOn !== null) {
+            const focusedConstrct = structures.find(i => i.id === this.focusedOn);
+
+            if (typeof focusedConstrct !== 'undefined') {
+                if (this.creepRef.repair(focusedConstrct) === ERR_NOT_IN_RANGE) {
+                    this.creepRef.moveTo(focusedConstrct);
+                    
+                }
+
+                this.CheckIfDepositEmpty()
+
+                return;
+            }
+        }
+
+        if (structures.length === 0) {
+            super.DoBasicDeposit();
+
+            return;
+        }
+
+        if (this.creepRef.repair(structures[0]) === ERR_NOT_IN_RANGE) {
+            this.creepRef.moveTo(structures[0]);
+        }
+
+        this.creepRef.say(`🏰`, false);
+
+        this.focusedOn = structures[0].id;
+
+        this.CheckIfDepositEmpty();
+    }
+
+    public DoConstructionDeposit() {
+        const constructions = this.util.FindCached<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES);
+
+        if (this.focusedOn !== null) {
+            const focusedConstrct = constructions.find(i => i.id === this.focusedOn);
+
+            if (typeof focusedConstrct !== 'undefined') {
+                if (this.creepRef.build(focusedConstrct) === ERR_NOT_IN_RANGE) {
+                    this.creepRef.moveTo(focusedConstrct);
+                    
+                }
+
+                this.CheckIfDepositEmpty();
+
+                return;
+            }
+        }
+
+        if (constructions.length === 0) {
+            this.DoWallRepair();
+
+            return;
+        }
+
+        if (this.creepRef.build(constructions[0]) === ERR_NOT_IN_RANGE) {
+            this.creepRef.moveTo(constructions[0]);
+        }
+
+        this.focusedOn = constructions[0].id;
+
+        this.creepRef.say(`🔨`, false);
+
+        this.CheckIfDepositEmpty();
+    }
+
+    public RepairAboutToFail() {
+        const structuresBasic = this.util.FindCached<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.10);
+        const structuresExtra = this.util.FindCached<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.10 && ['container', 'link', 'constructedWall'].includes(i.structureType))
+
+        const structures: Array<Structure> = structuresBasic.concat(structuresExtra).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
+
+        if (this.focusedOn !== null) {
+            const focusedConstrct = structures.find(i => i.id === this.focusedOn);
+
+            if (typeof focusedConstrct !== 'undefined') {
+                if (this.creepRef.repair(focusedConstrct) === ERR_NOT_IN_RANGE) {
+                    this.creepRef.moveTo(focusedConstrct);
+                    
+                }
+
+                this.CheckIfDepositEmpty()
+
+                return;
+            }
+        }
+
+        if (structures.length === 0) {
+            this.DoConstructionDeposit();
+
+            return;
+        }
+
+        if (this.creepRef.repair(structures[0]) === ERR_NOT_IN_RANGE) {
+            this.creepRef.moveTo(structures[0]);
+        }
+
+        this.focusedOn = structures[0].id;
+
+        this.creepRef.say(`❤️‍🩹`, false);
+
+        this.CheckIfDepositEmpty();
+    }
+
+    public DoCreepWork(): void {
+        switch(this.memory.task) {
+            case dokCreepTask.Gather:
+                super.DoBasicGather();
+
+                break;
+            case dokCreepTask.Depost:
+                this.RepairAboutToFail();  
+
+                break;
+        }
+    }
+}
