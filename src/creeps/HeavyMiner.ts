@@ -9,6 +9,8 @@ export default class dokCreepHeavyMiner extends dokCreep {
     private noSourceTime: number = 0;
     private deadLocksCleared: boolean = false;
 
+    public canTakeFrom: boolean = true;
+
     public ShouldTurnOffContainerBuilding() {
         if (this.creepRef.store.energy <= 0) {
             this.buildingContainer = false;
@@ -19,6 +21,10 @@ export default class dokCreepHeavyMiner extends dokCreep {
         const energySources = this.util.FindCached<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.util.GetLocks({ id: `heavyminer:${i.id}` }).filter(i => i.creep !== this.creepRef.id).length === 0).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
 
         if (energySources.length > 0) {
+            // lock for general public
+            this.util.PlaceLock(energySources[0], this);
+
+            // lock for other heavy miners
             this.util.PlaceLock({ id: `heavyminer:${energySources[0].id}` }, this);
 
             if (this.creepRef.harvest(energySources[0]) === ERR_NOT_IN_RANGE) {
@@ -81,17 +87,18 @@ export default class dokCreepHeavyMiner extends dokCreep {
         this.buildingContainer = false;
     }
 
-    public PlaceOverflowContainer() {
-        const nearbyLinks = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'link');
-        const nearbyContainersBuilt = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'container');
-
-        if (nearbyLinks.length > 0) {
-            if (this.creepRef.transfer(nearbyLinks[0], 'energy') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(nearbyLinks[0])
-            }
-
-            return;
+    public PlaceIntoLink(nearbyLink : StructureLink) {
+        if (this.creepRef.transfer(nearbyLink, 'energy') === ERR_NOT_IN_RANGE) {
+            this.moveToObject(nearbyLink)
         }
+
+        this.ShouldTurnOffContainerBuilding();
+
+        return;
+    }
+
+    public PlaceOverflowContainer() {
+        const nearbyContainersBuilt = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'container');
 
         if (nearbyContainersBuilt.length > 0) {
             if (this.creepRef.transfer(nearbyContainersBuilt[0], 'energy') === ERR_NOT_IN_RANGE) {
@@ -103,7 +110,7 @@ export default class dokCreepHeavyMiner extends dokCreep {
             return;
         }
 
-        const nearbyContainerConstructions = this.creepRef.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 4).filter(i => i.structureType === 'container');
+        const nearbyContainerConstructions = this.creepRef.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 4).filter(i => i.structureType === 'container' || i.structureType === 'link');
 
         if (nearbyContainerConstructions.length > 0) {
             if (this.creepRef.build(nearbyContainerConstructions[0]) === ERR_NOT_IN_RANGE) {
@@ -158,16 +165,34 @@ export default class dokCreepHeavyMiner extends dokCreep {
         if (this.creepRef.store.energy < this.creepRef.store.getCapacity('energy')) {
             this.DoMinerGather();
         } else {
+            // check if we have a link nearby, do an instant deposit if so
+            const nearbyLinks = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'link' && i.store.getFreeCapacity('energy') > 0) as StructureLink[];
+
+            if (nearbyLinks.length > 0) {
+                this.PlaceIntoLink(nearbyLinks[0]);
+
+                this.creepRef.say(`🔗`, false);
+
+                // tell other creeps you cant take from me
+                this.canTakeFrom = false;
+
+                return;
+            }
+
+            // if no links are nearby, allow some time for miners to come access me
             this.pickupIdleTime++;
             this.lastMessage++;
+
             if (this.lastMessage >= 10) {
                 this.lastMessage = 0;
 
                 this.creepRef.say(`PICKUP! ${this.pickupIdleTime}`, false);
+            }
 
-                if (this.pickupIdleTime > 50) {
-                    this.buildingContainer = true;
-                }
+            if (this.pickupIdleTime >= 30) {
+                this.buildingContainer = true;
+
+                this.PlaceOverflowContainer();
             }
         }
     }

@@ -4,6 +4,9 @@ import dokCreepConstructionWorker from "./creeps/ConstructionWorker";
 import dokCreepControllerSlave from "./creeps/ControllerSlave";
 import dokCreepDefender from "./creeps/Defender";
 import dokCreepHeavyMiner from "./creeps/HeavyMiner";
+import dokCreepLinkStorageSlave from "./creeps/LinkStorageSlave";
+import dokCreepRemoteConstructionWorker from "./creeps/RemoteConstructionWorker";
+import dokCreepRemoteMiner from "./creeps/RemoteMiner";
 import dokCreepRoadBuilder from "./creeps/RoadBuilder";
 import dokCreepRoomReserver from "./creeps/RoomReserver";
 import dokCreepScout from "./creeps/Scout";
@@ -185,6 +188,18 @@ export default class dokUtil {
                 break;
             case dokCreepJob.RoomDefender:
                 creepInstance = new dokCreepDefender(this, creep);
+
+                break;
+            case dokCreepJob.LinkStorageSlave:
+                creepInstance = new dokCreepLinkStorageSlave(this, creep);
+
+                break;
+            case dokCreepJob.RemoteConstructionWorker:
+                creepInstance = new dokCreepRemoteConstructionWorker(this, creep);
+
+                break;
+            case dokCreepJob.RemoteMiner:
+                creepInstance = new dokCreepRemoteMiner(this, creep);
 
                 break;
             default:
@@ -434,193 +449,6 @@ export default class dokUtil {
         this.RemoveDeadLocks();
     }
 
-    public DisplayWorldOverlay() {
-        if (!this.memory.worldOverlay)
-            return;
-
-        console.log('[dokUtil] Showing world overlay! This is expensive!')
-
-        for(const room of this.rooms) {
-            const scoutPlans = room.GetScoutPlan();
-
-            console.log(`[dokUtil] ${room.GetName()} has ${scoutPlans.length} scout plans`)
-
-            for(const plan of scoutPlans) {
-                if (plan.hostile) {
-                    Game.map.visual.text(`⚔️`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                    continue;
-                }
-
-                if (plan.myRoom) {
-                    Game.map.visual.text(`👑`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                    continue;
-                }
-
-                if (plan.inaccessible) {
-                    Game.map.visual.text(`❔`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                    continue;
-                }
-
-                if (plan.lastVisited === 0) {
-                    Game.map.visual.text(`🕵️`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                    continue;
-                }
-
-                if (!plan.roomOwnable) {
-                    Game.map.visual.text(`🏃‍♂️`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                    continue;
-                }
-
-                if (plan.roomOwner !== null) {
-                    new RoomVisual(plan.room).text(`☢️ (t: ${Math.floor(plan.threatRating || 0)}, b: ${Math.floor(plan.baseRating || 0)})`, 6, 6, { align: 'left' });
-                    Game.map.visual.text(`☢️`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                    continue;
-                }
-
-                new RoomVisual(plan.room).text(`💤`, 25, 30, { align: 'center' });
-                Game.map.visual.text(`💤`, new RoomPosition(25, 25, plan.room), { align: 'center' });
-
-                new RoomVisual(plan.room).text(`p: ${Math.floor(plan.profitabilityRating || 0)}`, 25, 25, { align: 'center' });
-                Game.map.visual.text(`p: ${Math.floor(plan.profitabilityRating || 0)}`, new RoomPosition(25, 10, plan.room), { align: 'center', fontSize: 4 });
-            }
-        }
-    }
-
-    public GetAllScoutPlans() {
-        const plans = this.GetAllScoutPlansWithRoom();
-
-        return plans.map(i => i.plan);
-    }
-
-    public GetAllScoutPlansWithRoom() {
-        if (typeof this.cachedScoutPlans !== 'undefined' && this.GetTickCount() - this.cachedScoutPlansAt <= 10) {
-            return this.cachedScoutPlans;
-        }
-
-        const plans : Array<{ plan: dokRoomScoutPlan, room: string }> = [];
-
-        for(const room of this.rooms) {
-            const scoutPlans = room.GetScoutPlan();
-
-            for(const plan of scoutPlans) {
-                plans.push({ plan, room: room.GetName() });
-            }
-        }
-
-        this.cachedScoutPlans = plans;
-
-        return plans;
-    }
-
-    public ShouldExpandIntoNewRoom() {
-        if (!this.RunEveryTicks(200))
-            return;
-
-        if (this.rooms.length < Game.gcl.level) {
-            if (typeof this.memory.nextSelectedRoom === 'undefined') {
-                this.memory.nextSelectedRoom = null;
-            }
-
-            if (this.memory.nextSelectedRoom !== null)
-                return;
-
-            const scoutPlans = this.GetAllScoutPlansWithRoom();
-
-            const unfinishedPlans = scoutPlans.filter(i => i.plan.inaccessible === false && i.plan.lastVisited === 0);
-
-            if (unfinishedPlans.length > 0) {
-                console.log(`[dokUtil][ExpandRoom] could not expand, ${unfinishedPlans.length} unfinished plans`)
-
-                return;
-            }
-            
-            const bestScoutPlans = scoutPlans.filter((i) => {
-                if (i.plan.hostile) {
-                    return false;
-                }
-                    
-                    
-                if (i.plan.roomOwner !== null) {
-                    return false;
-                }
-
-                if (i.plan.roomOwnable === false) {
-                    return false;
-                }
-
-                if (i.plan.profitabilityRating === null) {
-                    return false;
-                }
-
-                if (i.plan.myRoom) {
-                    return false;
-                }
-
-                console.log(`${i.plan.room} passed with p:${i.plan.profitabilityRating}`)
-
-                return true;
-            });
-
-            let bestProfitRoomValue = Infinity; 
-            let bestProfitRoom : { plan: dokRoomScoutPlan, room: string } | null = null;
-
-
-            for(const room of bestScoutPlans) {
-                if (room.plan.profitabilityRating === null)
-                    continue;
-
-                if (room.plan.profitabilityRating < bestProfitRoomValue) {
-                    bestProfitRoomValue = room.plan.profitabilityRating;
-                    bestProfitRoom = room;
-                }
-            }
-
-            if (bestProfitRoom === null)
-                return;
-
-            console.log(`[dokUtil][ExpandRoom] Selected to expand into room ${bestProfitRoom.plan.room}, p:${bestProfitRoom.plan.profitabilityRating}`);
-            // TODO: send notification 
-
-            const roomObject = this.GetDokRoom(bestProfitRoom.room);
-
-            if (!roomObject)
-                return;
-
-            roomObject.ColonizeRoom(bestProfitRoom.plan.room);
-
-            this.memory.nextSelectedRoom = bestProfitRoom.plan.room;
-        }
-    }
-
-    public ClearExpandGoal() {
-        this.memory.nextSelectedRoom = undefined;
-    }
-
-    public GetNextSpawnerName(): string | undefined {
-        const takenNames: Array<string> = [];
-
-        for(const room of this.GetRooms()) {
-            const spanwers = this.FindCached<StructureSpawn>(room.GetRef(), FIND_STRUCTURES).filter(i => i.structureType === 'spawn');
-
-            for(const spawner of spanwers) {
-                takenNames.push(spawner.name);
-            }
-        }
-
-        const goodNames = this.spawnerNames.filter(i => !takenNames.includes(i));
-        
-        if (goodNames.length === 0)
-            return undefined;
-
-        return goodNames[0];
-    }
-
     public GetFlagArray() {
         const flagArray : Array<Flag> = [];
 
@@ -633,30 +461,16 @@ export default class dokUtil {
         return flagArray;
     }
 
-    public SendDailyReport() {
-        const timeNow = Math.floor(Date.now() / 1000);
-        let lastReportSent = 0;
+    public TickConditionalFlags() {
+        if (!this.RunEveryTicks(15))
+            return;
 
-        if (typeof this.memory.lastReportSent !== 'undefined' && this.memory.lastReportSent !== null) {
-            lastReportSent = this.memory.lastReportSent;
-        }
+        const flags = this.GetFlagArray();
 
-        if (timeNow - lastReportSent >= 21600) {
-            console.log(`[dokUtil] sending report`)
-
-            this.memory.lastReportSent = timeNow;
-
-            const scoutPlans = this.GetAllScoutPlans();
-            const nextBestScoutPlan = scoutPlans.filter(i => i.profitabilityRating !== null && i.profitabilityRating > 0).sort((a: any, b: any) => a.profitabilityRating - b.profitabilityRating)
-
-            Game.notify(
-`Report Auto-gen:\n
-GCL: ${Game.gcl.level} (${Math.floor(Game.gcl.progress * 10) / 10}/${Math.floor(Game.gcl.progressTotal * 10) / 10})
-Rooms: ${this.rooms.map(i => `${i.GetName()} (${i.GetRef().controller?.level} ${Math.floor((i.GetRef().controller?.progress || 0)/(i.GetRef().controller?.progressTotal || 0))})`).join(', ')}
-Scout Plans: ${scoutPlans.length}
-Scout Goal: ${nextBestScoutPlan[0].room || 'N/A'} (${(Math.floor(nextBestScoutPlan[0].profitabilityRating || 0) * 10) / 10}%)
-Creeps: ${this.creeps.length}`
-            );
+        if (typeof flags.find(i => i.name.startsWith('Mines Remove')) !== 'undefined') {
+            for(const flag of flags.filter(i => i.name.includes('Mine'))) {
+                flag.remove();
+            }
         }
     }
 
@@ -679,17 +493,11 @@ Creeps: ${this.creeps.length}`
         // Clean dead memory
         this.CleanDeadMemory();
 
-        // Determine if we should expand into more rooms
-        this.ShouldExpandIntoNewRoom();
+        // Tick conditional flags
+        this.TickConditionalFlags();
 
         // commit memory
         this.SaveMemory();
-
-        // show overlay on world
-        this.DisplayWorldOverlay();
-
-        // Send daily report
-        this.SendDailyReport();
     }
 
     // Static methods

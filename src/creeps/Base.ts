@@ -20,7 +20,13 @@ export enum dokCreepJob {
 
     RoomDefender= 8,
 
-    RoomAttacker = 9
+    RoomAttacker = 9,
+
+    LinkStorageSlave = 10,
+
+    RemoteConstructionWorker = 11,
+
+    RemoteMiner = 12
 }
 
 export enum dokCreepTask {
@@ -132,13 +138,25 @@ export default class dokCreep {
             return;
 
         const droppedResources = this.util.FindCached<Resource>(this.creepRef.room, FIND_DROPPED_RESOURCES).filter(i => i.resourceType === 'energy');
-        const storedResources = this.util.FindCached<StructureContainer>(this.creepRef.room, FIND_STRUCTURES).filter(i => ['container', 'link'].includes(i.structureType) && this.IsTargetedGather(i.id) && i.store.energy >= 50).sort((a, b) => a.store.energy - b.store.energy);
-        const heavyMiners = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && this.memory.homeRoom === i.memory.homeRoom && this.IsTargetedGather(i.GetId()) && this.util.GetLocks({ id: i.GetId() }).filter(i => i.creep !== this.creepRef.id).length === 0 && i.creepRef.store.energy >= 200).sort((a, b) => dokUtil.getDistance(a.creepRef.pos, this.creepRef.pos) - dokUtil.getDistance(b.creepRef.pos, this.creepRef.pos));
+        const storedResources = this.util.FindCached<StructureContainer>(this.creepRef.room, FIND_STRUCTURES).filter(i => ['container', 'storage'].includes(i.structureType) && this.IsTargetedGather(i.id) && i.store.energy >= 50 && this.util.GetLocks({ id: i.id }).filter(i => i.creep !== this.creepRef.id).length < 2).sort((a, b) => a.store.energy - b.store.energy);
+        const heavyMiners = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && this.memory.homeRoom === i.memory.homeRoom && (i as dokCreepHeavyMiner).canTakeFrom && this.IsTargetedGather(i.GetId()) && this.util.GetLocks({ id: i.GetId() }).filter(i => i.creep !== this.creepRef.id).length === 0 && i.creepRef.store.energy >= 200).sort((a, b) => dokUtil.getDistance(a.creepRef.pos, this.creepRef.pos) - dokUtil.getDistance(b.creepRef.pos, this.creepRef.pos));
         const energySources = this.util.FindCached<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.IsTargetedGather(i.id) && this.ComputeLocksOnSource(i)).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
 
         if (droppedResources.length > 0) {
             if (this.creepRef.pickup(droppedResources[0]) === ERR_NOT_IN_RANGE) {
                 this.moveToObject(droppedResources[0])
+            }
+
+            return;
+        }
+
+        if (storedResources.length > 0) {
+            this.targetGather = storedResources[0].id;
+
+            this.util.PlaceLock({ id: storedResources[0].id }, this);
+
+            if (this.creepRef.withdraw(storedResources[0], 'energy') === ERR_NOT_IN_RANGE) {
+                this.moveToObject(storedResources[0])
             }
 
             return;
@@ -162,16 +180,6 @@ export default class dokCreep {
             return;
         }
 
-        if (storedResources.length > 0) {
-            this.targetGather = storedResources[0].id;
-
-            if (this.creepRef.withdraw(storedResources[0], 'energy') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(storedResources[0])
-            }
-
-            return;
-        }
-
         if (energySources.length > 0) {
             this.targetGather = energySources[0].id;
             
@@ -189,6 +197,8 @@ export default class dokCreep {
 
             this.creepRef.say('Target?', false);
         }
+
+        this.creepRef.say(`⚡🤷`, false);
     }
 
     protected CheckIfDepositEmpty() {
