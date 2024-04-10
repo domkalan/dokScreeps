@@ -1,5 +1,5 @@
 import dokUtil from "../dokUtil";
-import dokCreep, { dokCreepTask } from "./Base";
+import dokCreep from "./Base";
 
 export default class dokCreepHeavyMiner extends dokCreep {
     private lastMessage: number = 0;
@@ -18,7 +18,7 @@ export default class dokCreepHeavyMiner extends dokCreep {
     }
 
     public DoMinerGather() {
-        const energySources = this.util.FindCached<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.util.GetLocks({ id: `heavyminer:${i.id}` }).filter(i => i.creep !== this.creepRef.id).length === 0).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
+        const energySources = this.util.FindResource<Source>(this.creepRef.room, FIND_SOURCES).filter(i => this.util.GetLocksWithoutMe({ id: `heavyminer:${i.id}` }, this).length === 0).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
 
         if (energySources.length > 0) {
             // lock for general public
@@ -88,8 +88,16 @@ export default class dokCreepHeavyMiner extends dokCreep {
     }
 
     public PlaceIntoLink(nearbyLink : StructureLink) {
-        if (this.creepRef.transfer(nearbyLink, 'energy') === ERR_NOT_IN_RANGE) {
+        const linkTransferResult = this.creepRef.transfer(nearbyLink, 'energy');
+
+        if (linkTransferResult === ERR_NOT_IN_RANGE) {
             this.moveToObject(nearbyLink)
+        } else if (linkTransferResult === OK) {
+            const currRoom = this.util.GetDokRoom(this.creepRef.room.name);
+
+            if (typeof currRoom !== 'undefined') {
+                currRoom.TickOnLink(nearbyLink);
+            }
         }
 
         this.ShouldTurnOffContainerBuilding();

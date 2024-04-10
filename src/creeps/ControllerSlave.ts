@@ -6,7 +6,16 @@ export default class dokCreepControllerSlave extends dokCreep {
         if (this.CheckIfDepositEmpty())
             return;
 
-        const controllers = this.util.FindCached<StructureController>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'controller');
+        const hostilesHere = this.util.FindResource<Creep>(this.creepRef.room, FIND_CREEPS).filter(i => i.owner.username !== this.creepRef.owner.username);
+
+        // if have hostiles, fallback to being base creep
+        if (hostilesHere.length > 0) {
+            this.DoBasicDeposit();
+
+            return;
+        }
+
+        const controllers = this.util.FindResource<StructureController>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'controller');
 
         if (controllers.length > 0) {
             if (this.creepRef.pos.getRangeTo(controllers[0]) > 2) {

@@ -1,8 +1,28 @@
 import dokCreep, { dokCreepTask } from "./Base";
 
 export default class dokCreepRemoteMiner extends dokCreep {
-    private focusedOn: string | null = null;
     private focusedFlag: Flag | null = null;
+
+    protected RecycleCreep() {
+        const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
+
+        if (typeof homeRoom === 'undefined')
+            return;
+
+        const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES).filter(i => i.structureType === 'spawn') as StructureSpawn[];
+
+        if (homeStructures.length === 0) {
+            this.creepRef.say('NO SPAWN!')
+
+            return;
+        }
+
+        if (homeStructures[0].recycleCreep(this.creepRef) === ERR_NOT_IN_RANGE) {
+            this.moveToObject(homeStructures[0]);
+        }
+
+        return;
+    }
 
     protected MineSource(source : Source) {
         if (this.creepRef.harvest(source) === ERR_NOT_IN_RANGE) {
@@ -14,28 +34,16 @@ export default class dokCreepRemoteMiner extends dokCreep {
         }
     }
 
-    protected MineHere() {
-        const sources = this.creepRef.room.find(FIND_SOURCES);
+    protected MineHere(flag : Flag) {
+        const source = flag.pos.findClosestByRange(FIND_SOURCES);
 
-        if (sources.length < 0) {
+        if (source === null) {
             this.creepRef.say(`No sources!`);
 
             return;
         }
 
-        if (this.focusedOn !== null) {
-            const focusedSource = sources.find(i => i.id === this.focusedOn);
-
-            if (typeof focusedSource !== 'undefined') {
-                this.MineSource(focusedSource);
-
-                return;
-            }
-        }
-
-        this.focusedOn = sources[0].id;
-
-        this.MineSource(sources[0]);
+        this.MineSource(source);
     }
 
     protected GoHome() {
@@ -55,11 +63,11 @@ export default class dokCreepRemoteMiner extends dokCreep {
             return;
         }
 
-        this.MineHere();
+        this.MineHere(flag);
     }   
 
     protected GetLockCountForFlag(i: Flag) : number { 
-        const locksPlaced = this.util.GetLocks({ id: `flag:${i.name}` }).filter(i => i.creep !== this.creepRef.id);
+        const locksPlaced = this.util.GetLocksWithoutMe({ id: `flag:${i.name}` }, this);
 
         return locksPlaced.length;
     };
@@ -80,28 +88,7 @@ export default class dokCreepRemoteMiner extends dokCreep {
         }
 
         if (constructFlags.length === 0) {
-            if (this.memory.homeRoom !== this.creepRef.room.name) {
-                this.GoHome();
-
-                return;
-            }
-
-            const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
-
-            if (typeof homeRoom === 'undefined')
-                return;
-
-            const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES).filter(i => i.structureType === 'spawn') as StructureSpawn[];
-
-            if (homeStructures.length === 0) {
-                this.creepRef.say('NO SPAWN!')
-
-                return;
-            }
-
-            if (homeStructures[0].recycleCreep(this.creepRef) === ERR_NOT_IN_RANGE) {
-                this.moveToObject(homeStructures[0]);
-            }
+            this.RecycleCreep();
 
             return;
         }
@@ -125,17 +112,39 @@ export default class dokCreepRemoteMiner extends dokCreep {
         if (typeof homeRoom === 'undefined')
             return;
 
-        const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES).filter(i => i.structureType === 'storage');
+        const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES);
 
-        if (homeStructures.length === 0) {
-            this.creepRef.say('NO STORAGE!')
+        const homeStorage = homeStructures.filter(i => i.structureType === 'storage');
+
+        if (homeStorage.length > 0) {
+            if (this.creepRef.transfer(homeStorage[0], 'energy') === ERR_NOT_IN_RANGE) {
+                this.moveToObject(homeStorage[0]);
+            }
+    
+            if (this.creepRef.store.getUsedCapacity('energy') === 0) {
+                this.memory.task = dokCreepTask.Gather;
+            }
 
             return;
         }
 
-        if (this.creepRef.transfer(homeStructures[0], 'energy') === ERR_NOT_IN_RANGE) {
-            this.moveToObject(homeStructures[0]);
+        const homeContainer = homeStructures.filter(i => i.structureType === 'container');
+
+        if (homeContainer.length > 0) {
+            if (this.creepRef.transfer(homeContainer[0], 'energy') === ERR_NOT_IN_RANGE) {
+                this.moveToObject(homeContainer[0]);
+            }
+    
+            if (this.creepRef.store.getUsedCapacity('energy') === 0) {
+                this.memory.task = dokCreepTask.Gather;
+            }
+
+            return;
         }
+
+        this.creepRef.say('No storage!');
+        
+        this.creepRef.drop('energy');
 
         if (this.creepRef.store.getUsedCapacity('energy') === 0) {
             this.memory.task = dokCreepTask.Gather;

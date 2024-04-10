@@ -1,4 +1,4 @@
-import dokUtil from "../dokUtil";
+import dokUtil, { dokUtilPathing } from "../dokUtil";
 import dokCreepHeavyMiner from "./HeavyMiner";
 
 export enum dokCreepJob {
@@ -10,11 +10,17 @@ export enum dokCreepJob {
 
     ControllerSlave = 3,
 
-    Scout = 4,
+    /**
+     * @deprecated
+     */
+    Unused4 = 4,
 
     Colonizer = 5,
 
-    RoomReserver = 6,
+    /**
+     * @deprecated
+     */
+    Unused6 = 6,
 
     ConstructionWorker = 7,
 
@@ -24,9 +30,13 @@ export enum dokCreepJob {
 
     LinkStorageSlave = 10,
 
-    RemoteConstructionWorker = 11,
+    RemoteConstruction = 11,
 
-    RemoteMiner = 12
+    RemoteMiner = 12,
+
+    PowerMiner = 13,
+
+    Healer = 14
 }
 
 export enum dokCreepTask {
@@ -50,14 +60,20 @@ export default class dokCreep {
     private rclRecovery: boolean = false;
     private targetGather: string | null = null;
 
-    private myId: string;
     private myName: string;
+
+    private storedPath: dokUtilPathing | null = null;
+    private storedPathRoomSanity: string | null = null;
+
+    private atPositionFor: number = 0;
+    private atPosition: RoomPosition | null = null;
+
+    private focusedNearby: string | null = null;
 
     constructor(util: dokUtil, creep: Creep) {
         this.util = util;
         this.creepRef = creep;
 
-        this.myId = creep.id;
         this.myName = creep.name;
 
         this.memory = this.ReadMemory();
@@ -123,7 +139,7 @@ export default class dokCreep {
     }
 
     protected ComputeLocksOnSource(i: Source) : boolean { 
-        const locksPlaced = this.util.GetLocks(i).filter(i => i.creep !== this.creepRef.id);
+        const locksPlaced = this.util.GetLocksWithoutMe(i, this);
         const maximumSlots = this.util.GetSeatsForItem(this.creepRef.room, i);
 
         if (locksPlaced.length >= maximumSlots) {
@@ -136,12 +152,10 @@ export default class dokCreep {
     protected DoBasicGather() {
         if (this.CheckIfGatherFull())
             return;
-
-        const droppedResources = this.util.FindCached<Resource>(this.creepRef.room, FIND_DROPPED_RESOURCES).filter(i => i.resourceType === 'energy');
-        const storedResources = this.util.FindCached<StructureContainer>(this.creepRef.room, FIND_STRUCTURES).filter(i => ['container', 'storage'].includes(i.structureType) && this.IsTargetedGather(i.id) && i.store.energy >= 50 && this.util.GetLocks({ id: i.id }).filter(i => i.creep !== this.creepRef.id).length < 2).sort((a, b) => a.store.energy - b.store.energy);
-        const heavyMiners = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && this.memory.homeRoom === i.memory.homeRoom && (i as dokCreepHeavyMiner).canTakeFrom && this.IsTargetedGather(i.GetId()) && this.util.GetLocks({ id: i.GetId() }).filter(i => i.creep !== this.creepRef.id).length === 0 && i.creepRef.store.energy >= 200).sort((a, b) => dokUtil.getDistance(a.creepRef.pos, this.creepRef.pos) - dokUtil.getDistance(b.creepRef.pos, this.creepRef.pos));
-        const energySources = this.util.FindCached<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.IsTargetedGather(i.id) && this.ComputeLocksOnSource(i)).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
-
+        
+        // search for dropped resources first
+        const droppedResources = this.util.FindResource<Resource>(this.creepRef.room, FIND_DROPPED_RESOURCES).filter(i => i.resourceType === 'energy');
+                
         if (droppedResources.length > 0) {
             if (this.creepRef.pickup(droppedResources[0]) === ERR_NOT_IN_RANGE) {
                 this.moveToObject(droppedResources[0])
@@ -149,6 +163,27 @@ export default class dokCreep {
 
             return;
         }
+
+        // check for tombstones
+        const tombstones = this.util.FindResource<Tombstone>(this.creepRef.room, FIND_TOMBSTONES).filter(i => i.store.getUsedCapacity('energy') > 0 && this.util.GetLocksWithoutMe(i, this).length < 1);
+
+        if (tombstones.length > 0) {
+            if (this.creepRef.withdraw(tombstones[0], 'energy') === ERR_NOT_IN_RANGE) {
+                this.moveToObject(tombstones[0])
+            }
+
+            this.util.PlaceLock(tombstones[0], this);
+
+            return;
+        }
+
+        // single scan for all structures
+        const structuresHere = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES);
+
+        // check for stored energy
+        const containerResource = (structuresHere as StructureContainer[]).filter(i => i.structureType === 'container' && this.IsTargetedGather(i.id) && i.store.energy >= 50 && this.util.GetLocksWithoutMe(i, this).length < 2);
+        const storageResources = (structuresHere as StructureStorage[]).filter(i => i.structureType === 'storage' && this.IsTargetedGather(i.id) && i.store.energy > 0 && this.util.GetLocksWithoutMe(i, this).length < 5);
+        const storedResources: Array<StructureContainer | StructureStorage> = containerResource.concat((storageResources as any)).sort((a, b) => a.store.energy - b.store.energy);
 
         if (storedResources.length > 0) {
             this.targetGather = storedResources[0].id;
@@ -161,6 +196,9 @@ export default class dokCreep {
 
             return;
         }
+
+        // check for heavy miners without links
+        const heavyMiners = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && this.memory.homeRoom === i.memory.homeRoom && (i as dokCreepHeavyMiner).canTakeFrom && this.IsTargetedGather(i.GetId()) && this.util.GetLocksWithoutMe({ id: i.GetId() }, this).length === 0 && i.creepRef.store.energy >= 200).sort((a, b) => dokUtil.getDistance(a.creepRef.pos, this.creepRef.pos) - dokUtil.getDistance(b.creepRef.pos, this.creepRef.pos));
 
         if (heavyMiners.length > 0) {
             this.targetGather = heavyMiners[0].GetId();
@@ -179,6 +217,9 @@ export default class dokCreep {
 
             return;
         }
+
+        // check for energy sources
+        const energySources = this.util.FindResource<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.IsTargetedGather(i.id) && this.ComputeLocksOnSource(i)).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
 
         if (energySources.length > 0) {
             this.targetGather = energySources[0].id;
@@ -240,13 +281,11 @@ export default class dokCreep {
         if (this.CheckIfDepositEmpty())
             return;
 
-        const extensions = this.util.FindCached<StructureExtension>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'extension');
-        const towers = this.util.FindCached<StructureTower>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'tower');
-        const extensionsEmpty = extensions.filter(i => i.store.energy < i.store.getCapacity('energy'));
-        const spawns = this.util.FindCached<StructureSpawn>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'spawn');
-        const spawnsEmpty = spawns.filter(i => i.store.energy < i.store.getCapacity('energy'));
-        const controllers = this.util.FindCached<StructureController>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'controller');
-        const constructions = this.util.FindCached<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => i.structureType === 'extension' || i.structureType === 'tower');
+        // single scan for all structures
+        const structuresHere = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES);
+
+        // check on controller
+        const controllers = structuresHere.filter(i => i.structureType === 'controller') as StructureController[];
 
         // watch the controller so it dosent downgrade
         if (controllers.length > 0 && (controllers[0].ticksToDowngrade < 1200 * controllers[0].level || this.rclRecovery)) {
@@ -261,24 +300,53 @@ export default class dokCreep {
             return;
         }
 
+        // get extensions in the room
+        const extensions = structuresHere.filter(i => i.structureType === 'extension') as StructureExtension[];
+        const extensionsEmpty = extensions.filter(i => i.store.energy < i.store.getCapacity('energy') && this.util.GetLocksWithoutMe(i, this).length < 1).sort((a, b) => dokUtil.getDistance(this.creepRef.pos, a.pos) - dokUtil.getDistance(this.creepRef.pos, b.pos));
+
+        if (this.focusedNearby !== null) {
+            const emptyExtension = extensionsEmpty.find(i => i.id === this.focusedNearby);
+
+            if (typeof emptyExtension !== 'undefined') {
+                if (this.creepRef.transfer(emptyExtension, 'energy') === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(emptyExtension)
+                }
+
+                return;
+            }
+        }
+        
         if (extensionsEmpty.length > 0) {
             if (this.creepRef.transfer(extensionsEmpty[0], 'energy') === ERR_NOT_IN_RANGE) {
                 this.moveToObject(extensionsEmpty[0])
             }
 
+            this.util.PlaceLock(extensionsEmpty[0], this);
+
+            this.focusedNearby = extensionsEmpty[0].id;
+
             return;
         }
+
+        // get the spawns
+        const spawns = structuresHere.filter(i => i.structureType === 'spawn') as StructureSpawn[];
+        const spawnsEmpty = spawns.filter(i => i.store.energy < i.store.getCapacity('energy') && this.util.GetLocksWithoutMe(i, this).length < 1);
 
         if (spawnsEmpty.length > 0) {
             if (this.creepRef.transfer(spawnsEmpty[0], 'energy') === ERR_NOT_IN_RANGE) {
                 this.moveToObject(spawnsEmpty[0])
             }
 
+            this.util.PlaceLock(spawnsEmpty[0], this);
+
             return;
         }
 
+        // get the constructions
+        const constructions = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => (i.structureType === 'extension' || i.structureType === 'tower') &&  this.util.GetLocksWithoutMe(i, this).length < 1);
+
         if (constructions.length > 0) {
-            if (this.util.GetLocks(constructions[0]).filter(i => i.creep !== this.GetId()).length === 0) {
+            if (this.util.GetLocksWithoutMe(constructions[0], this).length === 0) {
                 this.util.PlaceLock(constructions[0], this);
 
                 if (this.creepRef.build(constructions[0]) === ERR_NOT_IN_RANGE) {
@@ -291,6 +359,7 @@ export default class dokCreep {
 
         // should we auto build some extensions?
         const rclConstructionLimits = dokUtil.getRclLimits(this.creepRef.room.controller?.level || 0);
+        const towers = structuresHere.filter(i => i.structureType === 'tower') as StructureTower[];
 
         if (towers.length < rclConstructionLimits.towers && constructions.length === 0) {
             if (this.CheckIfGatherNotFull())
@@ -333,7 +402,7 @@ export default class dokCreep {
 
             this.creepRef.say('Build E', false);
 
-            const buildableAreas = dokUtil.GetFreeSlots(this.creepRef.room, spawns[0], 8, 1, ['swamp']);
+            const buildableAreas = dokUtil.GetFreeSlots(this.creepRef.room, spawns[0], 8, 0, ['swamp']);
 
             const placeableArea = buildableAreas.filter((plotScan) => {
                 if (plotScan.code === 0) {
@@ -378,11 +447,69 @@ export default class dokCreep {
     }
 
     protected moveToObject(obj : RoomPosition | { pos: RoomPosition; id: string; }) {
-        this.creepRef.moveTo(obj, { reusePath: 10 });
+        //this.creepRef.moveTo(obj, { reusePath: 10 });
+        this.moveToObjectViaPath(obj);
     }
 
     protected moveToObjectFar(obj : RoomPosition | { pos: RoomPosition; id: string; }) {
-        this.creepRef.moveTo(obj, { reusePath: 25, ignoreCreeps: true, ignoreRoads: true });
+        this.moveToObjectViaPath(obj, true);
+    }
+
+    protected moveToObjectViaPath(obj : RoomPosition | { pos: RoomPosition; id: string; }, ignores: boolean = false) {
+        let position: RoomPosition | null = null;
+
+        // get target pos position
+        if (typeof (obj as any).pos !== 'undefined') {
+            position = (obj as any).pos;
+        } else if (typeof (obj as any).x !== 'undefined' && typeof (obj as any).y !== 'undefined') {
+            position = obj as RoomPosition;
+        }
+
+        if (this.atPosition !== null && dokUtil.posEqual(this.creepRef.pos, this.atPosition)) {
+            this.atPositionFor++;
+            
+            if (this.atPositionFor >= 10) {
+                this.creepRef.say('Stuck!');
+                
+                this.atPositionFor = 0;
+                this.storedPath = null;
+            } else if (this.atPositionFor > 2) {
+                this.creepRef.say(`Stalled ${this.atPositionFor}`);
+            }
+        } else {
+            this.atPositionFor = 0;
+            this.atPosition = this.creepRef.pos;
+        }
+            
+
+        // if not able to get position, fallback to heavy cpu move to :(
+        if (position === null) {
+            console.log(`[dokUtil][creep:${this.creepRef.id}][pathing] failed to gen path, falling back to moveTo`)
+
+            this.creepRef.moveTo(obj, { reusePath: 100, ignoreCreeps: true, ignoreRoads: true });
+
+            return;
+        }
+
+        // if room has changed for our creep, we need to regenerate pathing
+        if (this.creepRef.room.name !== this.storedPathRoomSanity) {
+            this.storedPath = null;
+        }
+
+        // do we already have a path stored?
+        if (this.storedPath !== null && dokUtil.posEqual(this.storedPath.to, position)) {
+            this.creepRef.moveByPath(this.storedPath.path);
+
+            return;
+        }
+
+        const fetchedPath = this.util.GetSuggestedPath(position, this.creepRef.pos, { ignoreCreeps: ignores, ignoreRoads: ignores });
+
+        this.storedPath = fetchedPath;
+        this.storedPathRoomSanity = this.creepRef.room.name;
+        this.atPosition = this.creepRef.pos;
+
+        this.creepRef.moveByPath(fetchedPath.path);
     }
 
     private RelinkRef() {
@@ -399,6 +526,10 @@ export default class dokCreep {
 
     public GetRoom() {
         return this.creepRef.room.name;
+    }
+
+    public GetJob() {
+        return this.memory.job;
     }
 
     public GetRef() {

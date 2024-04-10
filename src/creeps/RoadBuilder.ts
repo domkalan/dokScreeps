@@ -7,12 +7,12 @@ export default class dokCreepRoadBuilder extends dokCreep {
     private noTowerWorkAt: number = 0;
 
     private DepositIntoTower() {
-        const towers = this.util.FindCached<StructureTower>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.structureType === 'tower' && i.store.getFreeCapacity('energy') > 0).sort((a, b) => a.store.energy - b.store.energy);
+        const towers = this.util.FindResource<StructureTower>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.structureType === 'tower' && i.store.getFreeCapacity('energy') > 0 && this.util.GetLocksWithoutMe(i, this).length < 1).sort((a, b) => a.store.energy - b.store.energy);
 
         if (towers.length === 0) {
             this.creepRef.say('No towers!');
 
-            this.noTowerWorkAt = this.util.GetTickCount();
+            this.noTowerWorkAt = Math.floor(Date.now() / 1000);
 
             return;
         }
@@ -33,7 +33,7 @@ export default class dokCreepRoadBuilder extends dokCreep {
             return;
         }
 
-        const spawns = this.util.FindCached<StructureSpawn>(this.creepRef.room, FIND_MY_SPAWNS).filter(i => i.structureType === 'spawn');
+        const spawns = this.util.FindResource<StructureSpawn>(this.creepRef.room, FIND_MY_SPAWNS).filter(i => i.structureType === 'spawn');
 
         if (spawns.length === 0) {
             this.creepRef.say('No spawns!', false);
@@ -56,7 +56,7 @@ export default class dokCreepRoadBuilder extends dokCreep {
         if (roadsPlan.length === 0) {
             this.creepRef.say('No roads!', false);
 
-            this.noRoomWorkAt = this.util.GetTickCount();
+            this.noRoomWorkAt = Math.floor(Date.now() / 1000);
 
             return;
         }
@@ -91,7 +91,7 @@ export default class dokCreepRoadBuilder extends dokCreep {
     private DoRoadBuilderDeposit() {
         // are we focused on repairing a road?
         if (this.focusedOn !== null) {
-            const damagedRoad = this.util.FindCached<StructureRoad>(this.creepRef.room, FIND_STRUCTURES).find(i => i.id === this.focusedOn)
+            const damagedRoad = this.util.FindResource<StructureRoad>(this.creepRef.room, FIND_STRUCTURES).find(i => i.id === this.focusedOn)
 
             if (typeof damagedRoad !== 'undefined' && damagedRoad.hits <= damagedRoad.hitsMax * 0.5) {
                 this.DoRoadMaintenance(damagedRoad);
@@ -101,7 +101,7 @@ export default class dokCreepRoadBuilder extends dokCreep {
         }
 
         // check for road constructions
-        const roadConstruction = this.util.FindCached<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => i.structureType === 'road');
+        const roadConstruction = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => i.structureType === 'road');
 
         if (roadConstruction.length > 0) {
             this.DoRoadBuild(roadConstruction[0]);
@@ -110,7 +110,7 @@ export default class dokCreepRoadBuilder extends dokCreep {
         }
 
         // check for damaged roads
-        const damagedRoads = this.util.FindCached<StructureRoad>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'road' && i.hits <= i.hitsMax * 0.15).sort((a, b) => b.hits - a.hits);
+        const damagedRoads = this.util.FindResource<StructureRoad>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'road' && i.hits <= i.hitsMax * 0.15).sort((a, b) => b.hits - a.hits);
 
         if (damagedRoads.length > 0) {
             this.focusedOn = damagedRoads[0].id;
@@ -120,15 +120,15 @@ export default class dokCreepRoadBuilder extends dokCreep {
             return;
         }
 
-        const currentTick = this.util.GetTickCount()
+        const currentTime = Math.floor(Date.now() / 1000);
 
-        if (currentTick- this.noRoomWorkAt > 20) {
+        if (currentTime - this.noRoomWorkAt >= 300) {
             this.BuildNextRoad();
 
             return;
         }
 
-        if (currentTick- this.noTowerWorkAt > 20) {
+        if (currentTime - this.noTowerWorkAt >= 300) {
             this.DepositIntoTower();
 
             return;

@@ -3,31 +3,21 @@ import dokCreepColonizer from "./creeps/Colonizer";
 import dokCreepConstructionWorker from "./creeps/ConstructionWorker";
 import dokCreepControllerSlave from "./creeps/ControllerSlave";
 import dokCreepDefender from "./creeps/Defender";
+import { dokCreepHealer } from "./creeps/Healer";
 import dokCreepHeavyMiner from "./creeps/HeavyMiner";
 import dokCreepLinkStorageSlave from "./creeps/LinkStorageSlave";
-import dokCreepRemoteConstructionWorker from "./creeps/RemoteConstructionWorker";
+import dokCreepOffenseCreep from "./creeps/OffenseCreep";
+import dokCreepPowerMiner from "./creeps/PowerMiner";
+import dokCreepRemoteConstruction from "./creeps/RemoteConstruction";
 import dokCreepRemoteMiner from "./creeps/RemoteMiner";
 import dokCreepRoadBuilder from "./creeps/RoadBuilder";
-import dokCreepRoomReserver from "./creeps/RoomReserver";
-import dokCreepScout from "./creeps/Scout";
-import dokRoom, { dokRoomScoutPlan } from "./dokRoom";
+import dokRoom from "./dokRoom";
 
-export interface dokCache {
-    room: string;
-    filter: FindConstant;
-    resource: any;
-}
 export type dokUtilMemory = {
     ticks: number;
 
-    locks: Array<{ item: string, creep: string }>
-    seats: Array<{ item: string, seats: number }>
-
-    worldOverlay: boolean
-
-    nextSelectedRoom?: string | null
-
-    lastReportSent?: number | null
+    locks: Array<{ item: string, creep: string }>;
+    seats: Array<{ item: string, seats: number }>;
 }
 
 export interface dokUtilPlots {
@@ -65,40 +55,25 @@ export interface dokUtilItemSeats {
     seats: number
 }
 
+export interface dokUtilPathing {
+    used: number;
+    created: number;
+    lastUsed: number;
+
+    from: RoomPosition;
+    to: RoomPosition;
+    path: PathStep[];
+}
+
 export default class dokUtil {
     private rooms: Array<dokRoom>;
     private creeps: Array<dokCreep>;
     private memory: dokUtilMemory;
-    private cached: Array<dokCache> = [];
-    private cachedValidFor: number = 0;
-    private cacheTimesOutAt: number = 0;
-    private spawnerNames: Array<string> = [
-        'Target',
-        'Braken',
-        'Boston',
-        'Bruce',
-        'Huel',
-        'Kitty',
-        'Candy',
-        'James',
-        'Edward',
-        'Beans',
-        'Bakers',
-        'Jack',
-        'Eddie',
-        'Nina',
-        'Red',
-        'Joe',
-        'Tina',
-        'Soup',
-        'Wombo'
-    ];
-
-    private cachedScoutPlans: Array<{ plan: dokRoomScoutPlan, room: string }> | undefined;
-    private cachedScoutPlansAt: number = 0;
 
     // keep track of how long this instace has been alive
     private ticksAlive: number = 0;
+
+    private pathing: Array<dokUtilPathing> = [];
 
     constructor() {
         this.memory = this.ReadMemory();
@@ -114,8 +89,7 @@ export default class dokUtil {
             this.memory = {
                 ticks: 0,
                 locks: [],
-                seats: [],
-                worldOverlay: false,
+                seats: []
             };
 
             return (Memory as any)['dokUtil'] as dokUtilMemory;
@@ -170,16 +144,8 @@ export default class dokUtil {
                 creepInstance = new dokCreepControllerSlave(this, creep);
 
                 break;
-            case dokCreepJob.Scout:
-                creepInstance = new dokCreepScout(this, creep);
-
-                break;
             case dokCreepJob.Colonizer:
                 creepInstance = new dokCreepColonizer(this, creep);
-
-                break;
-            case dokCreepJob.RoomReserver:
-                creepInstance = new dokCreepRoomReserver(this, creep);
 
                 break;
             case dokCreepJob.ConstructionWorker:
@@ -194,12 +160,24 @@ export default class dokUtil {
                 creepInstance = new dokCreepLinkStorageSlave(this, creep);
 
                 break;
-            case dokCreepJob.RemoteConstructionWorker:
-                creepInstance = new dokCreepRemoteConstructionWorker(this, creep);
-
-                break;
             case dokCreepJob.RemoteMiner:
                 creepInstance = new dokCreepRemoteMiner(this, creep);
+
+                break;
+            case dokCreepJob.RemoteConstruction:
+                creepInstance = new dokCreepRemoteConstruction(this, creep);
+
+                break;
+            case dokCreepJob.Healer:
+                creepInstance = new dokCreepHealer(this, creep);
+
+                break;
+            case dokCreepJob.PowerMiner:
+                creepInstance = new dokCreepPowerMiner(this, creep);
+
+                break;
+            case dokCreepJob.RoomAttacker:
+                creepInstance = new dokCreepOffenseCreep(this, creep);
 
                 break;
             default:
@@ -224,37 +202,22 @@ export default class dokUtil {
     private GetRooms() {
         const roomArray: Array<dokRoom> = [];
 
-        for(const spawnKey in Game.spawns) {
-            const spawn = Game.spawns[spawnKey];
+        for(const roomKey in Game.rooms) {
+            const room = Game.rooms[roomKey];
 
-            // Only tick on our own spawns
-            if (!spawn.my) {
+            if (room.controller?.owner?.username !== 'dokman')
                 continue;
-            }
 
-            const roomInstance = new dokRoom(this, spawn.room);
+            const roomInstance = new dokRoom(this, room);
 
-            // since this our spawn, we own the room?
             roomArray.push(roomInstance);
         }
 
         return roomArray;
     }
 
-    public AddRoom(room : Room) {
-        if (typeof this.rooms === 'undefined')
-            return;
-
-        const roomExists = this.rooms.find(i => i.GetName() === room.name);
-
-        if (typeof roomExists !== 'undefined')
-            return;
-
-        const roomInstance = new dokRoom(this, room);
-
-        this.rooms.push(roomInstance);
-
-        Game.notify(`Congrats, room ${room.name} has been added to the controllable rooms!`);
+    public RefreshRooms() {
+        this.rooms = this.GetRooms();
     }
 
     public GetKnownCreeps() {
@@ -263,10 +226,6 @@ export default class dokUtil {
 
     public GetManagedRooms() {
         return this.rooms;
-    }
-
-    public GetCachedResources() {
-        return this.cached;
     }
 
     public GetTickCount() {
@@ -304,6 +263,10 @@ export default class dokUtil {
         };
 
         return this.memory.locks.filter(i => i.item === item.id);
+    }
+
+    public GetLocksWithoutMe(item: { id : string }, creep : dokCreep) {
+        return this.memory.locks.filter(i => i.item === item.id && i.creep !== creep.GetId());
     }
 
     public ReleaseLocks(creep: dokCreep) {
@@ -362,8 +325,66 @@ export default class dokUtil {
         return locksItem.seats;
     }
 
+    public GetSuggestedPath(pos1: RoomPosition, pos2: RoomPosition, opts: { ignoreCreeps?: boolean, ignoreRoads?: boolean } = { ignoreCreeps: false, ignoreRoads: false }) : dokUtilPathing {
+        const timeNow = Math.floor(Date.now() / 1000);
+
+        const existingPath = this.pathing.find(i => (i.from === pos1 && i.to === pos2) || (i.from === pos2 && i.to === pos1));
+
+        if (typeof existingPath !== 'undefined') {
+            existingPath.lastUsed = timeNow;
+            existingPath.used++;
+
+            return existingPath;
+        }
+            
+        // generate new path
+        const gamePath = pos2.findPathTo(pos1, { ignoreCreeps: opts.ignoreRoads, ignoreRoads: opts.ignoreRoads });
+
+        const dokPath: dokUtilPathing = {
+            created: timeNow,
+            lastUsed: timeNow,
+            used: 1,
+
+            to: pos1,
+            from: pos2,
+            path: gamePath
+        };
+
+        this.pathing.push(dokPath);
+
+        return dokPath;
+    }
+
+    protected CleanUnusedPaths() {
+        if (!this.RunEveryTicks(50))
+            return;
+
+        if (this.pathing.length >= this.rooms.length * 200) {
+            this.pathing = [];
+
+            Game.notify(`Pathing reset due to value being at or above 300 stored paths.`);
+
+            console.log(`[dokUtil][pathing] all paths have been cleared`);
+
+            return;
+        }
+
+        const expiredTime = Math.floor(Date.now() / 1000) - 300;
+        
+        const pathsBefore = this.pathing.length;
+
+        this.pathing = this.pathing.filter(i => i.lastUsed > expiredTime);
+
+        const pathsAfter = this.pathing.length;
+        const cleanedPaths = (pathsBefore - pathsAfter);
+
+        if (cleanedPaths > 0) {
+            console.log(`[dokUtil][pathing] ${cleanedPaths} path(s) have been cleaned`);
+        }
+    }
+
     private TickCreeps() {
-        /*this.creeps.forEach(creep => {
+        for(const creep of this.creeps) {
             try {
                 creep.Tick();
             }
@@ -372,7 +393,7 @@ export default class dokUtil {
 
                 this.creeps = this.creeps.filter(i => i !== creep);
             }
-        })*/
+        }
     }
 
     private TickRooms() {
@@ -390,35 +411,10 @@ export default class dokUtil {
         this.ticksAlive++;
     }
 
-    public FindCached<T>(room: Room, filterBy: FindConstant) : Array<T> {
-        if (this.cached.length > 0 && this.cacheTimesOutAt !== 0) {
-            const cachedResources = this.cached.filter(i => i.filter === filterBy && i.room === room.name);
-
-            if (cachedResources.length > 0) {
-                return cachedResources.map(i => i.resource);
-            }
-        }
-
+    public FindResource<T>(room: Room, filterBy: FindConstant) : Array<T> {
         const searchResults = room.find(filterBy);
 
-        for(const entry of searchResults) {
-            this.cached.push({ room: room.name, filter: filterBy, resource: entry });
-        }
-
         return searchResults as Array<T>;
-    }
-
-    public VoidCache() {
-        if (this.cacheTimesOutAt === 0 && this.cached.length > 0) {
-            this.cached = [];
-
-            return;
-        }
-
-        if (this.cachedValidFor > this.cacheTimesOutAt)
-            this.cached = [];
-
-        this.cachedValidFor++;
     }
 
     public GetDokRoom(name: string) : dokRoom | undefined {
@@ -431,6 +427,10 @@ export default class dokUtil {
 
     public GetDokCreeps() {
         return this.creeps;
+    }
+
+    public GetDokCreep(id: string) {
+        return this.creeps.find(i => i.GetId() === id);
     }
 
     public CleanDeadMemory() {
@@ -474,12 +474,17 @@ export default class dokUtil {
         }
     }
 
+    public DebugOverlay() {
+        new RoomVisual().text(`CPU Bucket: ${Game.cpu.bucket}`, 0, 0, { align: 'left' });
+        new RoomVisual().text(`Creeps: ${this.creeps.length}`, 0, 1, { align: 'left' });
+        new RoomVisual().text(`Rooms: ${this.rooms.length}`, 0, 2, { align: 'left' });
+        new RoomVisual().text(`Pathing: ${this.pathing.length}`, 0, 3, { align: 'left' });
+        new RoomVisual().text(`Tick: ${this.memory.ticks} (iat: ${this.ticksAlive})`, 0, 4, { align: 'left' });
+    }
+
     public Tick() {
         // Read memory
         this.ReadMemory();
-
-        // Void cache
-        this.VoidCache();
 
         // bump counters
         this.BumpCounters();
@@ -496,8 +501,19 @@ export default class dokUtil {
         // Tick conditional flags
         this.TickConditionalFlags();
 
+        // clean dirty pathing
+        this.CleanUnusedPaths();
+
         // commit memory
         this.SaveMemory();
+
+        // pixel generation
+        if (Game.cpu.bucket >= 10000) {
+            Game.cpu.generatePixel();
+        }
+
+        // show debug overlay
+        this.DebugOverlay();
     }
 
     // Static methods
@@ -513,44 +529,14 @@ export default class dokUtil {
         this.instance.Tick();
     }
 
-    public static GetPosPathBetween(room: Room, start: { pos: RoomPosition }, end: { pos: RoomPosition }) : Array<RoomPosition> {
-        let currentLocation = start;
-
+    public static GetPosPathBetween(start: { pos: RoomPosition }, end: { pos: RoomPosition }) : Array<RoomPosition> {
         const pathing: Array<RoomPosition> = [];
-        
-        while(true) {
-            const slots = dokUtil.GetFreeSlots(room, currentLocation, 1, 0, [ 'road', 'rampart', 'swamp' ]).filter(i => i.code === 1).sort((a, b) => dokUtil.getDistance(a.pos, end.pos) - dokUtil.getDistance(b.pos, end.pos));
 
-            if (slots.length === 0)
-                break;
+        const path = start.pos.findPathTo(end, { ignoreCreeps: true });
 
-            let slot = slots[0];
-            let autoSlot = 0;
-            let autoSlotPop = false;
-
-            while (slot.pos.x === currentLocation.pos.x && slot.pos.y === currentLocation.pos.y) {
-                autoSlot++;
-                if (autoSlot >= slots.length)
-                    break;
-
-                slot = slots[autoSlot];
-            }
-
-            if (autoSlot > 0 && !autoSlotPop)
-                pathing.pop();
-
-            pathing.push(slot.pos);
-
-            currentLocation = slot;
-
-            if (slot.pos.getRangeTo(end) <= 1) {
-                break;
-            }
+        for(const point of path) {
+            pathing.push(new RoomPosition(point.x, point.y, start.pos.roomName));
         }
-
-        pathing.forEach(slot => {
-            new RoomVisual(room.name).circle(slot.x, slot.y, { fill: '#ff4f00' })
-        });
 
         return pathing;
     }
@@ -642,6 +628,13 @@ export default class dokUtil {
             distance = distance * -1;
 
         return distance;
+    }
+
+    public static posEqual(pos1: RoomPosition, pos2: RoomPosition) {
+        if (pos1.x === pos2.x && pos1.y === pos2.y && pos1.roomName == pos2.roomName)
+            return true;
+
+        return false;
     }
 
     public static getRclLimits(rcl: number) {

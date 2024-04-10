@@ -12,8 +12,8 @@ export default class dokCreepConstructionWorker extends dokCreep {
     }
 
     public DoWallRepair() {
-        const structuresBasic = this.util.FindCached<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75);
-        const structuresExtra = this.util.FindCached<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75 && ['container', 'link', 'constructedWall'].includes(i.structureType))
+        const structuresBasic = this.util.FindResource<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75);
+        const structuresExtra = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75 && ['container', 'link', 'constructedWall'].includes(i.structureType))
 
         const structures: Array<Structure> = structuresBasic.concat(structuresExtra).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
         
@@ -22,7 +22,7 @@ export default class dokCreepConstructionWorker extends dokCreep {
 
             if (typeof focusedConstrct !== 'undefined') {
                 if (this.creepRef.repair(focusedConstrct) === ERR_NOT_IN_RANGE) {
-                    this.creepRef.moveTo(focusedConstrct);
+                    this.moveToObject(focusedConstrct);
                     
                 }
 
@@ -39,7 +39,7 @@ export default class dokCreepConstructionWorker extends dokCreep {
         }
 
         if (this.creepRef.repair(structures[0]) === ERR_NOT_IN_RANGE) {
-            this.creepRef.moveTo(structures[0]);
+            this.moveToObject(structures[0]);
         }
 
         this.creepRef.say(`🏰`, false);
@@ -50,14 +50,14 @@ export default class dokCreepConstructionWorker extends dokCreep {
     }
 
     public DoConstructionDeposit() {
-        const constructions = this.util.FindCached<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES);
+        const constructions = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES);
 
         if (this.focusedOn !== null) {
             const focusedConstrct = constructions.find(i => i.id === this.focusedOn);
 
             if (typeof focusedConstrct !== 'undefined') {
                 if (this.creepRef.build(focusedConstrct) === ERR_NOT_IN_RANGE) {
-                    this.creepRef.moveTo(focusedConstrct);
+                    this.moveToObject(focusedConstrct);
                     
                 }
 
@@ -74,7 +74,7 @@ export default class dokCreepConstructionWorker extends dokCreep {
         }
 
         if (this.creepRef.build(constructions[0]) === ERR_NOT_IN_RANGE) {
-            this.creepRef.moveTo(constructions[0]);
+            this.moveToObject(constructions[0]);
         }
 
         this.focusedOn = constructions[0].id;
@@ -85,8 +85,8 @@ export default class dokCreepConstructionWorker extends dokCreep {
     }
 
     public RepairAboutToFail() {
-        const structuresBasic = this.util.FindCached<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.10);
-        const structuresExtra = this.util.FindCached<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => {
+        const structuresBasic = this.util.FindResource<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.10);
+        const structuresExtra = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => {
             if (i.structureType === 'constructedWall') {
                 return i.hits < i.hitsMax * 0.0004;
             }
@@ -101,7 +101,7 @@ export default class dokCreepConstructionWorker extends dokCreep {
 
             if (typeof focusedConstrct !== 'undefined') {
                 if (this.creepRef.repair(focusedConstrct) === ERR_NOT_IN_RANGE) {
-                    this.creepRef.moveTo(focusedConstrct);
+                    this.moveToObject(focusedConstrct);
                     
                 }
 
@@ -118,7 +118,7 @@ export default class dokCreepConstructionWorker extends dokCreep {
         }
 
         if (this.creepRef.repair(structures[0]) === ERR_NOT_IN_RANGE) {
-            this.creepRef.moveTo(structures[0]);
+            this.moveToObject(structures[0]);
         }
 
         this.focusedOn = structures[0].id;

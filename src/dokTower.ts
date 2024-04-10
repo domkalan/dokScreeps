@@ -21,8 +21,8 @@ export default class dokTower {
     }
 
     public BlastHostiles() {
-        const hostiles = this.util.FindCached<Creep>(this.towerRef.room, FIND_HOSTILE_CREEPS);
-        const hostilePower = this.util.FindCached<PowerCreep>(this.towerRef.room, FIND_HOSTILE_POWER_CREEPS);
+        const hostiles = this.util.FindResource<Creep>(this.towerRef.room, FIND_HOSTILE_CREEPS);
+        const hostilePower = this.util.FindResource<PowerCreep>(this.towerRef.room, FIND_HOSTILE_POWER_CREEPS);
 
         const hostilesHere : Array<Creep | PowerCreep> = hostilePower.concat(hostiles as any).sort((a, b) => b.hits - a.hits);
 
@@ -44,16 +44,37 @@ export default class dokTower {
             return true;
         }
 
-        const structuresBasic = this.util.FindCached<Structure>(this.towerRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax);
-        const structuresExtra = this.util.FindCached<Structure>(this.towerRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax && ['road', 'container', 'link', 'storage'].includes(i.structureType))
+        const structuresBasic = this.util.FindResource<Structure>(this.towerRef.room, FIND_MY_STRUCTURES);
+        const structuresExtra = this.util.FindResource<Structure>(this.towerRef.room, FIND_STRUCTURES).filter(i => ['road', 'container', 'link', 'storage', 'extension'].includes(i.structureType))
 
-        const structures: Array<Structure> = structuresBasic.concat(structuresExtra).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
+        const structures: Array<Structure> = structuresBasic.concat(structuresExtra).filter(i => i.hits < i.hitsMax).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
 
-        if (structures.length == 0) {
+        const extensions = structuresExtra.filter(i => i.structureType === 'extension') as StructureExtension[];
+        const extensionsEmpty = extensions.filter(i => i.store.energy < 50);
+
+        // if half of all extensions are empty, we need to save energy
+        if (extensionsEmpty.length > extensions.length * 0.5) {
+            new RoomVisual(this.towerRef.room.name).text('😰⚡', this.towerRef.pos.x, this.towerRef.pos.y + 1.45, { align: 'center' });
+
+            return true;
+        }
+
+        // patch to consume less energy
+        const structuresFiltered = structures.filter(i => {
+            // dont focused on ramparts with 35% or more health
+            if (i.structureType === 'rampart' && i.hits > i.hitsMax * 0.35) {
+                return false;
+            }
+
+            // all rest can pass
+            return true;
+        })
+
+        if (structuresFiltered.length == 0) {
             return false;
         }
 
-        this.towerRef.repair(structures[0]);
+        this.towerRef.repair(structuresFiltered[0]);
 
         new RoomVisual(this.towerRef.room.name).text('🔨', this.towerRef.pos.x, this.towerRef.pos.y + 1.45, { align: 'center' });
 
