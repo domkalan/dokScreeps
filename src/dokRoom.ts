@@ -254,6 +254,8 @@ export default class dokRoom {
     }
 
     private CreepBodyType(job: dokCreepJob, energy: number) : BodyPartConstant[] {
+        const rclLevel = this.roomRef.controller?.level || 0;
+
         let bodyType : Array<BodyPartConstant> = [WORK, CARRY, MOVE];
         let bodyMaxStack = 3;
 
@@ -308,7 +310,7 @@ export default class dokRoom {
             ];
         }
 
-        if (job === dokCreepJob.ControllerSlave) {
+        if (rclLevel >= 7 && (job !== dokCreepJob.HeavyMiner && job !== dokCreepJob.LinkStorageSlave)) {
             bodyMaxStack = Infinity;
         }
 
