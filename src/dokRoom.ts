@@ -190,11 +190,11 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RemoteMiner);
         }
 
-        if (healerCreeps.length < remotePowerMinerCreeps.length * 2 || healerCreeps.length < Math.floor(offenseCreeps.length / 5)) {
+        if (healerCreeps.length < remotePowerMinerCreeps.length * 3 || healerCreeps.length < Math.floor(offenseCreeps.length / 5)) {
             jobCodes.push(dokCreepJob.Healer);
         }
 
-        if (remotePowerMinerCreeps.length < powerMinerFlags.length * 3) {
+        if (remotePowerMinerCreeps.length < powerMinerFlags.length * 2) {
             jobCodes.push(dokCreepJob.PowerMiner);
         }
 
@@ -288,11 +288,24 @@ export default class dokRoom {
         }
 
         if (job === dokCreepJob.PowerMiner) {
-            return [TOUGH, MOVE, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE];
+            return [
+                TOUGH, MOVE, 
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, 
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE,
+                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE,
+                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE,
+                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE
+            ];
         }
 
         if (job === dokCreepJob.Healer) {
-            bodyType = [HEAL, HEAL, HEAL, HEAL, HEAL, MOVE, MOVE, MOVE, MOVE, MOVE];
+            bodyType = [
+                HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
+                MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE
+            ];
         }
 
         if (job === dokCreepJob.ControllerSlave) {
