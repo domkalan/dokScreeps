@@ -343,7 +343,7 @@ export default class dokCreep {
         }
 
         // get the constructions
-        const constructions = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => (i.structureType === 'extension' || i.structureType === 'tower') &&  this.util.GetLocksWithoutMe(i, this).length < 1);
+        const constructions = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => (i.structureType === 'extension' || i.structureType === 'tower'));
 
         if (constructions.length > 0) {
             if (this.util.GetLocksWithoutMe(constructions[0], this).length === 0) {
