@@ -210,7 +210,7 @@ export default class dokCreepPowerMiner extends dokCreep {
     
             this.creepRef.say(`🤝❤️`);
 
-            if (this.assignedHealers.length >= 2) {
+            if (this.assignedHealers.length >= 3) {
                 break;
             }
         }
@@ -223,7 +223,7 @@ export default class dokCreepPowerMiner extends dokCreep {
 
             this.ValidateHealers();
 
-            if (this.assignedHealers.length < 2) {
+            if (this.assignedHealers.length < 3) {
                 this.AttemptAssignHealer();
             }  
         }
