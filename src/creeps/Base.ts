@@ -468,8 +468,8 @@ export default class dokCreep {
         if (this.atPosition !== null && dokUtil.posEqual(this.creepRef.pos, this.atPosition)) {
             this.atPositionFor++;
             
-            if (this.atPositionFor >= 10) {
-                this.creepRef.say('Stuck!');
+            if (this.atPositionFor >= 5) {
+                this.creepRef.say('Stuck!?');
                 
                 this.atPositionFor = 0;
                 this.storedPath = null;
