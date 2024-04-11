@@ -473,8 +473,6 @@ export default class dokCreep {
                 
                 this.atPositionFor = 0;
                 this.storedPath = null;
-            } else if (this.atPositionFor > 2) {
-                this.creepRef.say(`Stalled ${this.atPositionFor}`);
             }
         } else {
             this.atPositionFor = 0;
