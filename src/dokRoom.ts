@@ -314,6 +314,7 @@ export default class dokRoom {
             bodyMaxStack = Infinity;
         }
 
+
         // lower max stack if we are low on juice
         if (typeof roomStorage !== 'undefined') {
             if (roomStorage.store.energy < roomStorage.store.getCapacity('energy') * 0.10) {
@@ -334,10 +335,19 @@ export default class dokRoom {
         if (spawner.length === 0)
             return;
 
+        // what job should we run next
+        const nextJobs = this.NextCreepJob();
+
         for(const spawn of spawner) {
             // dont focus if we are spawning something
-            if (spawn.spawning) {
-                return;
+            if (spawn.spawning)
+                continue;
+
+            // if no jobs, wait for work
+            if (nextJobs.length === 0) {
+                new RoomVisual(spawn.room.name).text(`🧊`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
+
+                continue;
             }
 
             // const get all energy sources
@@ -350,25 +360,18 @@ export default class dokRoom {
                 energyReady += extension.store.getUsedCapacity('energy');
             }
 
-            // what job should we run next
-            const nextJobs = this.NextCreepJob();
-
-            // if no jobs, wait for work
-            if (nextJobs.length === 0) {
-                new RoomVisual(spawn.room.name).text(`🧊`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
-
-                return;
-            }
-
             // select next job
-            const nextJob = nextJobs[0];
+            const nextJob = nextJobs.shift();
+
+            if (typeof nextJob === 'undefined')
+                continue;
 
             // what body parts are needed for job
             const bodyParts = this.CreepBodyType(nextJob, energyReady);
 
             // if no body parts...?
             if (bodyParts.length === 0)
-                return;
+                continue;
 
             // init the spawn counter
             if (typeof this.memory.spawnCount === `undefined`)
