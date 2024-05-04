@@ -29,7 +29,7 @@ export default class dokCreepRemoteConstruction extends dokCreep {
             return;
         }
 
-        const constructionsHere = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).sort((a, b) => a.progress - b.progress);
+        const constructionsHere = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).sort((a, b) => b.progress - a.progress);
 
         if (constructionsHere.length == 0) {
             flag.remove();

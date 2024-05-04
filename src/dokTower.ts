@@ -62,7 +62,7 @@ export default class dokTower {
         // patch to consume less energy
         const structuresFiltered = structures.filter(i => {
             // dont focused on ramparts with 35% or more health
-            if (i.structureType === 'rampart' && i.hits > i.hitsMax * 0.35) {
+            if (i.structureType === 'rampart' && i.hits > i.hitsMax * 0.01) {
                 return false;
             }
 

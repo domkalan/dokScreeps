@@ -1,5 +1,5 @@
 import dokUtil from "../dokUtil";
-import dokCreep from "./Base";
+import dokCreep, { dokCreepJob } from "./Base";
 
 export default class dokCreepHeavyMiner extends dokCreep {
     private lastMessage: number = 0;
@@ -10,12 +10,6 @@ export default class dokCreepHeavyMiner extends dokCreep {
     private deadLocksCleared: boolean = false;
 
     public canTakeFrom: boolean = true;
-
-    public ShouldTurnOffContainerBuilding() {
-        if (this.creepRef.store.energy <= 0) {
-            this.buildingContainer = false;
-        }
-    }
 
     public DoMinerGather() {
         const energySources = this.util.FindResource<Source>(this.creepRef.room, FIND_SOURCES).filter(i => this.util.GetLocksWithoutMe({ id: `heavyminer:${i.id}` }, this).length === 0).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
@@ -48,6 +42,25 @@ export default class dokCreepHeavyMiner extends dokCreep {
 
             this.util.RemoveDeadLocks();
         }
+
+        const creepToReplace = this.util.GetKnownCreeps().find(i => i.GetCurrentMemory().homeRoom === this.memory.homeRoom && i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && ((i.GetRef().ticksToLive || 101) <= 200) && this.util.GetLocksWithoutMe(i.GetRef(), this).length === 0);
+
+        if (typeof creepToReplace !== 'undefined') {
+            this.util.PlaceLock(creepToReplace.GetRef(), this);
+
+            if (creepToReplace.GetRef().pos.getRangeTo(this.creepRef.pos) > 1) {
+                this.moveToObject(creepToReplace.GetRef());
+            } else {
+                this.creepRef.say(`👷‍♂️`);
+                creepToReplace.GetRef().say(`👴`);
+
+                creepToReplace.GetRef().transfer(this.creepRef, 'energy');
+
+                creepToReplace.GetRef().suicide();
+
+                this.util.ReleaseLocks(creepToReplace);
+            }
+        }
     }
 
     public DoMinerTransfer() {
@@ -69,14 +82,6 @@ export default class dokCreepHeavyMiner extends dokCreep {
             return;
         }
 
-        /*const balance = this.creepRef.store.energy;
-        const donateMaximum = creep.GetRef().store.getFreeCapacity('energy');
-        let donateAmount = donateMaximum;
-
-        if (donateAmount > donateMaximum) {
-            donateAmount = balance;
-        }*/
-
         this.creepRef.transfer(creep.GetRef(), 'energy');
 
         this.creepTransfer = null;
@@ -92,28 +97,25 @@ export default class dokCreepHeavyMiner extends dokCreep {
 
         if (linkTransferResult === ERR_NOT_IN_RANGE) {
             this.moveToObject(nearbyLink)
-        } else if (linkTransferResult === OK) {
-            const currRoom = this.util.GetDokRoom(this.creepRef.room.name);
-
-            if (typeof currRoom !== 'undefined') {
-                currRoom.TickOnLink(nearbyLink);
-            }
         }
-
-        this.ShouldTurnOffContainerBuilding();
 
         return;
     }
 
     public PlaceOverflowContainer() {
+        if (this.creepRef.store.getUsedCapacity('energy') <= 0) {
+            this.buildingContainer = false;
+            this.pickupIdleTime = 0;
+
+            return;
+        }
+
         const nearbyContainersBuilt = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'container');
 
         if (nearbyContainersBuilt.length > 0) {
             if (this.creepRef.transfer(nearbyContainersBuilt[0], 'energy') === ERR_NOT_IN_RANGE) {
                 this.moveToObject(nearbyContainersBuilt[0])
             }
-
-            this.ShouldTurnOffContainerBuilding();
 
             return;
         }
@@ -124,8 +126,6 @@ export default class dokCreepHeavyMiner extends dokCreep {
             if (this.creepRef.build(nearbyContainerConstructions[0]) === ERR_NOT_IN_RANGE) {
                 this.moveToObject(nearbyContainerConstructions[0])
             }
-
-            this.ShouldTurnOffContainerBuilding();
 
             return;
         }
@@ -174,7 +174,7 @@ export default class dokCreepHeavyMiner extends dokCreep {
             this.DoMinerGather();
         } else {
             // check if we have a link nearby, do an instant deposit if so
-            const nearbyLinks = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'link' && i.store.getFreeCapacity('energy') > 0) as StructureLink[];
+            const nearbyLinks = this.creepRef.pos.findInRange(FIND_STRUCTURES, 4).filter(i => i.structureType === 'link') as StructureLink[];
 
             if (nearbyLinks.length > 0) {
                 this.PlaceIntoLink(nearbyLinks[0]);

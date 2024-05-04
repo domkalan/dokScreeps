@@ -1,6 +1,12 @@
-import { dokCreepJob, dokCreepMemory } from "./creeps/Base";
+import dokCreep, { dokCreepJob, dokCreepMemory } from "./creeps/Base";
 import dokTower from "./dokTower";
 import dokUtil from "./dokUtil";
+
+export interface dokReserveEntry {
+    name: string;
+    ticks: number;
+    met: boolean
+}
 
 export interface dokRoomMemory {
     spawnCount: number;
@@ -11,6 +17,8 @@ export interface dokRoomMemory {
 
     terminalMode?: string;
     terminalSendTo?: string;
+
+    reserveTicks?: Array<dokReserveEntry>;
 }
 
 export default class dokRoom {
@@ -21,11 +29,22 @@ export default class dokRoom {
 
     private towers: Array<dokTower> = [];
 
+    private aliveTicks: number = 0;
+
+    private boostedCreeps: boolean = false;
+    private reducedCreeps: boolean = true;
+
     constructor(util : dokUtil, room: Room) {
         this.util = util;
         this.roomRef = room;
 
         this.memory = this.ReadMemory();
+
+        const randomTickOffset = dokUtil.genRandomNumber(2, 12);
+
+        console.log(`[dokUtil][dokRoom][${this.roomRef.name}] random tick offset is ${randomTickOffset}`);
+
+        this.aliveTicks += randomTickOffset;
     }
 
     private ReadMemory() {
@@ -63,7 +82,14 @@ export default class dokRoom {
         const hostilePower = this.util.FindResource<PowerCreep>(this.roomRef, FIND_HOSTILE_POWER_CREEPS);
 
         // get all creeps that born from this room
-        const creepsFromRoom = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().homeRoom === this.roomRef.name);
+        let creepsFromRoom: Array<dokCreep> = [];
+
+        // sometimes this errors out if we have a creep that died on the same tick as this
+        try {
+            creepsFromRoom = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().homeRoom === this.roomRef.name && (i.GetRef().ticksToLive || 21) >= 20);
+        } catch(error) {
+            creepsFromRoom = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().homeRoom === this.roomRef.name);
+        }
 
         // get base creeps
         const baseCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.Base);
@@ -82,7 +108,15 @@ export default class dokRoom {
 
         // colonizer creeps
         const colonizerCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.Colonizer);
-        const colornizerFlags = flags.filter(i => i.name.startsWith(`${this.roomRef.name} Reserve`) || i.name.startsWith(`${this.roomRef.name} Colonize`));
+        const colornizerFlags = flags.filter(i => {
+            if (i.name.startsWith(`${this.roomRef.name} Colonize`)) {
+                return true;
+            }
+
+            if (i.name.startsWith(`${this.roomRef.name} Reserve`)) {
+                return !this.GetReserveMet(i.pos.roomName);
+            }
+        });
 
         // colonizer creeps
         const remoteConstructionCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.RemoteConstruction);
@@ -96,6 +130,25 @@ export default class dokRoom {
                 remoteConstructLimit += Number(flagObj[1]);
             } else {
                 remoteConstructLimit += 1;
+            }
+        }
+
+        // power hauler creeps
+        const powerHaulerCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.PowerHauler);
+        const powerHaulerFlags = flags.filter(i => i.name.startsWith(`${this.roomRef.name} PowerHauler`));
+        const canHaulerFlags = flags.filter(i => i.name.startsWith(`${this.roomRef.name} CanHauler`));
+
+        const haulerFlags: Flag[] = powerHaulerFlags.concat(canHaulerFlags);
+
+        let haulerLimit = 0;
+
+        for(const flag of haulerFlags) {
+            const flagObj = flag.name.replace(`${this.roomRef.name} PowerHauler `, '').split(' ');
+
+            if (flagObj.length === 2) {
+                haulerLimit+= Number(flagObj[1]);
+            } else {
+                haulerLimit += 1;
             }
         }
 
@@ -148,12 +201,6 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RoomDefender);
         }
         
-        // start with 2
-        if (rclLevel === 1 && baseCreeps.length < 2) {
-            jobCodes.push(dokCreepJob.Base);
-        }
-
-        // then rely on the room rcl unless its 6
         if (baseCreeps.length < rclLevel) {
             jobCodes.push(dokCreepJob.Base);
         }
@@ -186,11 +233,15 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RemoteConstruction);
         }
 
-        if (minerFlagLimits > remoteMinerCreeps.length) {
+        if (minerFlagLimits > remoteMinerCreeps.length + 0.5) {
             jobCodes.push(dokCreepJob.RemoteMiner);
         }
 
-        if (healerCreeps.length < remotePowerMinerCreeps.length * 3 || healerCreeps.length < Math.floor(offenseCreeps.length / 5)) {
+        if (powerHaulerCreeps.length < haulerLimit) {
+            jobCodes.push(dokCreepJob.PowerHauler);
+        }
+
+        if ((healerCreeps.length < remotePowerMinerCreeps.length * 2) || healerCreeps.length < Math.floor(offenseCreeps.length / 5)) {
             jobCodes.push(dokCreepJob.Healer);
         }
 
@@ -202,24 +253,25 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RoomAttacker);
         }
 
-        const roomStorage = this.roomRef.find(FIND_STRUCTURES).find(i => i.structureType === 'storage') as StructureStorage;
-
         // energy processing santiy checks
-        if (typeof roomStorage !== 'undefined') {
-            if (roomStorage.store.energy < roomStorage.store.getCapacity('energy') * 0.10) {
-                if (baseCreeps.length >= 2) {
-                    jobCodes = jobCodes.filter(i => i !== dokCreepJob.Base);
-                }
-
-                if (roadCreeps.length >= 1) {
-                    jobCodes = jobCodes.filter(i => i !== dokCreepJob.RoadBuilder);
-                }
-
-                if (controllerSlaveCreeps.length >= 1) {
-                    jobCodes = jobCodes.filter(i => i !== dokCreepJob.ControllerSlave);
-                }
+        if (this.reducedCreeps && rclLevel >= 5) {
+            if (baseCreeps.length >= 2) {
+                jobCodes = jobCodes.filter(i => i !== dokCreepJob.Base);
             }
-        } 
+
+            if (roadCreeps.length >= 1) {
+                jobCodes = jobCodes.filter(i => i !== dokCreepJob.RoadBuilder);
+            }
+
+            if (controllerSlaveCreeps.length >= 1) {
+                jobCodes = jobCodes.filter(i => i !== dokCreepJob.ControllerSlave);
+            }
+        }
+
+        // if we are in the starting phase, we need a lot of these guys
+        if (rclLevel <= 3 && baseCreeps.length < 5 * sources.length) {
+            jobCodes.push(dokCreepJob.Base);
+        }
 
         return jobCodes;
     }
@@ -240,6 +292,10 @@ export default class dokRoom {
                 break;
             }
 
+            if (newStackedBody.length > 50) {
+                break;
+            }
+
             currentBody = newStackedBody;
 
             // only build the stack as big as it should get
@@ -256,10 +312,12 @@ export default class dokRoom {
     private CreepBodyType(job: dokCreepJob, energy: number) : BodyPartConstant[] {
         const rclLevel = this.roomRef.controller?.level || 0;
 
-        let bodyType : Array<BodyPartConstant> = [WORK, CARRY, MOVE];
+        let bodyType : Array<BodyPartConstant> = [WORK, MOVE, CARRY];
         let bodyMaxStack = 3;
 
-        const roomStorage = this.roomRef.find(FIND_STRUCTURES).find(i => i.structureType === 'storage') as StructureStorage;
+        if (rclLevel >= 5) {
+            bodyMaxStack = Infinity;
+        }
 
         // heavy miners have a special job
         if (job === dokCreepJob.HeavyMiner) {
@@ -273,7 +331,7 @@ export default class dokRoom {
         }
 
         if (job === dokCreepJob.RemoteMiner) {
-            bodyType = [MOVE, MOVE, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, WORK, MOVE];
+            bodyType = [WORK, WORK, WORK, MOVE, MOVE, MOVE, CARRY, MOVE];
         }
 
         // Special job code for room defenders
@@ -291,131 +349,135 @@ export default class dokRoom {
 
         if (job === dokCreepJob.PowerMiner) {
             return [
-                TOUGH, MOVE, 
-                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, 
-                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
-                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
-                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
-                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE,
-                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE,
-                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE,
-                CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE
+                MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
+                MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
+                ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, HEAL
             ];
         }
 
         if (job === dokCreepJob.Healer) {
             bodyType = [
-                HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
-                MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE
+                HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL,
+                MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE
             ];
         }
 
-        if (rclLevel >= 7 && (job !== dokCreepJob.HeavyMiner && job !== dokCreepJob.LinkStorageSlave)) {
-            bodyMaxStack = Infinity;
+        if (job === dokCreepJob.PowerHauler) {
+            return [
+                MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY,
+                MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY,
+                MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY, MOVE, CARRY
+            ]
         }
 
-
         // lower max stack if we are low on juice
-        if (typeof roomStorage !== 'undefined') {
-            if (roomStorage.store.energy < roomStorage.store.getCapacity('energy') * 0.10) {
-                bodyMaxStack = 1;
-            }
+        if (!this.boostedCreeps && rclLevel >= 5) {
+            bodyMaxStack = 1;
         }
 
         return this.AttemptBodyBoost(bodyType, energy, bodyMaxStack);
     }
 
     private MonitorSpawn() {
-        if (!this.util.RunEveryTicks(8))
+        if (!dokUtil.runEvery(this.aliveTicks, 8))
             return;
 
         // get room spawner
-        const spawner = this.util.FindResource<StructureSpawn>(this.roomRef, FIND_MY_SPAWNS);
+        const spawner = this.util.FindResource<StructureSpawn>(this.roomRef, FIND_MY_SPAWNS).filter(i => !i.spawning);
 
         if (spawner.length === 0)
             return;
 
+        let spawn = spawner[0];
+
         // what job should we run next
         const nextJobs = this.NextCreepJob();
 
-        for(const spawn of spawner) {
-            // dont focus if we are spawning something
-            if (spawn.spawning)
-                continue;
+        // if no jobs, wait for work
+        if (nextJobs.length === 0) {
+            new RoomVisual(spawn.room.name).text(`💤`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
 
-            // if no jobs, wait for work
-            if (nextJobs.length === 0) {
-                new RoomVisual(spawn.room.name).text(`🧊`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
+            return
+        }
 
-                continue;
-            }
+        // const get all energy sources
+        const structures = this.util.FindResource<Structure>(this.roomRef, FIND_STRUCTURES);
+        const extensions = structures.filter(i => i.structureType === 'extension') as StructureExtension[];
+        const storage = structures.find(i => i.structureType === 'storage') as StructureStorage;
 
-            // const get all energy sources
-            const extensions = this.util.FindResource<StructureExtension>(this.roomRef, FIND_STRUCTURES).filter(i => i.structureType === 'extension');
+        // get the energy on standby
+        let energyReady = spawn.store.energy;
 
-            // get the energy on standby
-            let energyReady = spawn.store.energy;
+        for(const extension of extensions) {
+            energyReady += extension.store.getUsedCapacity('energy');
+        }
 
-            for(const extension of extensions) {
-                energyReady += extension.store.getUsedCapacity('energy');
-            }
+        // select next job
+        let nextJob = nextJobs.shift();
 
-            // select next job
-            const nextJob = nextJobs.shift();
+        if (typeof nextJob === 'undefined')
+            return;
 
-            if (typeof nextJob === 'undefined')
-                continue;
+        // what body parts are needed for job
+        const bodyParts = this.CreepBodyType(nextJob, energyReady);
 
-            // what body parts are needed for job
-            const bodyParts = this.CreepBodyType(nextJob, energyReady);
+        // if no body parts...?
+        if (bodyParts.length === 0)
+            return;
 
-            // if no body parts...?
-            if (bodyParts.length === 0)
-                continue;
+        // init the spawn counter
+        if (typeof this.memory.spawnCount === `undefined`)
+            this.memory.spawnCount = 0;
 
-            // init the spawn counter
-            if (typeof this.memory.spawnCount === `undefined`)
+        // get our job code into text
+        const jobCode = this.GetJobCode(nextJob);
+
+        // calc the cost of the body
+        const bodyCost = this.CalcBodyCost(bodyParts);
+
+        const creepName = `${spawn.name}:${jobCode}:${this.memory.spawnCount}`;
+
+        // if we have enough energy
+        if (energyReady < bodyCost) {
+            new RoomVisual(spawn.room.name).text(`${jobCode} ${bodyCost}/${energyReady}`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
+
+            return;
+        }
+
+        // etablish base memory
+        const spawnMemory: dokCreepMemory = {
+            homeRoom: this.roomRef.name,
+
+            job: nextJob,
+            task: 0,
+
+            aliveFor: 0
+        };
+
+        let targetPos = spawn.pos;
+
+        // try to pull from extensions closer to storage
+        if (typeof storage !== 'undefined') {
+            targetPos = storage.pos;
+        }
+
+        // attempt spawn
+        const spawnCode = spawn.spawnCreep(bodyParts, creepName, {
+            memory: spawnMemory,
+            energyStructures: [ spawn as any ].concat(extensions.sort((a, b) => dokUtil.getDistance(a.pos, targetPos) - dokUtil.getDistance(b.pos, targetPos)))
+        });
+
+        // if spawn worked, then yes :)
+        if (spawnCode === OK) {
+            this.util.AddCreepToRuntime(creepName);
+
+            new RoomVisual(spawn.room.name).text(`👶 ${creepName}`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
+
+            this.memory.spawnCount++;
+            if (this.memory.spawnCount > 1000)
                 this.memory.spawnCount = 0;
-
-            // get our job code into text
-            const jobCode = this.GetJobCode(nextJob);
-
-            // calc the cost of the body
-            const bodyCost = this.CalcBodyCost(bodyParts);
-
-            const creepName = `${spawn.name}:${jobCode}:${this.memory.spawnCount}`;
-
-            // if we have enough energy
-            if (energyReady < bodyCost) {
-                new RoomVisual(spawn.room.name).text(`${jobCode} ${bodyCost}/${energyReady}`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
-
-                return;
-            }
-
-            // etablish base memory
-            const spawnMemory: dokCreepMemory = {
-                homeRoom: this.roomRef.name,
-
-                job: nextJob,
-                task: 0
-            };
-
-            // attempt spawn
-            const spawnCode = spawn.spawnCreep(bodyParts, creepName, {
-                memory: spawnMemory,
-                energyStructures: [ spawn as any ].concat(extensions)
-            });
-
-            // if spawn worked, then yes :)
-            if (spawnCode === OK) {
-                this.util.AddCreepToRuntime(creepName);
-
-                new RoomVisual(spawn.room.name).text(`👶 ${creepName}`, spawn.pos.x, spawn.pos.y + 2, { align: 'center' });
-
-                this.memory.spawnCount++;
-                if (this.memory.spawnCount > 1000)
-                    this.memory.spawnCount = 0;
-            }
         }
     }
 
@@ -457,6 +519,8 @@ export default class dokRoom {
                 return 'Healer';
             case dokCreepJob.PowerMiner:
                 return 'PowerMiner';
+            case dokCreepJob.PowerHauler:
+                return 'PowerHauler';
             default:
                 return 'Unknown'
         }
@@ -642,158 +706,99 @@ export default class dokRoom {
         linkToTick.transferEnergy(mainLink, linkToTick.store.energy);
     }
 
-    public TickTerminal() {
+    public NotifyReserveTicks(name: string, ticks: number) {
+        if (typeof this.memory.reserveTicks === 'undefined')
+            this.memory.reserveTicks = [];
+
+        const existingEntry = this.memory.reserveTicks.find(i => i.name === name);
+
+        if (typeof existingEntry !== 'undefined') {
+            existingEntry.ticks = ticks;
+            existingEntry.met = ticks >= 4800;
+
+            return;
+        }
+
+        this.memory.reserveTicks.push({
+            name,
+            ticks,
+            met: ticks >= 4800
+        });
+    }
+
+    /**
+     * @deprecated
+     */
+    public GetReserveTicks(name: string) {
+        if (typeof this.memory.reserveTicks === 'undefined')
+            this.memory.reserveTicks = [];
+
+        const existingEntry = this.memory.reserveTicks.find(i => i.name === name);
+
+        if (typeof existingEntry !== 'undefined')
+            return existingEntry.ticks;
+
+        return 0;
+    }
+
+    public GetReserveMet(name: string) {
+        if (typeof this.memory.reserveTicks === 'undefined')
+            this.memory.reserveTicks = [];
+
+        const existingEntry = this.memory.reserveTicks.find(i => i.name === name);
+
+        if (typeof existingEntry !== 'undefined' && typeof existingEntry.met !== 'undefined')
+            return existingEntry.met;
+
+        return false;
+    }
+
+    public GetReserveCount(name: string) {
+        if (typeof this.memory.reserveTicks === 'undefined')
+            this.memory.reserveTicks = [];
+
+        const existingEntry = this.memory.reserveTicks.find(i => i.name === name);
+
+        if (typeof existingEntry !== 'undefined')
+            return existingEntry.ticks;
+
+        return 0;
+    }
+
+    private DoRerserveTicks() {
+        if (typeof this.memory.reserveTicks === 'undefined')
+            this.memory.reserveTicks = [];
+
+        for(const reserveEntry of this.memory.reserveTicks) {
+            reserveEntry.ticks--;
+
+            if (reserveEntry.ticks < 600 && reserveEntry.met)
+                reserveEntry.met = false;
+        }
+
+        this.memory.reserveTicks = this.memory.reserveTicks.filter(i => i.ticks >= 0);
+    }
+
+    private CheckBoostedStatus() {
         if (!this.util.RunEveryTicks(10))
             return;
 
-        if (typeof this.memory.terminalMode === 'undefined')
-            return;
-
-        if (typeof this.memory.terminalSendTo === 'undefined')
-            return;
-
-        if (this.memory.terminalMode === 'energyReceive')
-            return;
-
-        const structures = this.util.FindResource<Structure>(this.roomRef, FIND_STRUCTURES);
-
-        const terminal = structures.find(i => i.structureType === 'terminal') as StructureTerminal;
-
-        if (typeof terminal === 'undefined')
-            return;
-
-
-        if (this.memory.terminalMode === 'energyShare') {
-            if (terminal.store.energy >= 100000) {
-                const roomInstance = this.util.GetDokRoom(this.memory.terminalSendTo);
-
-                if (typeof roomInstance !== 'undefined') {
-                    console.log(`[dokUtil][dokRoom][${this.roomRef.name}] terminal will send to ${this.memory.terminalSendTo}`);
-
-                    const transferCost = Game.market.calcTransactionCost(terminal.store.energy, this.roomRef.name, this.memory.terminalSendTo);
-    
-                    terminal.send('energy', terminal.store.energy - transferCost, this.memory.terminalSendTo, 'Energy Share');
-    
-                    Game.notify(`Room ${this.roomRef.name} has sent room ${this.memory.terminalSendTo} ${terminal.store.energy - transferCost} unit(s) of energy.`);
-    
-                    roomInstance.NotifySentEnergy();
-                }
-
-                delete this.memory.terminalMode;
-                delete this.memory.terminalSendTo;
-
-                return;
-            }
-        }
-    }
-
-    public ResetTerminal() {
-        delete this.memory.terminalMode;
-        delete this.memory.terminalSendTo;
-    }
-
-    public GetTerminalMode() {
-        return this.memory.terminalMode;
-    }
-
-    public ShareEnergy() {
-        if (!this.util.RunEveryTicks(20))
-            return;
-
-        if (typeof this.memory.terminalMode !== 'undefined')
-            return;
-
-        const structures = this.util.FindResource<Structure>(this.roomRef, FIND_STRUCTURES);
-
-        const storage = structures.find(i => i.structureType === 'storage') as StructureStorage;
+        const storage = this.util.FindResource<StructureStorage>(this.roomRef, FIND_STRUCTURES).find(i => i.structureType === 'storage');
 
         if (typeof storage === 'undefined')
             return;
 
-        if (storage.store.energy < 600000)
-            return;
-
-        const terminal = structures.find(i => i.structureType === 'terminal') as StructureTerminal;
-
-        if (typeof terminal === 'undefined')
-            return;
-
-        const rooms = this.util.GetDokRooms();
-
-        for(const room of rooms) {
-            if (!room.ShouldSendEnergy())
-                continue;
-
-            console.log(`[dokUtil][dokRoom] room ${this.roomRef.name} will send energy to ${room.GetName()}`);
-
-            Game.notify(`Room ${this.roomRef.name} will begin prepping to send room ${this.memory.terminalSendTo} energy.`);
-
-            this.memory.terminalMode = 'energyShare';
-            this.memory.terminalSendTo = room.GetName();
-
-            this.SaveMemory();
-
-            room.LockShouldSendEnergy();
-
-            break;
+        if (!this.boostedCreeps) {
+            this.boostedCreeps = storage.store.energy >= 140000;
+        } else if (this.boostedCreeps && storage.store.energy <= 60000) {
+            this.boostedCreeps = false;
         }
 
-    }
-
-    public DetermineNeedsEnergy() {
-        if (!this.util.RunEveryTicks(50))
-            return;
-
-        if (this.memory.needsEnergyLocked)
-            return;
-
-        this.memory.needsEnergy = false;
-
-        const structures = this.util.FindResource<Structure>(this.roomRef, FIND_STRUCTURES);
-
-        const storage = structures.find(i => i.structureType === 'storage') as StructureStorage;
-
-        if (typeof storage === 'undefined')
-            return;
-
-        if (storage.store.energy > 10000)
-            return;
-
-        console.log(`[dokUtil][dokRoom][${this.roomRef.name}] needs energy badly, will ask other rooms to share`)
-
-        this.memory.needsEnergy = true;
-    }
-
-    public ShouldSendEnergy() {
-        return (this.memory.needsEnergy || false) && !this.memory.needsEnergyLocked;
-    }
-
-    public LockShouldSendEnergy() {
-        this.memory.needsEnergyLocked = true;
-
-        this.memory.terminalMode = 'energyReceive';
-
-        this.SaveMemory();
-    }
-
-    public NotifySentEnergy() {
-        this.memory.needsEnergy = false;
-        this.memory.needsEnergyLocked = false;
-        this.memory.needsEnergySent = true;
-
-        this.SaveMemory();
-    }
-
-    public GetEnergySent() {
-        return this.memory.needsEnergySent;
-    }
-
-    public ResetEnergySent() {
-        this.memory.needsEnergy = false;
-        this.memory.needsEnergyLocked = false;
-        this.memory.needsEnergySent = false;
-
-        this.SaveMemory();
+        if (this.reducedCreeps) {
+            this.reducedCreeps = !(storage.store.energy >= 160000)
+        } else if (!this.reducedCreeps && storage.store.energy <= 100000) {
+            this.reducedCreeps = true;
+        }
     }
  
     public GetName() {
@@ -813,11 +818,11 @@ export default class dokRoom {
 
         this.TickLinksInRoom();
 
-        this.TickTerminal();
+        this.DoRerserveTicks();
 
-        this.ShareEnergy();
+        this.CheckBoostedStatus();
 
-        this.DetermineNeedsEnergy();
+        this.aliveTicks++
 
         this.SaveMemory();
     }

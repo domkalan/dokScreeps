@@ -5,7 +5,7 @@ export default class dokCreepColonizer extends dokCreep {
     private focusedFlag: string | null = null;
 
     protected RecycleCreep() {
-        const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
+        /*const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
 
         if (typeof homeRoom === 'undefined')
             return;
@@ -20,7 +20,9 @@ export default class dokCreepColonizer extends dokCreep {
 
         if (homeStructures[0].recycleCreep(this.creepRef) === ERR_NOT_IN_RANGE) {
             this.moveToObjectFar(homeStructures[0]);
-        }
+        }*/
+
+        this.moveToObject(new RoomPosition(25, 25, this.memory.homeRoom))
     }
 
     protected ColonizeRoom(flag: Flag) {
@@ -77,8 +79,20 @@ export default class dokCreepColonizer extends dokCreep {
             return;
         }
 
-        if (this.creepRef.reserveController(controller) === ERR_NOT_IN_RANGE) {
+        const controllerCode = this.creepRef.reserveController(controller);
+
+        if (controllerCode === ERR_NOT_IN_RANGE) {
             this.moveToObject(controller);
+        } else if (controllerCode === OK) {
+            const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
+
+            if (typeof homeRoom !== 'undefined') {
+                homeRoom.NotifyReserveTicks(controller.pos.roomName, controller.reservation?.ticksToEnd || 0);
+            }
+
+            if ((controller.sign?.text || 'any') !== dokUtil.signText) {
+                this.creepRef.signController(controller, dokUtil.signText);
+            }
         }
     }
 
@@ -107,8 +121,13 @@ export default class dokCreepColonizer extends dokCreep {
     protected CreepGoColonize() {
         const flags = this.util.GetFlagArray();
 
-        const colonizeFlags = flags.filter(i => i.name.startsWith(this.memory.homeRoom + ' Colonize ')).sort((a, b) => this.GetLockCountForFlag(a) - this.GetLockCountForFlag(b));
-        const reserveFlags = flags.filter(i => i.name.startsWith(this.memory.homeRoom + ' Reserve ')).sort((a, b) => this.GetLockCountForFlag(a) - this.GetLockCountForFlag(b));
+        const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
+
+        if (typeof homeRoom === 'undefined')
+            return;
+
+        const colonizeFlags = flags.filter(i => i.name.startsWith(this.memory.homeRoom + ' Colonize ') && this.GetLockCountForFlag(i) === 0);
+        const reserveFlags = flags.filter(i => i.name.startsWith(this.memory.homeRoom + ' Reserve ') && this.GetLockCountForFlag(i) === 0).sort((a, b) => homeRoom.GetReserveCount(a.pos.roomName) - homeRoom.GetReserveCount(b.pos.roomName));
 
         const combinedFlags : Array<Flag> = colonizeFlags.concat(reserveFlags);
 
@@ -137,7 +156,7 @@ export default class dokCreepColonizer extends dokCreep {
 
             this.GoToFlagRoom(reserveFlags[0]);
 
-            this.util.PlaceLock({ id: `flag:${reserveFlags[0]}` }, this);
+            this.util.PlaceLock({ id: `flag:${reserveFlags[0].name}` }, this);
 
             return;
         }

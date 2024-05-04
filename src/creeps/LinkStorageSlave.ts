@@ -2,9 +2,10 @@ import dokCreep from "./Base";
 
 export default class dokCreepLinkStorageSlave extends dokCreep {
     public DoCreepWork(): void {
-        const roomInstance = this.util.GetDokRoom(this.memory.homeRoom);
-
         const structures = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES);
+        
+        const tombstones = this.util.FindResource<Tombstone>(this.creepRef.room, FIND_TOMBSTONES).filter(i => i.store.getUsedCapacity() > 0);
+        const ruins = this.util.FindResource<Ruin>(this.creepRef.room, FIND_RUINS).filter((i) => i.store.getUsedCapacity() > 0);
 
         const storage = structures.find(i => i.structureType === 'storage') as StructureStorage;
 
@@ -14,78 +15,92 @@ export default class dokCreepLinkStorageSlave extends dokCreep {
             return;
         }
 
-        let grabbedEnergy = false;
+        const mainLinks = storage.pos.findInRange(FIND_STRUCTURES, 5).filter(i => i.structureType === 'link') as StructureLink[];
 
-        const terminal = structures.find(i => i.structureType === 'terminal') as StructureTerminal;
-
-        const mainLink = structures.find(i => i.structureType === 'link' && i.pos.getRangeTo(storage) <= 5) as StructureLink;
-
-        if (typeof mainLink === 'undefined') {
+        if (mainLinks.length === 0) {
             console.log(`[dokUtil][dokLinkStorageSlave] could not tick, no main link exists!`);
 
             return;
         }
 
-        if (typeof terminal !== 'undefined' && typeof roomInstance !== 'undefined' && roomInstance.GetTerminalMode() === 'energyShare') {
-            if (this.creepRef.store.getFreeCapacity() > 0 && mainLink.store.energy > 0) {
-                grabbedEnergy = true;
+        try {
+            if (tombstones.length > 0 && this.creepRef.store.getUsedCapacity() <= 0) {
+                const contents = (Object.keys(tombstones[0].store) as ResourceConstant[]);
+                let pulledSomething = false;
     
-                if (this.creepRef.withdraw(mainLink, 'energy') === ERR_NOT_IN_RANGE) {
-                    this.moveToObject(mainLink)
+                for(const content of contents) {
+                    const withdrawCode = this.creepRef.withdraw(tombstones[0], content);
+
+                    pulledSomething = true;
     
-                    return;
-                }
-            } else if (this.creepRef.store.getFreeCapacity() > 0 && storage.store.energy > 600000) {
-                grabbedEnergy = true;
+                    if (withdrawCode === ERR_NOT_IN_RANGE) {
+                        this.moveToObject(tombstones[0]);
     
-                if (this.creepRef.withdraw(storage, 'energy') === ERR_NOT_IN_RANGE) {
-                    this.moveToObject(storage)
-    
-                    return;
-                }
-            }
-
-            if (grabbedEnergy || this.creepRef.store.energy > 0) {
-                if (this.creepRef.transfer(terminal, 'energy') === ERR_NOT_IN_RANGE) {
-                    this.moveToObject(terminal)
-    
-                    return;
-                }
-            }
-
-            return;
-        }
-
-        if (this.creepRef.store.getFreeCapacity() > 0 && mainLink.store.energy > 0) {
-            grabbedEnergy = true;
-
-            if (this.creepRef.withdraw(mainLink, 'energy') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(mainLink)
-
-                return;
-            }
-        } else if (typeof terminal !== 'undefined' && typeof roomInstance !== 'undefined' && roomInstance.GetTerminalMode() === 'energyReceive' && roomInstance.GetEnergySent() === true) {
-            if (terminal.store.energy > 0) {
-                if (this.creepRef.store.getFreeCapacity() > 0) {
-                    grabbedEnergy = true;
-        
-                    if (this.creepRef.withdraw(terminal, 'energy') === ERR_NOT_IN_RANGE) {
-                        this.moveToObject(terminal)
-        
-                        return;
+                        break;
+                    } else if (withdrawCode === OK) {
+                        if (this.creepRef.store.getFreeCapacity() <= 0) {
+                            break;
+                        }
                     }
                 }
-            } else if (terminal.store.energy === 0) {
-                roomInstance.ResetTerminal();
-                roomInstance.ResetEnergySent();
+
+                if (pulledSomething)
+                    return;
+            }
+        } catch(e) {
+            console.log(`[dokUtil][LSS] failed to parse tombstones`, e)
+        }
+
+        try {
+            if (ruins.length > 0 && this.creepRef.store.getUsedCapacity() <= 0) {
+                const contents = (Object.keys(ruins[0].store) as ResourceConstant[]);
+                let pulledSomething = true;
+    
+                for(const content of contents) {
+                    const withdrawCode = this.creepRef.withdraw(ruins[0], content);
+    
+                    if (withdrawCode === ERR_NOT_IN_RANGE) {
+                        this.moveToObject(ruins[0]);
+    
+                        break;
+                    } else if (withdrawCode === OK) {
+                        if (this.creepRef.store.getFreeCapacity() <= 0) {
+                            break;
+                        }
+                    }
+                }
+
+                if (pulledSomething)
+                    return;
+            }
+        } catch(e) {
+            console.log(`[dokUtil][LSS] failed to parse ruins`, e)
+        }
+       
+
+        if (this.creepRef.store.getUsedCapacity() <= 0 && mainLinks[0].store.energy > 0) {
+            if (this.creepRef.withdraw(mainLinks[0], 'energy') === ERR_NOT_IN_RANGE) {
+                this.moveToObject(mainLinks[0])
+
+                return;
             }
         }
 
-        if (grabbedEnergy || this.creepRef.store.energy > 0) {
-            if (this.creepRef.transfer(storage, 'energy') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(storage)
+        if (this.creepRef.store.getUsedCapacity() > 0) {
+            const contents = (Object.keys(this.creepRef.store) as ResourceConstant[]);
 
-                return;
+            for(const content of contents) {
+                const withdrawCode = this.creepRef.transfer(storage, content);
+
+                if (withdrawCode === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(storage);
+
+                    break;
+                } else if (withdrawCode === OK) {
+                    if (this.creepRef.store.getUsedCapacity() <= 0) {
+                        break;
+                    }
+                }
             }
         }
     }

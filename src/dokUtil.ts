@@ -3,6 +3,7 @@ import dokCreepColonizer from "./creeps/Colonizer";
 import dokCreepConstructionWorker from "./creeps/ConstructionWorker";
 import dokCreepControllerSlave from "./creeps/ControllerSlave";
 import dokCreepDefender from "./creeps/Defender";
+import dokCreepPowerHauler from "./creeps/Hauler";
 import { dokCreepHealer } from "./creeps/Healer";
 import dokCreepHeavyMiner from "./creeps/HeavyMiner";
 import dokCreepLinkStorageSlave from "./creeps/LinkStorageSlave";
@@ -180,6 +181,10 @@ export default class dokUtil {
                 creepInstance = new dokCreepOffenseCreep(this, creep);
 
                 break;
+            case dokCreepJob.PowerHauler:
+                creepInstance = new dokCreepPowerHauler(this, creep);
+
+                break;
             default:
                 creepInstance = new dokCreep(this, creep);
 
@@ -278,19 +283,22 @@ export default class dokUtil {
     }
 
     public RemoveDeadLocks() {
+        let cleanedLocks = 0;
+
         if (typeof this.memory.locks !== 'undefined') {
             this.memory.locks = this.memory.locks.filter(lock => {
                 const creep = this.creeps.find(i => i.GetId() === lock.creep);
 
                 if (typeof creep === 'undefined') {
-                    console.log(`[dokUtil] ghost lock for creep ${lock.creep} removed`)
-
+                    cleanedLocks++;
                     return false;
                 }
                 
                 return true;
             })
         }
+
+        console.log(`[dokUtil][locks] ${cleanedLocks} ghost lock(s) have been cleaned`)
     }
 
     public GetSeatsForItem(room: Room, item: { id: string, pos: RoomPosition }) : number {
@@ -440,8 +448,6 @@ export default class dokUtil {
         // Clean dead creeps memory
         for(const creepMemKey in Memory.creeps) {
             if (typeof Game.creeps[creepMemKey] === 'undefined') {
-                console.log(`[dokUtil] Creep ${creepMemKey} is considered dead...`);
-
                 delete Memory.creeps[creepMemKey];
             }
         }
@@ -461,6 +467,23 @@ export default class dokUtil {
         return flagArray;
     }
 
+    public RunScanOnRoom(room: Room, creepScanning: dokCreep) {
+        console.log(`[dokUtil] running room scan on ${room.name}`);
+
+        const roomFlags = this.GetFlagArray();
+        const roomFlagNames = roomFlags.map(i => i.name);
+
+        const roomStructures = room.find(FIND_STRUCTURES);
+
+        const powerBank = roomStructures.find(i => i.structureType === 'powerBank') as StructurePowerBank | undefined;
+
+        if (typeof powerBank !== 'undefined' && powerBank.ticksToDecay >= 4800 && powerBank.power >= 3000) {
+            if (!roomFlagNames.includes(`${creepScanning.GetCurrentMemory().homeRoom} PowerMine`)) {
+                room.createFlag(powerBank.pos, `${creepScanning.GetCurrentMemory().homeRoom} PowerMine 1`);
+            }
+        }
+    }
+
     public TickConditionalFlags() {
         if (!this.RunEveryTicks(15))
             return;
@@ -472,6 +495,57 @@ export default class dokUtil {
                 flag.remove();
             }
         }
+
+        const leaveRoomFlag = flags.find(i => i.name.startsWith('LeaveRoom'));
+        if (typeof leaveRoomFlag !== 'undefined') {
+            const roomInstance = this.rooms.find(i => i.GetName() === leaveRoomFlag.pos.roomName);
+
+            if (typeof roomInstance !== 'undefined') {
+                const creepsHere = this.creeps.filter(i => i.GetCurrentMemory().homeRoom === leaveRoomFlag.pos.roomName);
+
+                for(const creep of creepsHere) {
+                    creep.GetRef().suicide();
+                }
+    
+                const myStructuresHere = roomInstance.GetRef().find(FIND_MY_STRUCTURES);
+
+                for(const structure of myStructuresHere) {
+                    structure.destroy();
+                }
+
+                const publicStructuresHere = roomInstance.GetRef().find(FIND_STRUCTURES);
+
+                const publicRoads = publicStructuresHere.filter(i => i.structureType === 'road');
+
+                for(const road of publicRoads) {
+                    road.destroy();
+                }
+
+                const publicBins = publicStructuresHere.filter(i => i.structureType === 'container');
+
+                for(const bin of publicBins) {
+                    bin.destroy();
+                }
+
+                const publicWalls = publicStructuresHere.filter(i => i.structureType === 'constructedWall');
+
+                for(const wall of publicWalls) {
+                    wall.destroy();
+                }
+
+                const controller = roomInstance.GetRef().controller;
+
+                if (typeof controller !== 'undefined') {
+                    controller.unclaim();
+
+                    this.rooms = this.rooms.filter(i => i.GetName() !== leaveRoomFlag.pos.roomName)
+                }
+
+                Game.notify(`dokUtil has been instructed to leave room ${leaveRoomFlag.pos.roomName}.`);
+
+                leaveRoomFlag.remove();
+            }
+        }
     }
 
     public DebugOverlay() {
@@ -480,6 +554,10 @@ export default class dokUtil {
         new RoomVisual().text(`Rooms: ${this.rooms.length}`, 0, 2, { align: 'left' });
         new RoomVisual().text(`Pathing: ${this.pathing.length}`, 0, 3, { align: 'left' });
         new RoomVisual().text(`Tick: ${this.memory.ticks} (iat: ${this.ticksAlive})`, 0, 4, { align: 'left' });
+
+        if (Game.cpu.bucket < 500) {
+            new RoomVisual().text(`LOW CPU!`, 0, 5, { align: 'left', color: 'red', backgroundColor: 'black' });
+        }
     }
 
     public Tick() {
@@ -489,6 +567,9 @@ export default class dokUtil {
         // bump counters
         this.BumpCounters();
 
+        // Tick conditional flags
+        this.TickConditionalFlags();
+
         // tick all active rooms
         this.TickRooms();
 
@@ -497,9 +578,6 @@ export default class dokUtil {
 
         // Clean dead memory
         this.CleanDeadMemory();
-
-        // Tick conditional flags
-        this.TickConditionalFlags();
 
         // clean dirty pathing
         this.CleanUnusedPaths();
@@ -519,7 +597,7 @@ export default class dokUtil {
     // Static methods
     private static instance: dokUtil;
 
-    public static signText: string = "I eat pants for a living.";
+    public static signText: string = "dokman was here";
 
     public static ProcessTick() {
         if (!this.instance) {
@@ -635,6 +713,14 @@ export default class dokUtil {
             return true;
 
         return false;
+    }
+
+    public static genRandomNumber(min: number, max: number) : number {
+        return Math.floor(Math.random() * (max - min) + min)
+    }
+
+    public static runEvery(ticks: number, num : number) : boolean {
+        return ticks % num == 0;
     }
 
     public static getRclLimits(rcl: number) {

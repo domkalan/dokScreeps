@@ -27,9 +27,11 @@ export class dokCreepHealer extends dokCreep {
         }
 
         if (targetCreepRef.hits < targetCreepRef.hitsMax) {
-            if(this.creepRef.rangedHeal(targetCreepRef) === ERR_NOT_IN_RANGE) {
+            if (this.creepRef.heal(targetCreepRef) === ERR_NOT_IN_RANGE) {
+                this.creepRef.rangedHeal(targetCreepRef);
+
                 this.moveToObject(targetCreepRef);
-            }
+            };
         }
     }
 

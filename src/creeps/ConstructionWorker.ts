@@ -85,16 +85,34 @@ export default class dokCreepConstructionWorker extends dokCreep {
     }
 
     public RepairAboutToFail() {
-        const structuresBasic = this.util.FindResource<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.10);
-        const structuresExtra = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => {
+        const roomRcl = this.creepRef.room.controller?.level || 0;
+
+        const structuresBasic = this.util.FindResource<Structure>(this.creepRef.room, FIND_MY_STRUCTURES);
+        const structuresExtra = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES);
+
+        const structures: Array<Structure> = structuresBasic.concat(structuresExtra).filter(i => {
             if (i.structureType === 'constructedWall') {
-                return i.hits < i.hitsMax * 0.0004;
+                if (roomRcl >= 5) {
+                    return i.hits < i.hitsMax * 0.0004;
+                }
+
+                return i.hits < i.hitsMax * 0.0016;
             }
 
-            return i.hits < i.hitsMax * 0.01 && ['container', 'link'].includes(i.structureType)
-        });
+            if (i.structureType === 'rampart') {
+                if (roomRcl >= 5) {
+                    return i.hits < i.hitsMax * 0.0004;
+                }
 
-        const structures: Array<Structure> = structuresBasic.concat(structuresExtra).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
+                return i.hits < i.hitsMax * 0.0016;
+            }
+
+            if (['container', 'link'].includes(i.structureType)) {
+                return i.hits < i.hitsMax * 0.01;
+            }
+
+            return i.hits < i.hitsMax * 0.10;
+        }).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
 
         if (this.focusedOn !== null) {
             const focusedConstrct = structures.find(i => i.id === this.focusedOn);

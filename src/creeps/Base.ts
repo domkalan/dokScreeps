@@ -36,7 +36,9 @@ export enum dokCreepJob {
 
     PowerMiner = 13,
 
-    Healer = 14
+    Healer = 14,
+
+    PowerHauler = 15
 }
 
 export enum dokCreepTask {
@@ -49,6 +51,8 @@ export interface dokCreepMemory {
 
     job: dokCreepJob;
     task: dokCreepTask;
+
+    aliveFor: number;
 }
 
 export default class dokCreep {
@@ -59,8 +63,6 @@ export default class dokCreep {
 
     private rclRecovery: boolean = false;
     private targetGather: string | null = null;
-
-    private myName: string;
 
     private storedPath: dokUtilPathing | null = null;
     private storedPathRoomSanity: string | null = null;
@@ -73,8 +75,6 @@ export default class dokCreep {
     constructor(util: dokUtil, creep: Creep) {
         this.util = util;
         this.creepRef = creep;
-
-        this.myName = creep.name;
 
         this.memory = this.ReadMemory();
     }
@@ -152,29 +152,33 @@ export default class dokCreep {
     protected DoBasicGather() {
         if (this.CheckIfGatherFull())
             return;
+
+        const currentRoomRcl = (this.creepRef.room.controller?.level || 0);
         
-        // search for dropped resources first
-        const droppedResources = this.util.FindResource<Resource>(this.creepRef.room, FIND_DROPPED_RESOURCES).filter(i => i.resourceType === 'energy');
-                
-        if (droppedResources.length > 0) {
-            if (this.creepRef.pickup(droppedResources[0]) === ERR_NOT_IN_RANGE) {
-                this.moveToObject(droppedResources[0])
+        if (currentRoomRcl < 5) {
+            // search for dropped resources first
+            const droppedResources = this.util.FindResource<Resource>(this.creepRef.room, FIND_DROPPED_RESOURCES).filter(i => i.resourceType === 'energy');
+                    
+            if (droppedResources.length > 0) {
+                if (this.creepRef.pickup(droppedResources[0]) === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(droppedResources[0])
+                }
+
+                return;
             }
 
-            return;
-        }
+            // check for tombstones
+            const tombstones = this.util.FindResource<Tombstone>(this.creepRef.room, FIND_TOMBSTONES).filter(i => i.store.getUsedCapacity('energy') > 0 && this.util.GetLocksWithoutMe(i, this).length < 1);
 
-        // check for tombstones
-        const tombstones = this.util.FindResource<Tombstone>(this.creepRef.room, FIND_TOMBSTONES).filter(i => i.store.getUsedCapacity('energy') > 0 && this.util.GetLocksWithoutMe(i, this).length < 1);
+            if (tombstones.length > 0) {
+                if (this.creepRef.withdraw(tombstones[0], 'energy') === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(tombstones[0])
+                }
 
-        if (tombstones.length > 0) {
-            if (this.creepRef.withdraw(tombstones[0], 'energy') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(tombstones[0])
+                this.util.PlaceLock(tombstones[0], this);
+
+                return;
             }
-
-            this.util.PlaceLock(tombstones[0], this);
-
-            return;
         }
 
         // single scan for all structures
@@ -197,26 +201,43 @@ export default class dokCreep {
             return;
         }
 
-        // check for heavy miners without links
-        const heavyMiners = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && this.memory.homeRoom === i.memory.homeRoom && (i as dokCreepHeavyMiner).canTakeFrom && this.IsTargetedGather(i.GetId()) && this.util.GetLocksWithoutMe({ id: i.GetId() }, this).length === 0 && i.creepRef.store.energy >= 200).sort((a, b) => dokUtil.getDistance(a.creepRef.pos, this.creepRef.pos) - dokUtil.getDistance(b.creepRef.pos, this.creepRef.pos));
+        if (currentRoomRcl <= 5) {
+            // check for heavy miners without links
+            const heavyMiners = this.util.GetKnownCreeps().filter(i => i.GetCurrentMemory().job === dokCreepJob.HeavyMiner && this.memory.homeRoom === i.memory.homeRoom && (i as dokCreepHeavyMiner).canTakeFrom && this.IsTargetedGather(i.GetId()) && this.util.GetLocksWithoutMe({ id: i.GetId() }, this).length === 0 && i.creepRef.store.energy >= 200).sort((a, b) => dokUtil.getDistance(a.creepRef.pos, this.creepRef.pos) - dokUtil.getDistance(b.creepRef.pos, this.creepRef.pos));
 
-        if (heavyMiners.length > 0) {
-            this.targetGather = heavyMiners[0].GetId();
+            if (heavyMiners.length > 0) {
+                this.targetGather = heavyMiners[0].GetId();
 
-            this.util.PlaceLock({ id: heavyMiners[0].GetId() }, this);
+                this.util.PlaceLock({ id: heavyMiners[0].GetId() }, this);
 
-            if (this.creepRef.pos.getRangeTo(heavyMiners[0].creepRef) > 1) {
-                this.moveToObject(heavyMiners[0].creepRef)
-            } else {
-                const heavyMiner = heavyMiners[0] as dokCreepHeavyMiner;
+                if (this.creepRef.pos.getRangeTo(heavyMiners[0].creepRef) > 1) {
+                    this.moveToObject(heavyMiners[0].creepRef)
+                } else {
+                    const heavyMiner = heavyMiners[0] as dokCreepHeavyMiner;
 
-                this.creepRef.say('Give', false);
+                    this.creepRef.say('Give', false);
 
-                heavyMiner.RequestTransfer(this.creepRef.id);
+                    heavyMiner.RequestTransfer(this.creepRef.id);
+                }
+
+                return;
             }
-
-            return;
         }
+
+        if (currentRoomRcl < 5) {
+            const ruins = this.util.FindResource<Ruin>(this.creepRef.room, FIND_RUINS).filter(i => i.store.getUsedCapacity('energy') > 0 && this.util.GetLocksWithoutMe(i, this).length < 1);
+
+            if (ruins.length > 0) {
+                if (this.creepRef.withdraw(ruins[0], 'energy') === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(ruins[0])
+                }
+
+                this.util.PlaceLock(ruins[0], this);
+
+                return;
+            }
+        }
+
 
         // check for energy sources
         const energySources = this.util.FindResource<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.IsTargetedGather(i.id) && this.ComputeLocksOnSource(i)).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
@@ -346,15 +367,11 @@ export default class dokCreep {
         const constructions = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).filter(i => (i.structureType === 'extension' || i.structureType === 'tower'));
 
         if (constructions.length > 0) {
-            if (this.util.GetLocksWithoutMe(constructions[0], this).length === 0) {
-                this.util.PlaceLock(constructions[0], this);
-
-                if (this.creepRef.build(constructions[0]) === ERR_NOT_IN_RANGE) {
-                    this.moveToObject(constructions[0])
-                }
-
-                return;
+            if (this.creepRef.build(constructions[0]) === ERR_NOT_IN_RANGE) {
+                this.moveToObject(constructions[0])
             }
+
+            return;
         }
 
         // should we auto build some extensions?
@@ -452,7 +469,7 @@ export default class dokCreep {
     }
 
     protected moveToObjectFar(obj : RoomPosition | { pos: RoomPosition; id: string; }) {
-        this.moveToObjectViaPath(obj, true);
+        this.moveToObjectViaPath(obj);
     }
 
     protected moveToObjectViaPath(obj : RoomPosition | { pos: RoomPosition; id: string; }, ignores: boolean = false) {
@@ -465,7 +482,7 @@ export default class dokCreep {
             position = obj as RoomPosition;
         }
 
-        if (this.atPosition !== null && dokUtil.posEqual(this.creepRef.pos, this.atPosition)) {
+        if (this.atPosition !== null && dokUtil.posEqual(this.creepRef.pos, this.atPosition) && this.creepRef.fatigue === 0) {
             this.atPositionFor++;
             
             if (this.atPositionFor >= 5) {
@@ -501,7 +518,7 @@ export default class dokCreep {
             return;
         }
 
-        const fetchedPath = this.util.GetSuggestedPath(position, this.creepRef.pos, { ignoreCreeps: ignores, ignoreRoads: ignores });
+        const fetchedPath = this.util.GetSuggestedPath(position, this.creepRef.pos, { ignoreRoads: ignores });
 
         this.storedPath = fetchedPath;
         this.storedPathRoomSanity = this.creepRef.room.name;
@@ -538,8 +555,6 @@ export default class dokCreep {
         this.RelinkRef();
 
         if (typeof this.creepRef === 'undefined') {
-            console.log(`[dokUtil] creep ${this.myName} has died!`)
-
             this.util.RemoveCreepFromRuntime(this);
 
             return;
@@ -549,6 +564,9 @@ export default class dokCreep {
             return;
 
         this.DoCreepWork();
+
+        // tick alive for
+        this.memory.aliveFor++;
 
         this.SaveMemory();
     }

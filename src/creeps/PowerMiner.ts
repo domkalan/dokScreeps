@@ -29,43 +29,24 @@ export default class dokCreepPowerMiner extends dokCreep {
     }
 
     protected MineHere(flag : Flag) {
-        if (this.creepRef.pos.getRangeTo(flag) <= 6) {
-            if (this.creepRef.store.getFreeCapacity('power') <= 0) {
-                this.memory.task = dokCreepTask.Depost;
-    
-                return;
-            }
-    
+        if (this.creepRef.pos.getRangeTo(flag) <= 6) {    
             const powerBank = flag.pos.findClosestByRange(FIND_STRUCTURES);
     
-            if (powerBank === null || powerBank.structureType !== 'powerBank') {
-                const powerSourceDropped = flag.pos.findClosestByRange(FIND_DROPPED_RESOURCES);
-                const powerSourceRuin = flag.pos.findClosestByRange(FIND_RUINS);
-    
-                if (powerSourceDropped !== null) {
-                    if (this.creepRef.pickup(powerSourceDropped) === ERR_NOT_IN_RANGE) {
-                        this.moveToObject(powerSourceDropped);
-    
-                        return;
-                    }
-                }
-    
-                if (powerSourceRuin !== null) {
-                    if (this.creepRef.withdraw(powerSourceRuin, 'power')  === ERR_NOT_IN_RANGE) {
-                        this.moveToObject(powerSourceRuin);
-    
-                        return;
-                    }
-                }
-    
+            if (powerBank === null || powerBank.structureType !== 'powerBank') {    
                 flag.remove();
     
                 return;
             }
-    
+
+            if (powerBank.hits <= 500000 && typeof Game.flags[ `${this.memory.homeRoom} PowerHauler 1 4`] === 'undefined') {
+                this.creepRef.room.createFlag(powerBank.pos, `${this.memory.homeRoom} PowerHauler 1 4`);
+            }
+
             if (this.creepRef.hits < this.creepRef.hitsMax * 0.90) {
+                this.creepRef.heal(this.creepRef);
+
                 return;
-            } 
+            }
     
             if (this.creepRef.attack(powerBank) === ERR_NOT_IN_RANGE) {
                 this.moveToObject(powerBank);
@@ -131,57 +112,6 @@ export default class dokCreepPowerMiner extends dokCreep {
         this.GoToFlag(constructFlags[0]);
     }
 
-    protected CreepGoDeposit() {
-        if (this.creepRef.room.name !== this.memory.homeRoom) {
-            this.GoHome();
-
-            return;
-        }
-
-        const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
-
-        if (typeof homeRoom === 'undefined')
-            return;
-
-        const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES);
-
-        const homeStorage = homeStructures.filter(i => i.structureType === 'storage');
-
-        if (homeStorage.length > 0) {
-            if (this.creepRef.transfer(homeStorage[0], 'power') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(homeStorage[0]);
-            }
-    
-            if (this.creepRef.store.getUsedCapacity('power') === 0) {
-                this.memory.task = dokCreepTask.Gather;
-            }
-
-            return;
-        }
-
-        const homeContainer = homeStructures.filter(i => i.structureType === 'container');
-
-        if (homeContainer.length > 0) {
-            if (this.creepRef.transfer(homeContainer[0], 'power') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(homeContainer[0]);
-            }
-    
-            if (this.creepRef.store.getUsedCapacity('power') === 0) {
-                this.memory.task = dokCreepTask.Gather;
-            }
-
-            return;
-        }
-
-        this.creepRef.say('No storage!');
-        
-        this.creepRef.drop('power');
-
-        if (this.creepRef.store.getUsedCapacity('power') === 0) {
-            this.memory.task = dokCreepTask.Gather;
-        }
-    }
-
     protected ValidateHealers() {
         const livingCreeps = this.util.GetDokCreeps().map(i => {
             try {
@@ -210,7 +140,7 @@ export default class dokCreepPowerMiner extends dokCreep {
     
             this.creepRef.say(`🤝❤️`);
 
-            if (this.assignedHealers.length >= 3) {
+            if (this.assignedHealers.length >= 2) {
                 break;
             }
         }
@@ -223,21 +153,12 @@ export default class dokCreepPowerMiner extends dokCreep {
 
             this.ValidateHealers();
 
-            if (this.assignedHealers.length < 3) {
+            if (this.assignedHealers.length < 2) {
                 this.AttemptAssignHealer();
             }  
         }
         
 
-        switch(this.memory.task) {
-            case dokCreepTask.Gather:
-                this.CreepGoMine();
-
-                break;
-            case dokCreepTask.Depost:
-                this.CreepGoDeposit();
-
-                break;
-        }
+        this.CreepGoMine();
     }
 }
