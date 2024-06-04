@@ -62,7 +62,7 @@ export default class dokRoom {
 
         // how much extensions do we have
         const publicStructures = this.util.FindResource<Structure>(this.roomRef, FIND_STRUCTURES).filter(i => ['road', 'constructedWall', 'storage', 'link'].includes(i.structureType));
-        const publicStructuresDamaged = publicStructures.filter(i => i.hits <= i.hitsMax * 0.50);
+        const publicStructuresDamaged = publicStructures.filter(i => i.hits <= i.hitsMax * 0.05);
         const structures = this.util.FindResource<Structure>(this.roomRef, FIND_MY_STRUCTURES);
         const extensions = structures.filter(i => i.structureType === 'extension') as Array<StructureExtension>;
         const sources = this.util.FindResource<Source>(this.roomRef, FIND_SOURCES);
@@ -228,9 +228,9 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RoomDefender);
         }
         
-        if (baseCreeps.length < 4 && rclLevel < 7) {
+        if (baseCreeps.length < 2 && rclLevel < 7) {
             jobCodes.push(dokCreepJob.Base);
-        } else if (rclLevel >= 7 && baseCreepsParts < 15 * sources.length) {
+        } else if (rclLevel >= 7 && baseCreepsParts < 15 && baseCreeps.length < 4) {
             jobCodes.push(dokCreepJob.Base);
         }
 
@@ -246,7 +246,7 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.HeavyMiner);
         }
 
-        if (rclLevel >= 4 && (constructions.length > 0 || publicStructuresDamaged.length > 0) && constructionCreeps.length < 1) {
+        if (rclLevel >= 2 && (constructions.length > 0 || publicStructuresDamaged.length > 0) && constructionCreeps.length < 1) {
             jobCodes.push(dokCreepJob.ConstructionWorker);
         }
 
@@ -262,7 +262,7 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RemoteConstruction);
         }
 
-        if (minerFlagLimits > remoteMinerCreeps.length + 0.5) {
+        if (minerFlagLimits > remoteMinerCreeps.length) {
             jobCodes.push(dokCreepJob.RemoteMiner);
         }
 

@@ -40,7 +40,7 @@ export default class dokTower {
     }
 
     public RepairStructures() {
-        if (this.towerRef.store.energy < this.towerRef.store.getCapacity('energy') * 0.50) {
+        if (this.towerRef.store.energy < this.towerRef.store.getCapacity('energy') * 0.85) {
             this.towerEnergyHold = true;
 
             return true;
