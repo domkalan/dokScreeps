@@ -1,8 +1,17 @@
+import dokUtil from "../dokUtil";
 import dokCreep from "./Base";
 
 export class dokCreepHealer extends dokCreep {
     protected healSlaveMode: string | null = null;
     protected healHangAroundFor: number = 0;
+
+    constructor(util : dokUtil, creep : Creep) {
+        super(util, creep);
+
+        // disable path caching
+        this.moveSpammyDisable = true;
+    }
+      
 
     protected DoCreepHealSlaveMode() {
         if (this.healSlaveMode === null)

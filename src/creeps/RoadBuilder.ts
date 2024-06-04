@@ -143,7 +143,7 @@ export default class dokCreepRoadBuilder extends dokCreep {
                 super.DoBasicGather();
 
                 break;
-            case dokCreepTask.Depost:
+            case dokCreepTask.Deposit:
                 this.DoRoadBuilderDeposit();
 
                 break;

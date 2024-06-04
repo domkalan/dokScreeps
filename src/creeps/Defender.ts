@@ -1,53 +1,46 @@
+import dokUtil from "../dokUtil";
 import dokCreep from "./Base";
 
 export default class dokCreepDefender extends dokCreep {
-    private hostileFree: number = 0;
+    private focusedOn?: string;
+    private waitingForGroup: boolean = true;
 
-    protected waitingForGroup : boolean = true;
+    constructor(util: dokUtil, creep: Creep) {
+        super(util, creep);
+
+        this.moveSpammyDisable = true;
+    }
 
     private AttackTarget(target : Creep | PowerCreep) {
         const attackCode = this.creepRef.attack(target)
 
-        if (attackCode === ERR_NOT_IN_RANGE || attackCode === ERR_NO_BODYPART) {
-            if (this.creepRef.rangedAttack(target)) {
+        if (attackCode === (ERR_NOT_IN_RANGE || ERR_NO_BODYPART)) {
+            if (this.creepRef.rangedAttack(target) === ERR_NOT_IN_RANGE) {
                 this.creepRef.moveTo(target);
             }
         }
     }
 
     public DoCreepWork(): void {
-        if (this.waitingForGroup) {
-            if (this.creepRef.pos.findInRange(FIND_MY_CREEPS, 10).filter(i => i.name.includes('Defender')).length >= 4) {
+        if (this.waitingForGroup && this.creepRef.hits === this.creepRef.hitsMax) {
+            if (this.creepRef.pos.findInRange(FIND_MY_CREEPS, 10).filter(i => i.name.includes('Defender')).length >= 2) {
                 this.waitingForGroup = false;
             }
 
             return;
         }
 
-        const hostiles = this.util.FindResource<Creep>(this.creepRef.room, FIND_HOSTILE_CREEPS);
-        const hostilePower = this.util.FindResource<PowerCreep>(this.creepRef.room, FIND_HOSTILE_POWER_CREEPS);
+        const dokRoom = this.util.GetDokRoom(this.memory.homeRoom);
 
-        const hostilesHere : Array<Creep | PowerCreep> = hostilePower.concat(hostiles as any).filter(i => i.owner.username !== this.creepRef.owner.username).sort((a, b) => b.hits - a.hits);
+        if (typeof dokRoom === 'undefined')
+            return;
+
+        const hostiles = this.util.FindResource<Creep>(dokRoom.GetRef(), FIND_CREEPS).filter(i => i.owner.username !== this.creepRef.owner.username);
+        const hostilePower = this.util.FindResource<PowerCreep>(dokRoom.GetRef(), FIND_HOSTILE_POWER_CREEPS).filter(i => i.owner.username !== this.creepRef.owner.username);
+
+        const hostilesHere : Array<Creep | PowerCreep> = hostilePower.concat(hostiles as any);
 
         if (hostilesHere.length === 0) {
-            if (this.hostileFree >= 250) {
-                const roomSpanwer = this.util.FindResource<StructureSpawn>(this.creepRef.room, FIND_MY_SPAWNS)[0];
-
-                if (!roomSpanwer) {
-                    this.creepRef.suicide();
-
-                    return;
-                }
-
-                if (this.creepRef.pos.getRangeTo(roomSpanwer) > 1) {
-                    this.moveToObject(roomSpanwer);
-                } else {
-                    roomSpanwer.recycleCreep(this.creepRef);
-                }
-            }
-
-            this.hostileFree++;
-
             return;
         }
         
@@ -62,6 +55,16 @@ export default class dokCreepDefender extends dokCreep {
 
             return;
         }*/
+
+        const focusedTarget = hostilesHere.find(i => i.id === this.focusedOn);
+
+        if (typeof focusedTarget !== 'undefined') {
+            this.AttackTarget(focusedTarget);
+
+            return;
+        }
+
+        this.focusedOn = hostilesHere[0].id;
 
         this.AttackTarget(hostilesHere[0]);
     }

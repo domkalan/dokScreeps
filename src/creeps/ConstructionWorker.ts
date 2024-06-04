@@ -93,18 +93,18 @@ export default class dokCreepConstructionWorker extends dokCreep {
         const structures: Array<Structure> = structuresBasic.concat(structuresExtra).filter(i => {
             if (i.structureType === 'constructedWall') {
                 if (roomRcl >= 5) {
-                    return i.hits < i.hitsMax * 0.0004;
+                    return i.hits < 10000;
                 }
 
-                return i.hits < i.hitsMax * 0.0016;
+                return i.hits < 1000;
             }
 
             if (i.structureType === 'rampart') {
                 if (roomRcl >= 5) {
-                    return i.hits < i.hitsMax * 0.0004;
+                    return i.hits < 10000;
                 }
 
-                return i.hits < i.hitsMax * 0.0016;
+                return i.hits < 1000;
             }
 
             if (['container', 'link'].includes(i.structureType)) {
@@ -152,7 +152,7 @@ export default class dokCreepConstructionWorker extends dokCreep {
                 super.DoBasicGather();
 
                 break;
-            case dokCreepTask.Depost:
+            case dokCreepTask.Deposit:
                 this.RepairAboutToFail();  
 
                 break;

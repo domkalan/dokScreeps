@@ -1,9 +1,14 @@
+import dokUtil from "../dokUtil";
 import dokCreep, { dokCreepJob, dokCreepTask } from "./Base";
 import { dokCreepHealer } from "./Healer";
 
 export default class dokCreepPowerHauler extends dokCreep {
     private focusedFlag: Flag | null = null;
     private flagInvalidFor: number = 0;
+
+    private scannedOnFloor: number = 0;
+
+    private scannedForLink: number = 0;
 
     protected RecycleCreep() {
         const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
@@ -29,7 +34,7 @@ export default class dokCreepPowerHauler extends dokCreep {
     protected HaulPowerHere(flag : Flag) {
         if (this.creepRef.pos.getRangeTo(flag) <= 6) {
             if (this.creepRef.store.getFreeCapacity('power') <= 0) {
-                this.memory.task = dokCreepTask.Depost;
+                this.memory.task = dokCreepTask.Deposit;
                 this.flagInvalidFor = 0;
     
                 return;
@@ -85,52 +90,72 @@ export default class dokCreepPowerHauler extends dokCreep {
         this.moveToObject(flag.pos);
     }
 
-    protected HualCanHere(flag: Flag) {
-        if (this.creepRef.pos.getRangeTo(flag) <= 6) {
-            if (this.creepRef.store.getFreeCapacity() <= 0) {
-                this.memory.task = dokCreepTask.Depost;
-    
-                return;
-            }
-
-            const cans = flag.pos.findInRange(FIND_STRUCTURES, 3).filter(i => i.structureType === 'container') as StructureContainer[];
-
-            if (cans.length === 0) {
-                flag.remove();
-
-                return;
-            }
-
-            const can = cans[0];
-
-            if (can.store.getUsedCapacity() >= this.creepRef.store.getFreeCapacity()) {
-                const contents = (Object.keys(can.store) as ResourceConstant[]);
-                let pulledSomething = true;
-    
-                for(const content of contents) {
-                    const withdrawCode = this.creepRef.withdraw(can, content);
-    
-                    if (withdrawCode === ERR_NOT_IN_RANGE) {
-                        this.moveToObject(can);
-    
-                        break;
-                    } else if (withdrawCode === OK) {
-                        if (this.creepRef.store.getFreeCapacity() <= 0) {
-                            break;
-                        }
-                    }
-                }
-
-                if (pulledSomething)
-                    return;
-            }
-
-            this.creepRef.say(`⏱️`);
+    protected HaulCanHere(flag: Flag) {
+        if (this.creepRef.store.getFreeCapacity() <= 0) {
+            this.memory.task = dokCreepTask.Deposit;
 
             return;
         }
 
-        this.moveToObject(flag.pos);
+        this.scannedOnFloor++;
+        if (this.scannedOnFloor >= 30) {
+            const droppedResource = this.util.FindResource<Resource>(this.creepRef.room, FIND_DROPPED_RESOURCES);
+
+            if (droppedResource.length === 0) {
+                this.scannedOnFloor = 0;
+
+                return;
+            }
+
+            this.creepRef.pickup(droppedResource[0]);
+
+            if (this.creepRef.store.getFreeCapacity() <= 10) {
+                this.memory.task = dokCreepTask.Deposit;
+
+                return;
+            }
+        }
+
+        const cans = this.util.FindResource<StructureContainer>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'container').sort((a, b) => a.store.getUsedCapacity() - b.store.getUsedCapacity());
+
+        if (cans.length === 0) {
+            // putting this on pause, we are loosing too many flags
+            //flag.remove();
+
+            this.creepRef.say('🤷');
+
+            if (dokUtil.getDistance(flag.pos, this.creepRef.pos) > 6) {
+                this.moveToObject(flag.pos);
+            }
+
+            return;
+        }
+
+        const can = cans[0];
+
+        if (can.store.getUsedCapacity() >= this.creepRef.store.getFreeCapacity()) {
+            const contents = (Object.keys(can.store) as ResourceConstant[]);
+            let pulledSomething = true;
+
+            for(const content of contents) {
+                const withdrawCode = this.creepRef.withdraw(can, content);
+
+                if (withdrawCode === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(can);
+
+                    break;
+                } else if (withdrawCode === OK) {
+                    if (this.creepRef.store.getFreeCapacity() <= 0) {
+                        break;
+                    }
+                }
+            }
+
+            if (pulledSomething)
+                return;
+        }
+
+        this.creepRef.say(`⏱️`);
     }
 
     protected GoHome() {
@@ -155,7 +180,7 @@ export default class dokCreepPowerHauler extends dokCreep {
         }
 
         if (flag.name.includes(' CanHauler ')) {
-            this.HualCanHere(flag);
+            this.HaulCanHere(flag);
         }
     }   
 
@@ -165,7 +190,7 @@ export default class dokCreepPowerHauler extends dokCreep {
         return locksPlaced.length;
     };
 
-    public CreepGoHual() {
+    public CreepGoHaul() {
         const flags = this.util.GetFlagArray();
 
         const powerHaulFlags = flags.filter(i => i.name.startsWith(this.memory.homeRoom + ' PowerHauler'));
@@ -215,39 +240,27 @@ export default class dokCreepPowerHauler extends dokCreep {
 
         const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES);
 
-        const homeStorage = homeStructures.filter(i => i.structureType === 'storage');
+        const homeStorage = homeStructures.filter(i => i.structureType === 'storage' || i.structureType === 'link').sort((a, b) => this.creepRef.pos.getRangeTo(a.pos) - this.creepRef.pos.getRangeTo(b.pos));
 
         if (homeStorage.length > 0) {
-            if (this.creepRef.transfer(homeStorage[0], 'power') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(homeStorage[0]);
-            }
-    
-            if (this.creepRef.store.getUsedCapacity('power') === 0) {
-                this.memory.task = dokCreepTask.Gather;
-            }
+            const contents = (Object.keys(this.creepRef.store) as ResourceConstant[]);
 
-            return;
+            for(const content of contents) {
+                const withdrawCode = this.creepRef.transfer(homeStorage[0], content);
+
+                if (withdrawCode === ERR_NOT_IN_RANGE) {
+                    this.moveToObject(homeStorage[0]);
+
+                    break;
+                } else if (withdrawCode === OK) {
+                    if (this.creepRef.store.getUsedCapacity() <= 0) {
+                        break;
+                    }
+                }
+            }
         }
 
-        const homeContainer = homeStructures.filter(i => i.structureType === 'container');
-
-        if (homeContainer.length > 0) {
-            if (this.creepRef.transfer(homeContainer[0], 'power') === ERR_NOT_IN_RANGE) {
-                this.moveToObject(homeContainer[0]);
-            }
-    
-            if (this.creepRef.store.getUsedCapacity('power') === 0) {
-                this.memory.task = dokCreepTask.Gather;
-            }
-
-            return;
-        }
-
-        this.creepRef.say('No storage!');
-        
-        this.creepRef.drop('power');
-
-        if (this.creepRef.store.getUsedCapacity('power') === 0) {
+        if (this.creepRef.store.getUsedCapacity() === 0) {
             this.memory.task = dokCreepTask.Gather;
         }
     }
@@ -255,10 +268,10 @@ export default class dokCreepPowerHauler extends dokCreep {
     public DoCreepWork(): void {
         switch(this.memory.task) {
             case dokCreepTask.Gather:
-                this.CreepGoHual();
+                this.CreepGoHaul();
 
                 break;
-            case dokCreepTask.Depost:
+            case dokCreepTask.Deposit:
                 this.CreepGoDeposit();
 
                 break;

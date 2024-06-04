@@ -3,6 +3,8 @@ import dokCreep, { dokCreepTask } from "./Base";
 export default class dokCreepRemoteConstruction extends dokCreep {
     private focusedFlag: string | null = null;
 
+    private tryingToGather: number = 0;
+
     protected RecycleCreep() {
         const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
 
@@ -22,6 +24,26 @@ export default class dokCreepRemoteConstruction extends dokCreep {
         }
     }
 
+    protected RepairInFlagRoom(flag : Flag) {
+        if (this.creepRef.room.name !== flag.pos.roomName) {
+            this.moveToObjectFar(flag.pos);
+
+            return;
+        }
+
+        const repairables = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax);
+
+        if (repairables.length == 0) {
+            this.creepRef.say(`⏱️`);
+
+            return;
+        }
+
+        if (this.creepRef.repair(repairables[0]) === ERR_NOT_IN_RANGE) {
+            this.moveToObject(repairables[0]);
+        }
+    }
+
     protected GoToFlagRoom(flag : Flag) {
         if (this.creepRef.room.name !== flag.pos.roomName) {
             this.moveToObjectFar(flag.pos);
@@ -32,7 +54,11 @@ export default class dokCreepRemoteConstruction extends dokCreep {
         const constructionsHere = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_MY_CONSTRUCTION_SITES).sort((a, b) => b.progress - a.progress);
 
         if (constructionsHere.length == 0) {
-            flag.remove();
+            if (flag.name.endsWith('Repair')) {
+                this.RepairInFlagRoom(flag);
+            } else {
+                flag.remove();
+            }
 
             return;
         }
@@ -51,6 +77,10 @@ export default class dokCreepRemoteConstruction extends dokCreep {
     };
 
     protected CreepGoBuild() {
+        if (this.tryingToGather !== 0) {
+            this.tryingToGather = 0;
+        }
+
         const flags = this.util.GetFlagArray();
 
         const buildFlags = flags.filter(i => i.name.startsWith(this.memory.homeRoom + ' Construct ')).sort((a, b) => this.GetLockCountForFlag(a) - this.GetLockCountForFlag(b));
@@ -88,16 +118,35 @@ export default class dokCreepRemoteConstruction extends dokCreep {
         this.moveToObjectFar(new RoomPosition(25, 25, this.memory.homeRoom))
     }
 
+    protected TryToConstructGather() {
+        if (this.tryingToGather > 100) {
+            if (this.creepRef.room.name === this.memory.homeRoom) {
+                this.DoBasicGather();
+
+                this.tryingToGather = 0;
+
+                return;
+            }
+
+            this.GoHome();
+
+            return;
+        };
+
+        this.tryingToGather++;
+        this.DoBasicGather();
+
+        this.creepRef.say(`⚒️ ${this.tryingToGather}`);
+    }
+
     public DoCreepWork(): void {
         switch(this.memory.task) {
-            case dokCreepTask.Depost:
+            case dokCreepTask.Deposit:
                 this.CreepGoBuild();
 
                 break;
             case dokCreepTask.Gather:
-                //this.CreepRemoteConstructionGather();
-
-                this.DoBasicGather();
+                this.TryToConstructGather();
 
                 break;
         }

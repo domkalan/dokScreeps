@@ -36,7 +36,7 @@ export default class dokCreepRemoteMiner extends dokCreep {
 
     protected MineDeposit(resource: Deposit, flag: Flag) {
         if (this.creepRef.store.getFreeCapacity() <= 0) {
-            this.memory.task = dokCreepTask.Depost;
+            this.memory.task = dokCreepTask.Deposit;
 
             this.lastPeaceGranted = false;
 
@@ -80,7 +80,7 @@ export default class dokCreepRemoteMiner extends dokCreep {
 
     protected MineMineral(mineral: Mineral) {
         if (this.creepRef.store.getFreeCapacity() <= 0) {
-            this.memory.task = dokCreepTask.Depost;
+            this.memory.task = dokCreepTask.Deposit;
 
             return;
         }
@@ -99,16 +99,18 @@ export default class dokCreepRemoteMiner extends dokCreep {
     }
 
     protected MineSource(source : Source, flag: Flag) {
-        if (!flag.name.endsWith('Can')) {
+        const canHaul = this.util.GetFlagArray().find(i => i.pos.roomName === flag.pos.roomName && i.name.includes('CanHauler'));
+
+        if (typeof canHaul === 'undefined') {
             if (this.creepRef.store.getFreeCapacity() <= 0) {
-                this.memory.task = dokCreepTask.Depost;
+                this.memory.task = dokCreepTask.Deposit;
     
                 return;
             }
         } else {
             if (this.creepRef.store.getFreeCapacity() <= 0 || this.buildingCan) {
                 // find nearby storage cans
-                const nearbyCans = this.creepRef.pos.findInRange(FIND_STRUCTURES, 3).filter(i => i.structureType === 'container') as StructureContainer[];
+                const nearbyCans = this.creepRef.pos.findInRange(FIND_STRUCTURES, 5).filter(i => i.structureType === 'container') as StructureContainer[];
 
                 // if a can exists
                 if (nearbyCans.length > 0) {
@@ -128,7 +130,7 @@ export default class dokCreepRemoteMiner extends dokCreep {
                 }
 
                 // check if nearby can construction exists
-                const nearbyCanConstruction = this.creepRef.pos.findInRange(FIND_CONSTRUCTION_SITES, 3).filter(i => i.structureType === 'container');
+                const nearbyCanConstruction = this.creepRef.pos.findInRange(FIND_CONSTRUCTION_SITES, 5).filter(i => i.structureType === 'container');
 
                 if (nearbyCanConstruction.length > 0) {
                     this.creepRef.build(nearbyCanConstruction[0]);
@@ -330,7 +332,7 @@ export default class dokCreepRemoteMiner extends dokCreep {
                 this.CreepGoMine();
 
                 break;
-            case dokCreepTask.Depost:
+            case dokCreepTask.Deposit:
                 this.CreepGoDeposit();
 
                 break;

@@ -46,7 +46,7 @@ export default class dokCreepControllerSlave extends dokCreep {
                 this.DoBasicGather();
 
                 break;
-            case dokCreepTask.Depost:
+            case dokCreepTask.Deposit:
                 this.DoControllerDeposit()
 
                 break;

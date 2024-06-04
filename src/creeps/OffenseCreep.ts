@@ -1,11 +1,34 @@
-import dokCreep, { dokCreepJob, dokCreepTask } from "./Base";
+import dokUtil from "../dokUtil";
+import dokCreep, { dokCreepJob, dokCreepMemory, dokCreepTask } from "./Base";
 import { dokCreepHealer } from "./Healer";
+
+export interface dokCreepOffenseCreepMemory extends dokCreepMemory {
+    waypointsMet: Array<string>
+}
 
 export default class dokCreepOffenseCreep extends dokCreep {
     protected assignedHealer: string | null = null;
     protected lastHealerCheck: number = 0;
 
     protected waitingForGroup : boolean = true;
+
+    protected memory: dokCreepOffenseCreepMemory;
+
+    protected hostilesScan: number = 0;
+
+    constructor(util : dokUtil, creep : Creep) {
+        super(util, creep);
+
+        // disable path caching
+        this.moveSpammyDisable = true;
+
+        // extend creep memory
+        this.memory = this.creepRef.memory as any;
+
+        if (typeof this.memory.waypointsMet === 'undefined') {
+            this.memory.waypointsMet = [];
+        }
+    }
 
     private AttackTarget(target : Creep | PowerCreep | Structure) {
         const attackCode = this.creepRef.attack(target);
@@ -47,7 +70,8 @@ export default class dokCreepOffenseCreep extends dokCreep {
     }
 
     protected CreepGoAttack() {
-        const flag = this.util.GetFlagArray().find(i => i.name.startsWith(this.memory.homeRoom + ' Attack'))
+        const flags = this.util.GetFlagArray();
+        const flag = flags.filter(i => !i.name.includes('Waypoint')).find(i => i.name.startsWith(this.memory.homeRoom + ' Attack') || i.name.includes('Attack'))
 
         if (typeof flag === 'undefined') {
             this.CreepGoRetire();
@@ -61,9 +85,19 @@ export default class dokCreepOffenseCreep extends dokCreep {
             return;
         }
 
+        if (flag.name.includes('AttackStage')) {
+            if (this.creepRef.pos.getRangeTo(flag.pos) > 8) {
+                this.moveToObject(flag.pos)
+
+                return;
+            }
+
+            return;
+        }
+
         if (flag.name.includes('AttackHostiles')) {
-            const hostiles = this.util.FindResource<Creep>(this.creepRef.room, FIND_HOSTILE_CREEPS);
-            const hostilePower = this.util.FindResource<PowerCreep>(this.creepRef.room, FIND_HOSTILE_POWER_CREEPS);
+            const hostiles = this.util.FindResource<Creep>(this.creepRef.room, FIND_CREEPS);
+            const hostilePower = this.util.FindResource<PowerCreep>(this.creepRef.room, FIND_POWER_CREEPS);
 
             const hostilesHere : Array<Creep | PowerCreep> = hostilePower.concat(hostiles as any).filter(i => i.owner.username !== this.creepRef.owner.username);
 
@@ -104,6 +138,18 @@ export default class dokCreepOffenseCreep extends dokCreep {
             }
         }
 
+        if (flag.name.includes('AttackConstruction')) {
+            const attackStructures = this.util.FindResource<ConstructionSite>(this.creepRef.room, FIND_CONSTRUCTION_SITES).filter(i => i.owner.username !== this.creepRef.owner.username);
+
+            if (attackStructures.length > 0) {
+                this.moveToObject(attackStructures[0])
+
+                return;
+            } else {
+                flag.remove();
+            }
+        }
+
         this.CreepGoRetire();
     }
 
@@ -122,6 +168,8 @@ export default class dokCreepOffenseCreep extends dokCreep {
     }
 
     public DoCreepWork(): void {
+        const flags = this.util.GetFlagArray();
+
         if (!this.assignedHealer) {
             if (this.lastHealerCheck === 0) {
                 this.AttemptAssignHealer();
@@ -133,25 +181,54 @@ export default class dokCreepOffenseCreep extends dokCreep {
             }
         }
 
-        if (this.waitingForGroup && typeof Game.flags['AttackGroupUp'] !== 'undefined') {
-            if (this.creepRef.pos.findInRange(FIND_MY_CREEPS, 10).filter(i => i.name.includes('Attacker')).length >= 3) {
-                this.waitingForGroup = false;
+        let waypointFlags = flags.filter(i => i.name.includes('AttackWaypoint') && !this.memory.waypointsMet.includes(i.name));
 
-                this.creepRef.say(`👥`);
-            } else {
-                const waitingObject = this.creepRef.pos.findClosestByRange(FIND_MY_SPAWNS);
-                if (waitingObject !== null) {
-                    const waitingLocation = new RoomPosition(16, 16, waitingObject.pos.roomName);
+        if (waypointFlags.length >= 2) {
+            waypointFlags = waypointFlags.sort((a, b) => {
+                const flagSplitA = a.name.split(' ');
+                const flagSplitB = b.name.split(' ');
     
-                    if (this.creepRef.pos.getRangeTo(waitingLocation) > 4) {
-                        this.moveToObject(waitingLocation);
+                return Number(flagSplitA[1]) - Number(flagSplitB[2]);
+            });
+        }
+
+        if (waypointFlags.length > 0) {
+            console.log(`[dokUtil][dokAttacker] creep ${this.creepRef.name} has ${waypointFlags.length} to hit`)
+
+            const moveCode = this.creepRef.pos.getRangeTo(waypointFlags[0].pos);
+
+            if (moveCode >= 4) {
+                this.hostilesScan++;
+
+                if (this.hostilesScan >= 5) {
+                    const hostiles = this.util.FindResource<Creep>(this.creepRef.room, FIND_CREEPS);
+                    const hostilePower = this.util.FindResource<PowerCreep>(this.creepRef.room, FIND_POWER_CREEPS);
+    
+                    const hostilesHere : Array<Creep | PowerCreep> = hostilePower.concat(hostiles as any).filter(i => i.owner.username !== this.creepRef.owner.username && i.pos.getRangeTo(this.creepRef.pos) <= 6);
+    
+                    if (hostilesHere.length === 0) {
+                        this.hostilesScan = 0;
+                    } else {
+                        this.AttackTarget(hostiles[0]);
+
+                        return;
                     }
                 }
-            }
+                
 
-            return;
+                if (moveCode === 4) {
+                    this.memory.waypointsMet.push(waypointFlags[0].name);
+
+                    this.SaveMemory();
+
+                    return;
+                }
+
+                this.moveToObjectFar(waypointFlags[0].pos);
+
+                return;
+            }
         }
-        
 
         this.CreepGoAttack();
     }

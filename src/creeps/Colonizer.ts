@@ -42,9 +42,7 @@ export default class dokCreepColonizer extends dokCreep {
             return;
         }
 
-        const centerOfRoom = new RoomPosition(25, 25, flag.pos.roomName);
-
-        const buildableAreas = dokUtil.GetFreeSlots(this.creepRef.room, { pos: centerOfRoom }, 8, 1, ['swamp']);
+        const buildableAreas = dokUtil.GetFreeSlots(this.creepRef.room, { pos: flag.pos }, 8, 1, ['swamp']);
 
         const placeableArea = buildableAreas.filter((plotScan) => {
             if (plotScan.code === 0) {
@@ -56,7 +54,7 @@ export default class dokCreepColonizer extends dokCreep {
             new RoomVisual(this.creepRef.room.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#ff4f00' });
 
             return true;
-        }).sort((a, b) => dokUtil.getDistance(a.pos, centerOfRoom) - dokUtil.getDistance(b.pos, centerOfRoom));
+        }).sort((a, b) => dokUtil.getDistance(a.pos, flag.pos) - dokUtil.getDistance(b.pos, flag.pos));
 
         // place down spawn
         this.creepRef.room.createConstructionSite(placeableArea[0], 'spawn');
