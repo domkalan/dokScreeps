@@ -429,7 +429,7 @@ export default class dokUtil {
 
         // if low on CPU, do conditional ticking
         if (Game.cpu.bucket <= 500) {
-            const attackingCreeps = this.creeps.filter(i => i.GetJob() === (dokCreepJob.RoomAttacker || dokCreepJob.RoomDefender));
+            const attackingCreeps = this.creeps.filter(i => [dokCreepJob.RoomAttacker, dokCreepJob.RoomDefender].includes(i.GetJob()));
 
             if (attackingCreeps.length > 0) {
                 this.conditionalTickingBase++;
@@ -626,32 +626,48 @@ export default class dokUtil {
 
         const flags = this.GetFlagArray();
 
-        if (typeof flags.find(i => i.name.startsWith('Mines Remove')) !== 'undefined') {
+        if (typeof flags.find(i => i.name.startsWith('MinesRemove')) !== 'undefined') {
             for(const flag of flags.filter(i => i.name.includes('Mine'))) {
                 flag.remove();
             }
         }
 
-        if (typeof flags.find(i => i.name.startsWith('Attack Remove')) !== 'undefined') {
+        if (typeof flags.find(i => i.name.startsWith('AttackRemove')) !== 'undefined') {
             for(const flag of flags.filter(i => i.name.includes('Attack'))) {
                 flag.remove();
             }
         }
 
-        if (typeof flags.find(i => i.name.startsWith('Attackers Disband')) !== 'undefined') {
+        if (typeof flags.find(i => i.name.startsWith('AttackersDisband')) !== 'undefined') {
             for(const creep of this.creeps.filter(i => i.GetJob() === dokCreepJob.RoomAttacker || i.GetName().includes('Attacker'))) {
                 creep.GetRef().suicide();
             }
 
-            Game.flags['Attackers Disband'].remove();
+            Game.flags['AttackersDisband'].remove();
         }
 
-        if (typeof flags.find(i => i.name.startsWith('Attackers Disband')) !== 'undefined') {
-            for(const creep of this.creeps.filter(i => i.GetJob() === dokCreepJob.RoomAttacker || i.GetName().includes('Attacker'))) {
-                creep.GetRef().suicide();
-            }
+        const killCreepsRoomFlag = flags.find(i => i.name.startsWith('KillCreepsInRoom'));
+        if (typeof killCreepsRoomFlag !== 'undefined') {
+            const roomInstance = this.rooms.find(i => i.GetName() === killCreepsRoomFlag.pos.roomName);
 
-            Game.flags['Attackers Disband'].remove();
+            if (typeof roomInstance !== 'undefined') {
+                const creepsHere = this.creeps.filter(i => i.GetCurrentMemory().homeRoom === killCreepsRoomFlag.pos.roomName);
+
+                for(const creep of creepsHere) {
+                    creep.GetRef().suicide();
+                }
+
+                killCreepsRoomFlag.remove();
+            }
+        }
+
+        const killAllCreepsFlag = flags.find(i => i.name.startsWith('KillAllCreeps'));
+        if (typeof killAllCreepsFlag !== 'undefined') {
+                for(const creep of this.creeps) {
+                    creep.GetRef().suicide();
+                }
+
+                killAllCreepsFlag.remove();
         }
 
         const leaveRoomFlag = flags.find(i => i.name.startsWith('LeaveRoom'));

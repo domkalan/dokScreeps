@@ -10,6 +10,8 @@
 - **AttackRemove** - Remove all attack flags regardless of room.
 - **AttackersDisband** - Kills all attacker creeps regardless of room.
 - **LeaveRoom** - Kills all creeps, destroys all structures, and unclaims the controller of the room the flag is placed in.
+- **KillAllCreeps** - Kills all creeps, regardless of room.
+- **KillCreepsInRoom** - Kills all creeps that were born from the room the flag is placed in.
 
 ## Room Specific Flags
 Most room specific flags accept numbers after the name to allow for multiple flags. example: `W0N0 Reserve 1`

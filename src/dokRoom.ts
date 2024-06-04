@@ -31,9 +31,6 @@ export default class dokRoom {
 
     private aliveTicks: number = 0;
 
-    private boostedCreeps: boolean = false;
-    private reducedCreeps: boolean = true;
-
     constructor(util : dokUtil, room: Room) {
         this.util = util;
         this.roomRef = room;
@@ -93,7 +90,7 @@ export default class dokRoom {
 
         // get base creeps
         const baseCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.Base);
-        const baseCreepsParts = creepsFromRoom.map(i => i.GetRef().getActiveBodyparts(CARRY)).reduce((partialSum, a) => partialSum + a, 0);;
+        const baseCreepsParts = baseCreeps.map(i => i.GetRef().getActiveBodyparts(CARRY)).reduce((partialSum, a) => partialSum + a, 0);;
 
         // road builder creeps
         const roadCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.RoadBuilder);
@@ -231,9 +228,9 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RoomDefender);
         }
         
-        if (baseCreeps.length < rclLevel && rclLevel < 7) {
+        if (baseCreeps.length < 4 && rclLevel < 7) {
             jobCodes.push(dokCreepJob.Base);
-        } else if (baseCreepsParts < 60) {
+        } else if (rclLevel >= 7 && baseCreepsParts < 15 * sources.length) {
             jobCodes.push(dokCreepJob.Base);
         }
 
@@ -241,7 +238,7 @@ export default class dokRoom {
             jobCodes.push(dokCreepJob.RoadBuilder);
         }
 
-        if (heavyMinerCreeps.length > 0 && controllerSlaveCreeps.length < 2) {
+        if (heavyMinerCreeps.length > 0 && controllerSlaveCreeps.length < 2 && rclLevel < 8) {
             jobCodes.push(dokCreepJob.ControllerSlave);
         }
 
@@ -287,17 +284,6 @@ export default class dokRoom {
 
         if (workerFlagsValid && workerCreeps.length < 1) {
             jobCodes.push(dokCreepJob.FactoryWorker);
-        }
-
-        if (rclLevel >= 8) {
-            if (controllerSlaveCreeps.length >= 1) {
-                jobCodes = jobCodes.filter(i => i !== dokCreepJob.ControllerSlave);
-            }
-        }
-
-        // if we are in the starting phase, we need a lot of these guys
-        if (rclLevel <= 3 && baseCreeps.length < 5 * sources.length) {
-            jobCodes.push(dokCreepJob.Base);
         }
 
         if (rclLevel >= 7) {
@@ -412,7 +398,7 @@ export default class dokRoom {
             ]
         }
 
-        if (job === dokCreepJob.Base && rclLevel >= 7) {
+        if ([dokCreepJob.RoadBuilder, dokCreepJob.Base].includes(job) && rclLevel >= 7) {
             bodyMaxStack = Infinity;
         }
 
@@ -827,28 +813,6 @@ export default class dokRoom {
         this.memory.reserveTicks = this.memory.reserveTicks.filter(i => i.ticks >= 0);
     }
 
-    private CheckBoostedStatus() {
-        if (!this.util.RunEveryTicks(10))
-            return;
-
-        const storage = this.util.FindResource<StructureStorage>(this.roomRef, FIND_STRUCTURES).find(i => i.structureType === 'storage');
-
-        if (typeof storage === 'undefined')
-            return;
-
-        if (!this.boostedCreeps) {
-            this.boostedCreeps = storage.store.energy >= 140000;
-        } else if (this.boostedCreeps && storage.store.energy <= 60000) {
-            this.boostedCreeps = false;
-        }
-
-        if (this.reducedCreeps) {
-            this.reducedCreeps = !(storage.store.energy >= 600000)
-        } else if (!this.reducedCreeps && storage.store.energy <= 30000) {
-            this.reducedCreeps = true;
-        }
-    }
-
     public TickCreepsHere() {
         /*const creeps = this.util.GetDokCreeps().filter(i => i.GetRoom() === this.GetName());
 
@@ -875,8 +839,6 @@ export default class dokRoom {
         this.TickLinksInRoom();
 
         this.DoRerserveTicks();
-
-        this.CheckBoostedStatus();
 
         this.TickCreepsHere();
 

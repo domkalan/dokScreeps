@@ -476,11 +476,11 @@ export default class dokCreep {
             }
         }
 
-        /*if ((homeRoom.controller?.level || 1) >= 8) {
+        if ((homeRoom.controller?.level || 1) >= 8) {
             this.creepRef.say(`⏱️🪫`);
 
             return;
-        }*/
+        }
 
         // check to make sure energy is full before going to controller
         if (this.creepRef.store.getFreeCapacity() > 0 && this.depositTask === 'extension') {

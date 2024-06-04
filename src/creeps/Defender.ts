@@ -14,7 +14,7 @@ export default class dokCreepDefender extends dokCreep {
     private AttackTarget(target : Creep | PowerCreep) {
         const attackCode = this.creepRef.attack(target)
 
-        if (attackCode === (ERR_NOT_IN_RANGE || ERR_NO_BODYPART)) {
+        if (attackCode === ERR_NOT_IN_RANGE || attackCode === ERR_NO_BODYPART) {
             if (this.creepRef.rangedAttack(target) === ERR_NOT_IN_RANGE) {
                 this.creepRef.moveTo(target);
             }
