@@ -79,6 +79,8 @@ export default class dokCreep {
     private moveSpammy: RoomPosition | null = null;
     protected moveSpammyDisable: boolean = false;
 
+    private lastConstructionCheck: number = 0;
+
     constructor(util: dokUtil, creep: Creep) {
         this.util = util;
         this.creepRef = creep;
@@ -382,7 +384,10 @@ export default class dokCreep {
 
                 return;
             }
+        }
 
+        this.lastConstructionCheck++;
+        if (this.lastConstructionCheck >= 10 || this.depositTask === 'construct') {
             // get the constructions
             const constructions = this.util.FindResource<ConstructionSite>(homeRoom, FIND_MY_CONSTRUCTION_SITES).filter(i => (i.structureType === 'extension' || i.structureType === 'tower'));
 
@@ -391,95 +396,12 @@ export default class dokCreep {
                     this.moveToObject(constructions[0])
                 }
 
+                this.depositTask = 'construct';
+
                 return;
             }
 
-            // should we auto build some extensions?
-            const rclConstructionLimits = dokUtil.getRclLimits(homeRoom.controller?.level || 0);
-            const towers = structuresHere.filter(i => i.structureType === 'tower') as StructureTower[];
-
-            if (towers.length < rclConstructionLimits.towers && constructions.length === 0) {
-                if (this.CheckIfGatherNotFull())
-                    return;
-
-                if (spawns.length <= 0)
-                    return;
-
-                this.creepRef.say('Build T', false);
-
-                const buildableAreas = dokUtil.GetFreeSlots(homeRoom, spawns[0], 8, 1, ['swamp']);
-
-                const placeableArea = buildableAreas.filter((plotScan) => {
-                    if (plotScan.code === 0) {
-                        new RoomVisual(homeRoom.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#000000', opacity: 0.1 });
-
-                        return false;
-                    }
-
-                    new RoomVisual(homeRoom.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#ff4f00' });
-
-                    return true;
-                }).sort((a, b) => dokUtil.getDistance(b.pos, spawns[0].pos) - dokUtil.getDistance(a.pos, spawns[0].pos));
-
-                if (this.creepRef.pos.getRangeTo(placeableArea[0].pos) > 0) {
-                    this.moveToObject(placeableArea[0].pos);
-
-                    this.creepRef.room.createConstructionSite(placeableArea[0], 'tower');
-
-                    return;
-                }
-            }
-
-            if (extensions.length < rclConstructionLimits.extensions && constructions.length === 0) {
-                if (this.CheckIfGatherNotFull())
-                    return;
-
-                if (spawns.length <= 0)
-                    return;
-
-                // TODO: move this into room controller
-                this.creepRef.say('Build E', false);
-
-                const buildableAreas = dokUtil.GetFreeSlots(homeRoom, spawns[0], 8, 0, ['swamp']);
-
-                const placeableArea = buildableAreas.filter((plotScan) => {
-                    if (plotScan.code === 0) {
-                        new RoomVisual(homeRoom.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#000000', opacity: 0.1 });
-
-                        return false;
-                    }
-
-                    if (plotScan.pos.x % 3 === 0) {
-                        new RoomVisual(homeRoom.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#000000', opacity: 0.1 });
-
-                        return false;
-                    }
-
-                    if (plotScan.pos.y % 4 === 0) {
-                        new RoomVisual(homeRoom.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#000000', opacity: 0.1 });
-
-                        return false;
-                    }
-
-                    new RoomVisual(homeRoom.name).circle(plotScan.pos.x, plotScan.pos.y, { fill: '#ff4f00' })
-
-                    return true;
-                }).sort((a, b) => dokUtil.getDistance(a.pos, spawns[0].pos) - dokUtil.getDistance(b.pos, spawns[0].pos));
-
-                if (this.creepRef.pos.getRangeTo(placeableArea[0].pos) > 0) {
-                    this.moveToObject(placeableArea[0].pos);
-
-                    this.creepRef.room.createConstructionSite(placeableArea[0], 'extension');
-
-                    return;
-                }
-            }
-        }
-
-        if ((homeRoom.controller?.level || 1) >= 8) {
-            this.creepRef.say(`⏱️🪫`);
-
-            return;
+            this.lastConstructionCheck = 0;
         }
 
         // check to make sure energy is full before going to controller
@@ -491,11 +413,18 @@ export default class dokCreep {
             return;
         }
 
-        this.depositTask = 'controller';
-
         if (controllers.length > 0) {
-            if (this.creepRef.upgradeController(controllers[0]) === ERR_NOT_IN_RANGE) {
+            const upgradeControllerCode = this.creepRef.upgradeController(controllers[0]);
+
+            if (upgradeControllerCode === ERR_NOT_IN_RANGE) {
                 this.moveToObject(controllers[0]);
+            } else if (upgradeControllerCode == OK) {
+                this.depositTask = 'controller';
+                
+                if ((homeRoom.controller?.level || 0) >= 8 && this.creepRef.store.getFreeCapacity('energy') >= 50) {
+                    this.depositTask = '';
+                    this.memory.task = dokCreepTask.Gather;
+                }
             }
 
             return;

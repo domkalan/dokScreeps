@@ -1,3 +1,4 @@
+import dokUtil from "../dokUtil";
 import dokCreep, { dokCreepTask } from "./Base";
 
 export default class dokCreepRemoteConstruction extends dokCreep {
@@ -133,9 +134,48 @@ export default class dokCreepRemoteConstruction extends dokCreep {
             return;
         };
 
-        this.tryingToGather++;
-        this.DoBasicGather();
+        if (this.CheckIfGatherFull())
+            return;
+        
+        // single scan for all structures
+        const structuresHere = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES);
 
+        // check for stored energy
+        const containerResource = (structuresHere as StructureContainer[]).filter(i => i.structureType === 'container' && this.IsTargetedGather(i.id) && i.store.energy >= 50 && this.util.GetLocksWithoutMe(i, this).length < 2);
+        const storageResources = (structuresHere as StructureStorage[]).filter(i => i.structureType === 'storage' && this.IsTargetedGather(i.id) && i.store.energy > 0 && this.util.GetLocksWithoutMe(i, this).length < 5);
+        const storedResources: Array<StructureContainer | StructureStorage> = containerResource.concat((storageResources as any)).sort((a, b) => a.store.energy - b.store.energy);
+
+        if (storedResources.length > 0) {
+            this.util.PlaceLock({ id: storedResources[0].id }, this);
+
+            const withdrawCode = this.creepRef.withdraw(storedResources[0], 'energy');
+
+            if (withdrawCode === ERR_NOT_IN_RANGE) {
+                this.moveToObject(storedResources[0])
+            } else if (withdrawCode === OK) {
+                this.tryingToGather = 0;
+            }
+
+            return;
+        }
+
+        const energySources = this.util.FindResource<Source>(this.creepRef.room, FIND_SOURCES_ACTIVE).filter(i => this.IsTargetedGather(i.id) && this.ComputeLocksOnSource(i)).sort((a, b) => dokUtil.getDistance(a.pos, this.creepRef.pos) - dokUtil.getDistance(b.pos, this.creepRef.pos));
+
+        if (energySources.length > 0) {
+            this.util.PlaceLock(energySources[0], this);
+
+            const harvestCode = this.creepRef.harvest(energySources[0]);
+
+            if (harvestCode === ERR_NOT_IN_RANGE) {
+                this.moveToObject(energySources[0])
+            } else if (harvestCode === OK) {
+                this.tryingToGather = 0;
+            }
+
+            return;
+        }
+
+        this.tryingToGather++;
         this.creepRef.say(`⚒️ ${this.tryingToGather}`);
     }
 

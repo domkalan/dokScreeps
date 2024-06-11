@@ -15,6 +15,33 @@ export default class dokCreepControllerSlave extends dokCreep {
             return;
         }
 
+        if (typeof Game.flags[`${this.memory.homeRoom} ControllerBoost`] !== 'undefined') {
+
+            const boostedStatus = this.creepRef.body.filter(i => i.type === 'work' && typeof i.boost !== 'undefined');
+
+            if (boostedStatus.length === 0) {
+                const lab = this.util.FindResource<StructureLab>(this.creepRef.room, FIND_STRUCTURES).find(i => i.structureType === 'lab' && i.store.getUsedCapacity('XGH2O') >= 30);
+
+                if (typeof lab !== 'undefined') {
+                    if (lab.store.getUsedCapacity('energy') >= 10) {
+                        if (this.creepRef.pos.getRangeTo(lab) > 1) {
+                            this.moveToObject(lab);
+            
+                            return;
+                        }
+    
+                        lab.boostCreep(this.creepRef);
+                    } else {
+                        if (typeof Game.flags[`${lab.pos.roomName} Fill energy 2000`] === 'undefined') {
+                            lab.pos.createFlag(`${lab.pos.roomName} Fill energy 2000`);
+                        }
+                    }
+                } else {
+                    Game.flags[`${this.memory.homeRoom} ControllerBoost`].remove();
+                }
+            }
+        }
+
         const controllers = this.util.FindResource<StructureController>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'controller');
 
         if (controllers.length > 0) {

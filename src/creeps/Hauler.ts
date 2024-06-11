@@ -7,8 +7,7 @@ export default class dokCreepPowerHauler extends dokCreep {
     private flagInvalidFor: number = 0;
 
     private scannedOnFloor: number = 0;
-
-    private scannedForLink: number = 0;
+    private lockOnPosition: RoomPosition | null = null;
 
     protected RecycleCreep() {
         const homeRoom = this.util.GetDokRoom(this.memory.homeRoom);
@@ -91,7 +90,7 @@ export default class dokCreepPowerHauler extends dokCreep {
     }
 
     protected HaulCanHere(flag: Flag) {
-        if (this.creepRef.store.getFreeCapacity() <= 0) {
+        if (this.creepRef.store.getFreeCapacity() <= this.creepRef.store.getCapacity() * 0.50) {
             this.memory.task = dokCreepTask.Deposit;
 
             return;
@@ -119,9 +118,6 @@ export default class dokCreepPowerHauler extends dokCreep {
         const cans = this.util.FindResource<StructureContainer>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.structureType === 'container').sort((a, b) => a.store.getUsedCapacity() - b.store.getUsedCapacity());
 
         if (cans.length === 0) {
-            // putting this on pause, we are loosing too many flags
-            //flag.remove();
-
             this.creepRef.say('🤷');
 
             if (dokUtil.getDistance(flag.pos, this.creepRef.pos) > 6) {
@@ -133,7 +129,7 @@ export default class dokCreepPowerHauler extends dokCreep {
 
         const can = cans[0];
 
-        if (can.store.getUsedCapacity() >= this.creepRef.store.getFreeCapacity()) {
+        if (can.store.getUsedCapacity() >= this.creepRef.store.getFreeCapacity() * 0.25) {
             const contents = (Object.keys(can.store) as ResourceConstant[]);
             let pulledSomething = true;
 
@@ -156,16 +152,6 @@ export default class dokCreepPowerHauler extends dokCreep {
         }
 
         this.creepRef.say(`⏱️`);
-    }
-
-    protected GoHome() {
-        if (this.focusedFlag !== null) {
-            this.util.ReleaseLocks(this);
-
-            this.focusedFlag = null;
-        }
-
-        this.moveToObjectFar(new RoomPosition(25, 25, this.memory.homeRoom))
     }
 
     protected GoToFlag(flag : Flag) {
@@ -227,8 +213,14 @@ export default class dokCreepPowerHauler extends dokCreep {
     }
 
     protected CreepGoDeposit() {
-        if (this.creepRef.room.name !== this.memory.homeRoom) {
-            this.GoHome();
+        if (this.focusedFlag !== null) {
+            this.util.ReleaseLocks(this);
+
+            this.focusedFlag = null;
+        }
+
+        if (this.creepRef.pos.roomName !== this.memory.homeRoom && this.lockOnPosition !== null) {
+            this.moveToObject(this.lockOnPosition);
 
             return;
         }
@@ -240,9 +232,17 @@ export default class dokCreepPowerHauler extends dokCreep {
 
         const homeStructures = homeRoom.GetRef().find(FIND_STRUCTURES);
 
-        const homeStorage = homeStructures.filter(i => i.structureType === 'storage' || i.structureType === 'link').sort((a, b) => this.creepRef.pos.getRangeTo(a.pos) - this.creepRef.pos.getRangeTo(b.pos));
+        const homeStorage = homeStructures.filter(i => i.structureType === 'storage');
 
         if (homeStorage.length > 0) {
+            if (this.creepRef.pos.roomName !== homeStorage[0].pos.roomName) {
+                this.lockOnPosition = homeStorage[0].pos;
+
+                return;
+            } else if (this.creepRef.pos.roomName === homeStorage[0].pos.roomName && this.lockOnPosition !== null) {
+                this.lockOnPosition = null;
+            }
+ 
             const contents = (Object.keys(this.creepRef.store) as ResourceConstant[]);
 
             for(const content of contents) {

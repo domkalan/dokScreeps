@@ -90,7 +90,15 @@ export default class dokRoom {
 
         // get base creeps
         const baseCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.Base);
-        const baseCreepsParts = baseCreeps.map(i => i.GetRef().getActiveBodyparts(CARRY)).reduce((partialSum, a) => partialSum + a, 0);;
+        let baseCreepsParts = 0;
+
+        try {
+            baseCreepsParts = baseCreeps.map(i => i.GetRef().getActiveBodyparts(CARRY)).reduce((partialSum, a) => partialSum + a, 0);
+        } catch(error) {
+            console.log(`[dokUtil][${this.roomRef.name}] error calc body carry count, using fallback`);
+
+            baseCreepsParts = baseCreeps.length * 16;
+        }
 
         // road builder creeps
         const roadCreeps = creepsFromRoom.filter(i => i.GetJob() === dokCreepJob.RoadBuilder);
@@ -227,31 +235,31 @@ export default class dokRoom {
 
             jobCodes.push(dokCreepJob.RoomDefender);
         }
+
+        if (links.length >= 2 && storages.length >= 1 && storageSlave.length < 1) {
+            jobCodes.push(dokCreepJob.LinkStorageSlave);
+        }
         
-        if (baseCreeps.length < 2 && rclLevel < 7) {
+        if (baseCreeps.length < 2 && rclLevel < 8) {
             jobCodes.push(dokCreepJob.Base);
-        } else if (rclLevel >= 7 && baseCreepsParts < 15 && baseCreeps.length < 4) {
+        } else if (rclLevel >= 8 && baseCreepsParts < 15 && baseCreeps.length < 4) {
             jobCodes.push(dokCreepJob.Base);
-        }
-
-        if (rclLevel >= 2 && rclLimits.extensions >= 5 && roadCreeps.length < 1) {
-            jobCodes.push(dokCreepJob.RoadBuilder);
-        }
-
-        if (heavyMinerCreeps.length > 0 && controllerSlaveCreeps.length < 2 && rclLevel < 8) {
-            jobCodes.push(dokCreepJob.ControllerSlave);
         }
 
         if (extensions.length > 5 && heavyMinerCreeps.length < sources.length) {
             jobCodes.push(dokCreepJob.HeavyMiner);
         }
 
-        if (rclLevel >= 2 && (constructions.length > 0 || publicStructuresDamaged.length > 0) && constructionCreeps.length < 1) {
-            jobCodes.push(dokCreepJob.ConstructionWorker);
+        if (heavyMinerCreeps.length > 0 && controllerSlaveCreeps.length < 2 && rclLevel < 8) {
+            jobCodes.push(dokCreepJob.ControllerSlave);
         }
 
-        if (links.length >= 2 && storages.length >= 1 && storageSlave.length < 1) {
-            jobCodes.push(dokCreepJob.LinkStorageSlave);
+        if (rclLevel >= 2 && rclLimits.extensions >= 5 && roadCreeps.length < 1) {
+            jobCodes.push(dokCreepJob.RoadBuilder);
+        }
+
+        if (rclLevel >= 2 && (constructions.length > 0 || publicStructuresDamaged.length > 0) && constructionCreeps.length < 1) {
+            jobCodes.push(dokCreepJob.ConstructionWorker);
         }
 
         if (colornizerFlags.length > colonizerCreeps.length) {
@@ -326,21 +334,21 @@ export default class dokRoom {
         return currentBody;
     }
 
-    private CreepBodyType(job: dokCreepJob, energy: number, storageCap: number) : BodyPartConstant[] {
+    private CreepBodyType(job: dokCreepJob, energy: number, storageCap: number, extensionCount: number) : BodyPartConstant[] {
         const rclLevel = this.roomRef.controller?.level || 0;
         const flags = this.util.GetFlagArray();
 
         const unlockStack = typeof flags.find(i => i.name === `${this.roomRef.name} UnlockStack`) !== 'undefined';
 
         let bodyType : Array<BodyPartConstant> = [WORK, MOVE, CARRY];
-        let bodyMaxStack = 3;
+        let bodyMaxStack = Math.max(extensionCount / 5, 1);
         let energyCapStandby = 45000;
 
-        if (rclLevel >= 5) {
+        /*if (rclLevel >= 5) {
             let availableEnergy = (storageCap + energy) - energyCapStandby;
             let energyUnits = Math.floor(availableEnergy / energyCapStandby);
             bodyMaxStack = Math.max(1, energyUnits * 16);
-        }
+        }*/
 
         if (unlockStack) {
             bodyMaxStack = Infinity;
@@ -358,8 +366,7 @@ export default class dokRoom {
         }
 
         if (job === dokCreepJob.RemoteMiner) {
-            bodyMaxStack = 2;
-            bodyType = [WORK, WORK, WORK, MOVE, MOVE, MOVE, CARRY, MOVE];
+            return [WORK, WORK, WORK, MOVE, MOVE, MOVE, CARRY, MOVE];
         }
 
         // Special job code for room defenders
@@ -386,6 +393,7 @@ export default class dokRoom {
         }
 
         if (job === dokCreepJob.Healer) {
+            bodyMaxStack = Infinity;
             bodyType = [
                 HEAL, HEAL, MOVE
             ];
@@ -398,7 +406,7 @@ export default class dokRoom {
             ]
         }
 
-        if ([dokCreepJob.RoadBuilder, dokCreepJob.Base].includes(job) && rclLevel >= 7) {
+        if ([dokCreepJob.RoadBuilder, dokCreepJob.Base].includes(job) && rclLevel >= 8) {
             bodyMaxStack = Infinity;
         }
 
@@ -408,7 +416,7 @@ export default class dokRoom {
     }
 
     private MonitorSpawn() {
-        if (!dokUtil.runEvery(this.aliveTicks, 12))
+        if (!dokUtil.runEvery(this.aliveTicks, 12) && this.roomRef.name !== 'sim')
             return;
 
         // get room spawner
@@ -453,7 +461,7 @@ export default class dokRoom {
         }
 
         // what body parts are needed for job
-        const bodyParts = this.CreepBodyType(nextJob, energyReady, storeCap);
+        const bodyParts = this.CreepBodyType(nextJob, energyReady, storeCap, extensions.length);
 
         // if no body parts...?
         if (bodyParts.length === 0)
@@ -495,8 +503,11 @@ export default class dokRoom {
             targetPos = storage.pos;
         }
 
+        // should we do a conditional scrub?
+        const bodyPartsScrub = this.ScrubBody(nextJob, bodyParts);
+
         // attempt spawn
-        const spawnCode = spawn.spawnCreep(bodyParts, creepName, {
+        const spawnCode = spawn.spawnCreep(bodyPartsScrub, creepName, {
             memory: spawnMemory,
             energyStructures: [ spawn as any ].concat(extensions.sort((a, b) => dokUtil.getDistance(a.pos, targetPos) - dokUtil.getDistance(b.pos, targetPos)))
         });
@@ -511,6 +522,25 @@ export default class dokRoom {
             if (this.memory.spawnCount > 1000)
                 this.memory.spawnCount = 0;
         }
+    }
+
+    // when we reach RCL 8, we dont need to overflow with work parts
+    protected ScrubBody(job : dokCreepJob, body : BodyPartConstant[]) {
+        const rclLevel = this.roomRef.controller?.level || 0;
+
+        if (rclLevel >= 8) {
+            if (job === dokCreepJob.Base || job === dokCreepJob.RoadBuilder) {
+                const workParts = body.filter(i => i === WORK);
+                const otherParts = body.filter(i => i !== WORK);
+
+                const limitedWorkParts = workParts.slice(0, 2);
+
+                // Combine the limited WORK parts with the other parts
+                return [...limitedWorkParts, ...otherParts];
+            }
+        }
+
+        return body;
     }
 
     private CalcBodyCost(body : BodyPartConstant[]) {

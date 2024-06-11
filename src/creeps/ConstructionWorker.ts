@@ -12,8 +12,8 @@ export default class dokCreepConstructionWorker extends dokCreep {
     }
 
     public DoWallRepair() {
-        const structuresBasic = this.util.FindResource<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75);
-        const structuresExtra = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.75 && ['container', 'link', 'constructedWall'].includes(i.structureType))
+        const structuresBasic = this.util.FindResource<Structure>(this.creepRef.room, FIND_MY_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.05);
+        const structuresExtra = this.util.FindResource<Structure>(this.creepRef.room, FIND_STRUCTURES).filter(i => i.hits < i.hitsMax * 0.05 && ['container', 'link', 'constructedWall'].includes(i.structureType))
 
         const structures: Array<Structure> = structuresBasic.concat(structuresExtra).sort((a, b) => a.hits/a.hitsMax - b.hits/b.hitsMax);
         

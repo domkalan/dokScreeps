@@ -19,6 +19,7 @@ Most room specific flags accept numbers after the name to allow for multiple fla
 ### Colony Tasks
 - **W0N0 Reserve** - Spawns a colonizer to reserve the room of the placed flag.
 - **W0N0 Colonize** - Spawns a colonizer to claim the room of the placed flag.
+- **W0N0 ControllerBoost** - Instructs ControllerSlave creeps to boost at the nearest lab.
 
 ### Mining Tasks
 - **W0N0 Mine** - Spawns a remote miner to mine a resource or deposit.

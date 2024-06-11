@@ -174,13 +174,13 @@ export class dokCreepFactoryWorker extends dokCreep {
         }
 
         if (powerSpawn.store.power < 1) {
-            powerSpawn.pos.createFlag(`${powerSpawn.pos.roomName} Fill power 100`);
+            powerSpawn.pos.createFlag(`${powerSpawn.pos.roomName} Fill power 10`);
 
             return;
         }
 
         if (powerSpawn.store.energy < 1) {
-            powerSpawn.pos.createFlag(`${powerSpawn.pos.roomName} Fill energy 5000`);
+            powerSpawn.pos.createFlag(`${powerSpawn.pos.roomName} Fill energy 500`);
 
             return;
         }
