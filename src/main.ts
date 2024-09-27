@@ -1,7 +1,7 @@
-import { dokUtil } from "./dokUtil"
+import { dokScreeps} from "./dokScreeps"
 
 
 // Entry point
 module.exports.loop = () => {
-    dokUtil.RunLoop();
+    dokScreeps.RunLoop();
 }
