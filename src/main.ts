@@ -1,6 +1,7 @@
-import dokUtil from "./dokUtil"
+import { dokUtil } from "./dokUtil"
+
 
 // Entry point
 module.exports.loop = () => {
-    dokUtil.ProcessTick();
+    dokUtil.RunLoop();
 }

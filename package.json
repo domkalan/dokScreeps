@@ -8,5 +8,11 @@
     "@types/node": "^20.11.17",
     "@types/screeps": "^3.3.7",
     "tslib": "^2.6.2"
-  }
+  },
+  "name": "dokUtil",
+  "description": "dokUtil powers my screeps.com account dokman.",
+  "scripts": {
+    "build": "rollup.cmd -c .\\rollup.config.js"
+  },
+  "version": "3.0.0"
 }
