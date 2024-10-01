@@ -61,7 +61,8 @@ export class dokCreep {
                 lineStyle: 'dashed',
                 strokeWidth: .15,
                 opacity: .1
-            }
+            },
+            reusePath: 150
         });
     }
 
