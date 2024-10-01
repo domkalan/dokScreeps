@@ -131,3 +131,7 @@ dist
 
 # ignore compiled screeps code
 main.js
+
+.vscode
+
+todo.txt

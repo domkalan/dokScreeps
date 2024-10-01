@@ -1,7 +1,9 @@
 {
   "dependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
     "@types/lodash": "^4.14.202",
-    "dayjs": "^1.11.10"
+    "dayjs": "^1.11.10",
+    "rollup-plugin-progress": "^1.1.2"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^11.1.6",
