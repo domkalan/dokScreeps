@@ -30,6 +30,19 @@ export interface dokRoomResource {
     seats: number
 }
 
+export interface dokRoomMemory {
+    owned: boolean,
+    owner: string | null,
+    avoid: boolean,
+    resources: dokRoomResource[],
+    plans: any[],
+
+    scouted: boolean,
+    scoutedAt: number,
+
+    lastActive: number
+}
+
 export class dokRoom {
     // store room references
     public roomRef: Room;
@@ -78,27 +91,29 @@ export class dokRoom {
             (Memory as any).rooms = {};
         }
 
-        if (typeof (Memory as any).rooms[this.name] === 'undefined') {
-            (Memory as any).rooms[this.name] = {
+        if (typeof (Memory.rooms[this.name] as dokRoomMemory) === 'undefined') {
+            (Memory.rooms[this.name] as dokRoomMemory) = {
                 owned: false,
                 owner: null,
                 avoid: false,
-                resources: null,
+                resources: [],
                 plans: [],
+                scouted: true,
+                scoutedAt: Game.time,
 
                 lastActive: Game.time
             };
         }
 
         // scan room resources, save them into storage if not
-        if ((Memory as any).rooms[this.name].resources === null) {
-            (Memory as any).rooms[this.name].resources = [];
+        if ((Memory.rooms[this.name] as dokRoomMemory).resources === null) {
+            (Memory.rooms[this.name] as dokRoomMemory).resources = [];
 
             this.ScanRoomResources();
         
         // if room already has scanned, set sources length from mem
         } else {
-            this.sources = (Memory as any).rooms[this.name].resources.filter((i : dokRoomResource) => i.resourceType === ResourceType.Source).length;
+            this.sources = (Memory.rooms[this.name] as dokRoomMemory).resources.filter((i : dokRoomResource) => i.resourceType === ResourceType.Source).length;
         }
 
         Logger.Log('dokRooms', `Room ${room.name} has state ${this.state}`);
@@ -108,19 +123,21 @@ export class dokRoom {
 
             Logger.Log('dokRooms', `Room ${room.name} has ${this.ownedCreeps.length} creeps`);
 
-            if (!(Memory as any).rooms[this.name].owned) {
-                (Memory as any).rooms[this.name].owned = true;
+            if (!(Memory.rooms[this.name] as dokRoomMemory).owned) {
+                (Memory.rooms[this.name] as dokRoomMemory).owned = true;
             }
         }
     }
 
     private ScanRoomResources() {
+        const resources: dokRoomResource[] = [];
+
         const sources = this.roomRef.find(FIND_SOURCES);
 
         for (const source of sources) {
             const seats = Seats.GetSeatsForItem(this.roomRef, source);
 
-            (Memory as any).rooms[this.name].resources.push({ resourceType: ResourceType.Source, resourceSubType: 'energy', id: source.id, seats });
+            resources.push({ resourceType: ResourceType.Source, resourceSubType: 'energy', id: source.id, seats });
         }
 
         // set the sources count
@@ -131,7 +148,7 @@ export class dokRoom {
         for (const mineral of minerals) {
             const seats = Seats.GetSeatsForItem(this.roomRef, mineral);
 
-            (Memory as any).rooms[this.name].resources.push({ resourceType: ResourceType.Mineral, resourceSubType: mineral.mineralType, id: mineral.id, seats });
+            resources.push({ resourceType: ResourceType.Mineral, resourceSubType: mineral.mineralType, id: mineral.id, seats });
         }
 
         const deposits = this.roomRef.find(FIND_DEPOSITS);
@@ -139,10 +156,12 @@ export class dokRoom {
         for (const deposit of deposits) {
             const seats = Seats.GetSeatsForItem(this.roomRef, deposit);
 
-            (Memory as any).rooms[this.name].resources.push({ resourceType: ResourceType.Mineral, resourceSubType: deposit.depositType, id: deposit.id, seats });
+            resources.push({ resourceType: ResourceType.Mineral, resourceSubType: deposit.depositType, id: deposit.id, seats });
         }
 
-        Logger.Log(`dokCreep:RoomResources`, `Room ${this.name} has ${(Memory as any).rooms[this.name].resources.length} resource(s)`)
+        Logger.Log(`dokCreep:RoomResources`, `Room ${this.name} has ${resources.length} resource(s)`);
+
+        (Memory.rooms[this.name] as dokRoomMemory).resources = resources;
     }
 
     private QueueForSpawnOnce(creep: typeof dokCreep) {
@@ -338,7 +357,7 @@ export class dokRoom {
         }
 
         // track the last time we ticked here
-        (Memory as any).rooms[this.name].lastActive = Game.time;
+        (Memory.rooms[this.name] as dokRoomMemory).lastActive = Game.time;
 
         // update room ref
         this.roomRef = Game.rooms[this.name];
