@@ -1,0 +1,34 @@
+{
+    "name": "ExtensionDiamond",
+    "version": "1",
+    "author": "dokman",
+    "data": [
+        {
+            "structureType": "extension",
+            "x": 1,
+            "y": 0
+        },
+        {
+            "structureType": "extension",
+            "x": 0,
+            "y": 1
+        },
+        {
+            "structureType": "extension",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "structureType": "extension",
+            "x": 0,
+            "y": -1
+        },
+        {
+            "structureType": "extension",
+            "x": -1,
+            "y": 0
+        }
+    ],
+    "created": 1727755633,
+    "updated": 1727755633
+}
