@@ -165,16 +165,20 @@ export class dokHaulerCreep extends dokCreep {
                 roomRef.QueueHaulRequest(item);
             }
 
-            const pickupCode = this.creepRef.withdraw(itemLookup, item.resource);
+            const pullCode = this.creepRef.withdraw(itemLookup, item.resource);
 
-            if (pickupCode == -9) {
+            if (pullCode == -9) {
                 this.MoveTo(itemLookup);
 
                 return;
-            } else if (pickupCode == -8) {
+            } else if (pullCode == -8) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
-            } else if (pickupCode == 0 && itemLookup.store.getUsedCapacity(item.resource) < this.creepRef.store.getFreeCapacity()) {
+            } else if (pullCode == 0 && itemLookup.store.getUsedCapacity(item.resource) < this.creepRef.store.getFreeCapacity()) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
+            } else if (pullCode == -7) {
+                (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
+
+                this.creepRef.say(`📦💨`);
             }
 
             return;
