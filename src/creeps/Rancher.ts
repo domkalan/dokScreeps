@@ -9,59 +9,28 @@ export class dokRancherCreep extends dokCreep {
     }
 
     public DoRancherWork() {
-        const spawn = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).find(i => i.structureType === 'spawn') as StructureSpawn;
-        const extensions = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).filter(i => i.structureType === 'extension') as StructureExtension[];
-
-        if (typeof spawn === 'undefined') {
-            this.creepRef.say(`?`);
-
-            return;
-        }
+        const spawnStructures = (this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).filter(i => i.structureType === 'spawn' || i.structureType === 'extension') as StructureSpawn[]).filter(i => i.store.energy < i.store.getCapacity('energy'));
 
         if (this.creepRef.store.energy === 0) {
             this.creepRef.say(`⚡?`);
 
-            this.sleepTime = 10;
-
             this.RequestEnergyDelivery();
-
+            
             return;
         }
 
-        const rancherStructures = [spawn, ...extensions].filter(i => i.store.getFreeCapacity('energy') > 0);
-
-        if (rancherStructures.length === 0) {
-            this.creepRef.say(`⚡🔋`);
-
+        if (spawnStructures.length < 0) {
             this.sleepTime = 10;
 
+            this.creepRef.say(`🔋`);
+
             return;
         }
 
-        if (this.focusedStructure !== null) {
-            const focusedStructure = rancherStructures.find(i => i.id === this.focusedStructure);
+        const transferCode = this.creepRef.transfer(spawnStructures[0], 'energy');
 
-            if (typeof focusedStructure !== 'undefined') {
-                const transferCode = this.creepRef.transfer(focusedStructure, 'energy');
-    
-                if (transferCode === -9) {
-                    this.MoveTo(focusedStructure);
-
-                    return;
-                } else if (transferCode === -8) {
-                    this.focusedStructure = null;
-                }
-            }
-        }
-
-        const lowStructure = rancherStructures[0];
-
-        this.focusedStructure = lowStructure.id;
-
-        const transferCode = this.creepRef.transfer(lowStructure, 'energy');
-    
-        if (transferCode === -9) {
-            this.MoveTo(lowStructure);
+        if (transferCode == -9) {
+            this.MoveTo(spawnStructures[0]);
         }
     }
 
