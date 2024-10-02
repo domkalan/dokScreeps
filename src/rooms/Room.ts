@@ -223,7 +223,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokEnergyMinerCreep);
             }
 
-            if (builderCreeps.length < Math.floor((this.constructionProjects.length / 5) + 1) && this.constructionProjects.length > 0) {
+            if (builderCreeps.length < Math.floor((this.constructionProjects.length / 5) + 1) && this.constructionProjects.length > 0 && builderCreeps.length < 4) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
@@ -231,9 +231,9 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokServantCreep);
             }
             
-            Logger.Log(`dokRooms:${this.name}`, `Math says we need ${Math.floor((this.haulQueue.length / 10) + 1)} hauler(s)`);
+            Logger.Log(`dokRooms:${this.name}`, `Math says we need ${Math.floor((this.haulQueue.length / 3) + 1)} hauler(s)`);
 
-            if (haulerCreeps.length < Math.floor((this.haulQueue.length / 10) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < 10) {
+            if (haulerCreeps.length < Math.floor((this.haulQueue.length / 3) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < 10) {
                 this.QueueForSpawnOnce(dokHaulerCreep);
             }
         }
