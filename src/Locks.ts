@@ -64,4 +64,8 @@ export class Locks {
 
         Logger.Log('Locks', `${cleanedLocks} ghost lock(s) have been cleaned`);
     }
+
+    public static ResetAllLocks() {
+        (Memory as any).dokScreeps.locks = [];
+    }
 }

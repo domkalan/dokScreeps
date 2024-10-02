@@ -25,6 +25,8 @@ export class dokScreeps {
         this.GatherRooms();
 
         Locks.RemoveDeadLocks();
+
+        this.AddConsoleCommands();
     }
 
     private InitMemory() {
@@ -152,6 +154,21 @@ export class dokScreeps {
         (Memory as any).dokScreeps.creepsCount = (Memory as any).dokScreeps.creepsCount + 1;
 
         return (Memory as any).dokScreeps.creepsCount;
+    }
+
+    public AddConsoleCommands() {
+        (global as any).RemoveDeadLocks = Locks.RemoveDeadLocks;
+        (global as any).ResetAllLocks = Locks.ResetAllLocks;
+        (global as any).Help = this.HelpConsoleCommand;
+    }
+
+    public HelpConsoleCommand() {
+        console.log(`dokScreeps
+        \tRemoveDeadLocks() - Remove dead or ghost locks.
+        \tResetAllLocks() - Wipe the locks data.
+
+        \tHelp() - Displays this help command.
+        `)
     }
 
     // #region Static Methods
