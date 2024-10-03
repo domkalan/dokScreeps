@@ -88,7 +88,7 @@ export class dokScreeps {
     }
 
     public GetStructuresByRoom(room : string) : Structure[] {
-        return Object.values(Game.structures);
+        return Object.values(Game.structures).filter(i => i.pos.roomName === room);
     }
 
     public GetRoomReference(room : string) : dokRoom | undefined {
