@@ -66,6 +66,10 @@ export class dokRoom {
     // how many sources does this room have
     private sources: number = 0;
 
+    // how many construction projects we have
+    private constructionProjects: number = 0;
+    private constructionProjectsProgress: number = 0;
+
     // track our assigned flags
     private assignedFlags: dokFlag[] = [];
 
@@ -239,7 +243,13 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokEnergyMinerCreep);
             }
 
+            // spawn based on projects
             if (builderCreeps.length < Math.floor((roomMemory.constructionQueue.length / 5) + 1) && roomMemory.constructionQueue.length > 0 && builderCreeps.length < 4) {
+                this.QueueForSpawnOnce(dokBuilderCreep);
+            }
+
+            // spawn based on project points
+            if (builderCreeps.length < Math.floor(this.constructionProjectsProgress / 5000) && roomMemory.constructionQueue.length > 0 && builderCreeps.length < 4) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
@@ -276,8 +286,6 @@ export class dokRoom {
         for(const extension of extensions) {
             standbyEnergy += extension.store.energy;
         }
-
-        Logger.Log(`dokRooms:${this.roomRef.name}`, `Room spawn status, ${spawnsReady.length}/${spawns.length} ready`);
 
         for (const spawn of spawns) {
             if (this.creepSpawnQueue.length === 0)
@@ -362,9 +370,17 @@ export class dokRoom {
         const personalConstructionSites = this.roomRef.find(FIND_MY_CONSTRUCTION_SITES);
         const totalConstructionSites = [...constructionSites, ...personalConstructionSites];
 
+        // reset construction projects progress
+        this.constructionProjectsProgress = 0;
+
         for(const construction of totalConstructionSites) {
             this.AddConstructionProject(construction.id, construction.progressTotal);
+
+            this.constructionProjectsProgress = this.constructionProjectsProgress + (construction.progressTotal - construction.progress);
         }
+
+        // total up our construction projects
+        this.constructionProjects = totalConstructionSites.length;
 
         // TODO: need to run health checks on build structures, add a repair instruction for builders or a new creep class
         
