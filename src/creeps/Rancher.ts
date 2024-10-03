@@ -50,6 +50,6 @@ export class dokRancherCreep extends dokCreep {
         return false;
     }
 
-    public static buildBody: BodyPartConstant[] = [ WORK, CARRY, CARRY ];
+    public static buildBody: BodyPartConstant[] = [ MOVE, CARRY, CARRY ];
     public static buildName: string = 'rancher';
 }
