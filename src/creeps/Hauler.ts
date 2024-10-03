@@ -27,6 +27,7 @@ export interface HaulQueueEntry {
 export class dokHaulerCreep extends dokCreep {
     private checkedForRequestor: boolean = false;
     private focusedStorage: string | null = null;
+    private haulDeliveryResourceConstraint: ResourceConstant | null = null;
 
     constructor(creep: Creep, dokScreepInstance : dokScreeps) {
         super(creep, dokScreepInstance);
@@ -39,7 +40,13 @@ export class dokHaulerCreep extends dokCreep {
         if (haulTask === null) {
             const roomRef = this.GetRoomRefSafe();
 
-            const haulWork = roomRef.PullFromHaulQueue();
+            let haulWork = undefined;
+
+            if (this.haulDeliveryResourceConstraint === null) {
+                haulWork = roomRef.PullFromHaulQueue();
+            } else {
+                haulWork = roomRef.PullFromHaulQueueWithConstraint(this.haulDeliveryResourceConstraint)
+            }
 
             if (typeof haulWork === 'undefined') {
                 this.sleepTime = 10;
@@ -275,6 +282,14 @@ export class dokHaulerCreep extends dokCreep {
             } else if (transferCode == -8) {
                 this.sleepTime = 10;
             } else if (transferCode == 0) {
+                if (Object.keys(this.creepRef.store).length > 0) {
+                    const resourceConstraint = Object.keys(this.creepRef.store)[0] as ResourceConstant;
+
+                    this.haulDeliveryResourceConstraint = resourceConstraint;
+                } else {
+                    this.haulDeliveryResourceConstraint = null;
+                }
+
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 0;
                 (this.creepRef.memory as dokHaulerCreepMemory).haulTask = null;
                 this.checkedForRequestor = false;

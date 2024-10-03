@@ -478,6 +478,25 @@ export class dokRoom {
         return haulEntry;
     }
 
+    public PullFromHaulQueueWithConstraint(resource : ResourceConstant) {
+        const haulQueueConstrained = this.haulQueue.filter(i => i.resource === resource);
+
+        if (haulQueueConstrained.length === 0) {
+            return undefined;
+        }
+
+        const haulEntry = haulQueueConstrained.shift();
+
+        // remove item from queue since we cloned array when we filtered
+        this.haulQueue = this.haulQueue.filter(i => i !== haulEntry);
+
+        if (typeof haulEntry !== 'undefined') {
+            Logger.Log(`HaulQueue:${this.name}`, `Haul request ${haulEntry.item} has been pulled out of queue`);
+        }
+
+        return haulEntry;
+    }
+
     public AddConstructionProject(item: string, points: number, priority: number = 3, itemPos: RoomPosition | null = null) {
         const existingEntry = this.constructionProjects.find(i => i.item === item);
 
