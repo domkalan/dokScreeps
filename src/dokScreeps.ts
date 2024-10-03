@@ -183,6 +183,8 @@ export class dokScreeps {
 
     public ProcessTick() {
         if (this.tickCount === 0) {
+            console.log('---------------\n');
+
             new RoomVisual().text('Starting dokScreeps...', 25, 25, { font: '24px' });
 
             this.tickCount++;

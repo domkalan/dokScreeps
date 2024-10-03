@@ -69,6 +69,7 @@ export class dokRoom {
     // how many construction projects we have
     private constructionProjects: number = 0;
     private constructionProjectsProgress: number = 0;
+    private askedForHelp: boolean = false;
 
     // track our assigned flags
     private assignedFlags: dokFlag[] = [];
@@ -276,6 +277,20 @@ export class dokRoom {
 
         const spawns = structures.filter(i => i.structureType === 'spawn') as StructureSpawn[];
         const spawnsReady = spawns.filter(i => !i.spawning);
+
+        if (spawns.length === 0) {
+            Logger.Log(`dokRooms:${this.roomRef.name}`, `This room has no spawns, will check if has constructions`);
+
+            if (this.constructionProjects > 0) {
+                Logger.Log(`dokRooms:${this.roomRef.name}`, `This room has no spawns, but has constructions. Will ask for help`);
+
+                this.RequestRemoteRoomHelp();
+
+                return;
+            }
+
+            return;
+        }
 
         Logger.Log(`dokRooms:${this.roomRef.name}`, `Room spawn status, ${spawnsReady.length}/${spawns.length} ready`);
 
@@ -603,5 +618,40 @@ export class dokRoom {
         Logger.Log(`HaulQueue:${this.name}`, `Haul request directly added to queue for ${request.item}`)
 
         this.haulQueue.push(request);
+    }
+
+    private RequestRemoteRoomHelp() {
+        if (this.askedForHelp)
+            return;
+
+        const ownedRooms = this.dokScreepsRef.GetRooms().filter(i => i.state === RoomState.Controlled).filter(i => i.name !== this.name);
+
+        if (ownedRooms.length === 0) {
+            Logger.Log(`Room:${this.name}`, `Could not ask for help, no other rooms!`);
+
+            return;
+        }
+
+        let closerRoom = null;
+
+        if (ownedRooms.length === 1) {
+            Logger.Log(`Room:${this.name}`, `Only one other room, will beg for help from them.`);
+
+            closerRoom = ownedRooms[0];
+        }
+
+        if (closerRoom === null) {
+            const closerRooms = ownedRooms.sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.name) - Game.map.getRoomLinearDistance(b.name, this.name));
+
+            closerRoom = closerRooms[0];
+        }
+
+        const constructionProjects = this.roomRef.find(FIND_CONSTRUCTION_SITES);
+
+        for(const construction of constructionProjects) {
+            closerRoom.AddConstructionProject(construction.id, construction.progressTotal, 2, construction.pos);
+        }
+
+        this.askedForHelp = true;
     }
 }
