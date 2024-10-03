@@ -5,7 +5,9 @@ import { dokEnergyMinerCreep } from "../creeps/EnergyMiner";
 import { dokHaulerCreep, HaulQueueEntry, HaulType } from "../creeps/Hauler";
 import { dokRancherCreep } from "../creeps/Rancher";
 import { dokServantCreep } from "../creeps/Servant";
+import { dokSettlerCreep } from "../creeps/Settler";
 import { dokScreeps } from "../dokScreeps";
+import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
 import { Seats } from "../Seats";
 import { Settings } from "../Settings";
@@ -40,7 +42,9 @@ export interface dokRoomMemory {
     scouted: boolean,
     scoutedAt: number,
 
-    lastActive: number
+    lastActive: number,
+
+    constructionQueue: RoomConstructionEntry[]
 }
 
 export class dokRoom {
@@ -62,8 +66,8 @@ export class dokRoom {
     // how many sources does this room have
     private sources: number = 0;
 
-    // track our construction projects
-    private constructionProjects: RoomConstructionEntry[] = [];
+    // track our assigned flags
+    private assignedFlags: dokFlag[] = [];
 
     // track if this is our first tick
     private firstTick: boolean = true;
@@ -98,6 +102,7 @@ export class dokRoom {
                 avoid: false,
                 resources: [],
                 plans: [],
+                constructionQueue: [],
                 scouted: true,
                 scoutedAt: Game.time,
 
@@ -106,7 +111,7 @@ export class dokRoom {
         }
 
         // scan room resources, save them into storage if not
-        if ((Memory.rooms[this.name] as dokRoomMemory).resources === null) {
+        if ((Memory.rooms[this.name] as dokRoomMemory).resources.length === 0) {
             (Memory.rooms[this.name] as dokRoomMemory).resources = [];
 
             this.ScanRoomResources();
@@ -114,6 +119,11 @@ export class dokRoom {
         // if room already has scanned, set sources length from mem
         } else {
             this.sources = (Memory.rooms[this.name] as dokRoomMemory).resources.filter((i : dokRoomResource) => i.resourceType === ResourceType.Source).length;
+        }
+
+        // this was not here for initial room creation
+        if (typeof (Memory.rooms[this.name] as dokRoomMemory).constructionQueue === 'undefined') {
+            (Memory.rooms[this.name] as dokRoomMemory).constructionQueue = [];
         }
 
         Logger.Log('dokRooms', `Room ${room.name} has state ${this.state}`);
@@ -188,6 +198,8 @@ export class dokRoom {
             return;
         }
 
+        const roomMemory = (Memory.rooms[this.name] as dokRoomMemory);
+
         // get creep counts
         const bootstrapCreeps = this.ownedCreeps.filter(i => i.name.startsWith('bootstrap'));
         const energyMinerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('energyminer'));
@@ -195,6 +207,10 @@ export class dokRoom {
         const servantCreeps = this.ownedCreeps.filter(i => i.name.startsWith('servant'));
         const builderCreeps = this.ownedCreeps.filter(i => i.name.startsWith('builder'));
         const rancherCreeps = this.ownedCreeps.filter(i => i.name.startsWith('rancher'));
+
+        // settler creeps require settler flags
+        const settlerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('settler'));
+        const settlerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_PURPLE && i.flagRef?.color === COLOR_PURPLE);
 
         // do logic based on rcl
         if (this.roomRef.controller?.level || 0 >= 2) {
@@ -223,7 +239,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokEnergyMinerCreep);
             }
 
-            if (builderCreeps.length < Math.floor((this.constructionProjects.length / 5) + 1) && this.constructionProjects.length > 0 && builderCreeps.length < 4) {
+            if (builderCreeps.length < Math.floor((roomMemory.constructionQueue.length / 5) + 1) && roomMemory.constructionQueue.length > 0 && builderCreeps.length < 4) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
@@ -231,10 +247,12 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokServantCreep);
             }
             
-            Logger.Log(`dokRooms:${this.name}`, `Math says we need ${Math.floor((this.haulQueue.length / 3) + 1)} hauler(s)`);
-
             if (haulerCreeps.length < Math.floor((this.haulQueue.length / 3) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < 10) {
                 this.QueueForSpawnOnce(dokHaulerCreep);
+            }
+
+            if (settlerCreeps.length < 1 && settlerFlags.length > 0) {
+                this.QueueForSpawnOnce(dokSettlerCreep);
             }
         }
     }
@@ -347,6 +365,15 @@ export class dokRoom {
         for(const construction of totalConstructionSites) {
             this.AddConstructionProject(construction.id, construction.progressTotal);
         }
+
+        // TODO: need to run health checks on build structures, add a repair instruction for builders or a new creep class
+        
+        // get our assigned flags
+        this.assignedFlags = this.dokScreepsRef.GetAssignedFlags(this.name);
+    }
+
+    public GetAssignedFlags() {
+        return this.assignedFlags;
     }
 
     public Tick(tickNumber: number, instanceTickNumber: number) : boolean {
@@ -498,7 +525,9 @@ export class dokRoom {
     }
 
     public AddConstructionProject(item: string, points: number, priority: number = 3, itemPos: RoomPosition | null = null) {
-        const existingEntry = this.constructionProjects.find(i => i.item === item);
+        const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
+        
+        const existingEntry = roomMemory.constructionQueue.find(i => i.item === item);
 
         if (typeof existingEntry !== 'undefined')
             return;
@@ -516,14 +545,16 @@ export class dokRoom {
 
         Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
 
-        this.constructionProjects.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time });
+        roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time });
     }
 
     public PullFromConstructionQueue() {
-        if (this.constructionProjects.length === 0)
+        const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
+
+        if (roomMemory.constructionQueue.length === 0)
             return undefined;
 
-        const constructionProject = this.constructionProjects[0];
+        const constructionProject = roomMemory.constructionQueue[0];
 
         if (typeof constructionProject !== 'undefined') {
             Logger.Log(`ConstructionQueue:${this.name}`, `Construction project ${constructionProject.item} has been pulled out of queue`);
@@ -533,7 +564,10 @@ export class dokRoom {
     }
 
     public RemoveFromConstructionQueue(item: string) {
-        this.constructionProjects = this.constructionProjects.filter(i => i.item !== item);
+        const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
+        const constructionQueue = roomMemory.constructionQueue.filter(i => i.item !== item);
+
+        (Memory.rooms[this.name] as dokRoomMemory).constructionQueue = constructionQueue;
     }
 
     public QueueHaulRequest(request : HaulQueueEntry) {

@@ -7,7 +7,7 @@ export class dokFlag {
     public room: string;
     public assignedRoom: string | null = null;
     
-    public flagRef: Flag | null = null;
+    public flagRef: Flag;
 
     // TODO: implement every tick flag logic, useful for debug visual drawing
     public runEveryTick: boolean = false;

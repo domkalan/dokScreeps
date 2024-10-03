@@ -79,6 +79,10 @@ export class dokScreeps {
         }
     }
 
+    public ManuallyRegisterRooms(room: Room) {
+        this.rooms.push(InstanceManager.ParseRawRoom(Game.rooms[room.name], this));
+    }
+
     public RemoveRoom(room : dokRoom) {
         this.rooms = this.rooms.filter(i => i !== room);
     }
@@ -132,6 +136,10 @@ export class dokScreeps {
         return Object.values(Game.flags);
     }
 
+    public GetDokFlags() {
+        return this.flags;
+    }
+
     public GetAssignedFlags(room : string) {
         const flags = this.flags.filter(i => i.assignedRoom === room || i.assignedRoom === '*');
 
@@ -143,9 +151,7 @@ export class dokScreeps {
 
         // delete expired flags, do flag logic
         for(const flag of this.flags) {
-            const placedFlag = flags.find(i => i.name);
-
-            if (typeof placedFlag !== 'undefined') {
+            if (typeof Game.flags[flag.name] === 'undefined') {
                 Logger.Log('dokScreeps', `Unregistered flag ${flag.name}`)
 
                 this.flags = this.flags.filter(i => i.name !== flag.name);
