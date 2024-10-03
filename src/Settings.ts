@@ -8,7 +8,9 @@ export const Settings : SettingsType = {
     roomScan: 50,
 
     dokScreepsRefresh: 4000,
-    dokScreepsMemoryCleanup: 1000
+    dokScreepsMemoryCleanup: 1000,
+
+    flagScanInternval: 5
 }
 
 //#region Settings Type
@@ -20,6 +22,8 @@ export type SettingsType = {
     roomScan: number,
 
     dokScreepsRefresh: number,
-    dokScreepsMemoryCleanup: number
+    dokScreepsMemoryCleanup: number,
+
+    flagScanInternval: number
 }
 //#endregion

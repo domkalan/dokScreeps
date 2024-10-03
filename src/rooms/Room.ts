@@ -50,7 +50,7 @@ export class dokRoom {
     private dokScreepsRef: dokScreeps;
 
     // what is the state of this room?
-    private state: RoomState = RoomState.Visiting;
+    public state: RoomState = RoomState.Visiting;
 
     // keep track of creeps
     private ownedCreeps: dokCreep[] = [];

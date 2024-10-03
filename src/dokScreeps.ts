@@ -1,4 +1,5 @@
 import { dokCreep } from "./creeps/Creep";
+import { dokFlag } from "./Flags";
 import { InstanceManager } from "./InstanceManager";
 import { Locks } from "./Locks";
 import { Logger } from "./Logger";
@@ -10,6 +11,7 @@ export class dokScreeps {
 
     private creeps: dokCreep[] = [];
     private rooms: dokRoom[] = [];
+    private flags: dokFlag[] = [];
 
     private tickCount: number = 0;
 
@@ -93,6 +95,10 @@ export class dokScreeps {
         return this.rooms.find(i => i.roomRef.name === room);
     }
 
+    public GetRooms() {
+        return this.rooms;
+    }
+
     private ProcessTickCreeps() {
         this.creeps.forEach(creep => {
             creep.Tick(Game.time, this.tickCount);
@@ -122,6 +128,53 @@ export class dokScreeps {
         Locks.RemoveDeadLocks();
     }
 
+    public GetFlags() {
+        return Object.values(Game.flags);
+    }
+
+    public GetAssignedFlags(room : string) {
+        const flags = this.flags.filter(i => i.assignedRoom === room || i.assignedRoom === '*');
+
+        return flags;
+    }
+
+    public DoFlagLogic() {
+        const flags = this.GetFlags();
+
+        // delete expired flags, do flag logic
+        for(const flag of this.flags) {
+            const placedFlag = flags.find(i => i.name);
+
+            if (typeof placedFlag !== 'undefined') {
+                Logger.Log('dokScreeps', `Unregistered flag ${flag.name}`)
+
+                this.flags = this.flags.filter(i => i.name !== flag.name);
+            }
+        }
+
+        // update flag refs
+        for(const flag of flags) {
+            const existingFlag = this.flags.find(i => i.name === flag.name);
+
+            if (typeof existingFlag === 'undefined') {
+                const flagObject = new dokFlag(flag);
+
+                Logger.Log('dokScreeps', `Registered new flag ${flag.name}`);
+
+                this.flags.push(flagObject);
+
+                continue;
+            } else {
+                existingFlag.flagRef = flag;
+            }
+        }
+
+        // do flag logic
+        for(const flag of this.flags) {
+            flag.DoFlagLogic(this);
+        }
+    }
+
     public ProcessTick() {
         if (this.tickCount === 0) {
             new RoomVisual().text('Starting dokScreeps...', 25, 25, { font: '24px' });
@@ -139,6 +192,10 @@ export class dokScreeps {
 
         if (this.tickCount % Settings.dokScreepsMemoryCleanup === 0) {
             this.CleanUnusedMemory();
+        }
+
+        if (this.tickCount % Settings.flagScanInternval === 0) {
+            this.DoFlagLogic();
         }
 
         this.ProcessTickRooms();
