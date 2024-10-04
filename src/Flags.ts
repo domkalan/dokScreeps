@@ -38,7 +38,7 @@ export class dokFlag {
                 return;
             }
 
-            const closerRooms = ownedRooms.sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.room) - Game.map.getRoomLinearDistance(b.name, this.room));
+            const closerRooms = ownedRooms.filter(i => (i.roomRef.controller?.level || 1) >= 3).sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.room) - Game.map.getRoomLinearDistance(b.name, this.room));
 
             this.assignedRoom = closerRooms[0].name;
 

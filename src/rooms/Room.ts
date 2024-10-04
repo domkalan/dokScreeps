@@ -47,6 +47,11 @@ export interface dokRoomMemory {
     constructionQueue: RoomConstructionEntry[]
 }
 
+export interface dokRoomSpawnEntry {
+    creep: typeof dokCreep;
+    room: string;
+}
+
 export class dokRoom {
     // store room references
     public roomRef: Room;
@@ -58,7 +63,7 @@ export class dokRoom {
 
     // keep track of creeps
     private ownedCreeps: dokCreep[] = [];
-    private creepSpawnQueue: typeof dokCreep[] = [];
+    private creepSpawnQueue: dokRoomSpawnEntry[] = [];
 
     // what do we have to haul here?
     private haulQueue: HaulQueueEntry[] = [];
@@ -70,6 +75,7 @@ export class dokRoom {
     private constructionProjects: number = 0;
     private constructionProjectsProgress: number = 0;
     private askedForHelp: boolean = false;
+    private askedForHelpRoom: string | null = null;
 
     // track our assigned flags
     private assignedFlags: dokFlag[] = [];
@@ -180,12 +186,14 @@ export class dokRoom {
     }
 
     private QueueForSpawnOnce(creep: typeof dokCreep) {
-        if (this.creepSpawnQueue.includes(creep))
+        const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === this.name);
+
+        if (typeof existingEntry !== 'undefined')
             return;
 
         Logger.Log('dokCreep:Spawn', `${creep.buildName} has been queued for spawn`)
 
-        this.creepSpawnQueue.push(creep);
+        this.creepSpawnQueue.push({ room: this.name, creep: creep });
     }
 
     private MonitorRoomCreeps() {
@@ -311,16 +319,16 @@ export class dokRoom {
             if (typeof creepClass === 'undefined')
                 break;
 
-            Logger.Log(`dokRooms:${this.roomRef.name}`, `${creepClass.buildName} is first in queue`)
+            Logger.Log(`dokRooms:${this.roomRef.name}`, `${creepClass.creep.buildName} is first in queue`)
 
             // get the creep counter
             const creepCounter = this.dokScreepsRef.GetCreepCounter();
 
             // get initial creep building info
-            const creepName = creepClass.buildName;
+            const creepName = creepClass.creep.buildName;
             const creepNameFull = `${creepName}:${creepCounter}`;
-            const bodyStack = creepClass.BuildBodyStack(this.roomRef.controller?.level || 1, standbyEnergy);
-            const startingMemory = creepClass.BuildInitialMemory({ fromRoom: this.roomRef.name });
+            const bodyStack = creepClass.creep.BuildBodyStack(this.roomRef.controller?.level || 1, standbyEnergy);
+            const startingMemory = creepClass.creep.BuildInitialMemory({ fromRoom: creepClass.room });
 
             // spawn creep
             const spawnCode = spawn.spawnCreep(bodyStack, creepNameFull, {
@@ -328,13 +336,13 @@ export class dokRoom {
                 memory: startingMemory
             });
 
-            Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.buildName} resulted in ${spawnCode}`)
+            Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} resulted in ${spawnCode}`)
 
             // bump the counter
             if (spawnCode === OK) {
                 this.dokScreepsRef.BumpCreepCounter();
 
-                const creepClassInstance = new creepClass(Game.creeps[creepNameFull], this.dokScreepsRef);
+                const creepClassInstance = new creepClass.creep(Game.creeps[creepNameFull], this.dokScreepsRef);
 
                 this.dokScreepsRef.RegisterCreep(creepClassInstance);
 
@@ -620,11 +628,24 @@ export class dokRoom {
         this.haulQueue.push(request);
     }
 
-    private RequestRemoteRoomHelp() {
-        if (this.askedForHelp)
+    private CommandeerSpawn(creep : typeof dokCreep, room : string) {
+        Logger.Log(`Room:${this.name}`, `Will spawn ${creep.buildName} for room ${room}`);
+
+        const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === room);
+
+        if (typeof existingEntry !== 'undefined')
             return;
 
-        const ownedRooms = this.dokScreepsRef.GetRooms().filter(i => i.state === RoomState.Controlled).filter(i => i.name !== this.name);
+        this.creepSpawnQueue.push({ room: room, creep: creep });
+    }
+
+    private RequestRemoteRoomHelp() {
+        if (this.askedForHelp && this.ownedCreeps.length > 0)
+            return;
+
+        const ownedRooms = this.dokScreepsRef.GetRooms().filter(i => i.state === RoomState.Controlled && i.name !== this.name).filter(i => {
+            return this.dokScreepsRef.GetStructuresByRoom(i.name).filter(i => i.structureType === 'spawn').length > 0;
+        });
 
         if (ownedRooms.length === 0) {
             Logger.Log(`Room:${this.name}`, `Could not ask for help, no other rooms!`);
@@ -646,12 +667,20 @@ export class dokRoom {
             closerRoom = closerRooms[0];
         }
 
-        const constructionProjects = this.roomRef.find(FIND_CONSTRUCTION_SITES);
+        if (!this.askedForHelp) {
+            const constructionProjects = this.roomRef.find(FIND_CONSTRUCTION_SITES);
 
-        for(const construction of constructionProjects) {
-            closerRoom.AddConstructionProject(construction.id, construction.progressTotal, 2, construction.pos);
+            for(const construction of constructionProjects) {
+                closerRoom.AddConstructionProject(construction.id, construction.progressTotal, 2, construction.pos);
+            }
+    
+            this.askedForHelp = true;
         }
 
-        this.askedForHelp = true;
+        if (this.ownedCreeps.length === 0) {
+            Logger.Log(`Room:${this.name}`, `Will ask ${closerRoom.name} to spawn ${dokBootstrapCreep.buildName}`);
+
+            closerRoom.CommandeerSpawn(dokBootstrapCreep, this.name);
+        }
     }
 }
