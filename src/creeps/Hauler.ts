@@ -88,14 +88,14 @@ export class dokHaulerCreep extends dokCreep {
         }
 
         if (item.haulType === HaulType.Deliver) {
-            if (this.creepRef.store.getUsedCapacity(item.resource) > 0) {
+            if (this.creepRef.store[item.resource] > 0) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
                 
                 return;
             }
 
             const storages = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).filter(i => i.structureType === 'storage' || i.structureType === 'container') as StructureStorage[];
-            const storedResources = storages.filter(i => i.store.getUsedCapacity(item.resource) > 0);
+            const storedResources = storages.filter(i => i.store[item.resource] > 0);
 
             if (storedResources.length === 0) {
                 this.creepRef.say('📦?');
@@ -166,7 +166,7 @@ export class dokHaulerCreep extends dokCreep {
                 return;
             }
 
-            if (itemLookup.store.getUsedCapacity(item.resource) > this.creepRef.store.getFreeCapacity()) {
+            if (itemLookup.store[item.resource] > this.creepRef.store.getFreeCapacity()) {
                 const roomRef = this.GetRoomRefSafe();
 
                 roomRef.QueueHaulRequest(item);
@@ -180,7 +180,7 @@ export class dokHaulerCreep extends dokCreep {
                 return;
             } else if (pullCode == -8) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
-            } else if (pullCode == 0 && itemLookup.store.getUsedCapacity(item.resource) < this.creepRef.store.getFreeCapacity()) {
+            } else if (pullCode == 0 && itemLookup.store[item.resource] < this.creepRef.store.getFreeCapacity()) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
             } else if (pullCode == -7) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
@@ -198,7 +198,7 @@ export class dokHaulerCreep extends dokCreep {
 
             if (this.creepRef.store.getFreeCapacity() < 0) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
-            } else if (chosenStorage.store.getUsedCapacity(item.resource) < this.creepRef.store.getFreeCapacity()) {
+            } else if (chosenStorage.store[item.resource] < this.creepRef.store.getFreeCapacity()) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
             }
 
