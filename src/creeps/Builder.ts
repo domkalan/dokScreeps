@@ -58,7 +58,7 @@ export class dokBuilderCreep extends dokCreep {
         if (this.focusedConstructType === ConstructionType.Repair) {
             const constructionSite = Game.getObjectById(this.focusedConstruct) as Structure;
 
-            if (constructionSite === null || constructionSite.hits / constructionSite.hitsMax > this.focusedConstructPoints) {
+            if (constructionSite === null || constructionSite.hits > this.focusedConstructPoints || constructionSite.hits >= constructionSite.hitsMax) {
                 roomRef.RemoveFromConstructionQueue(this.focusedConstruct);
 
                 this.focusedConstruct = null;

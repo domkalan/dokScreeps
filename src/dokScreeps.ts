@@ -233,6 +233,10 @@ export class dokScreeps {
     public AddConsoleCommands() {
         (global as any).RemoveDeadLocks = Locks.RemoveDeadLocks;
         (global as any).ResetAllLocks = Locks.ResetAllLocks;
+        
+        (global as any).ClearConstructionQueue = this.ClearConstructionQueue.bind(this);
+        (global as any).ClearAllConstructionQueue = this.ClearAllConstructionQueues.bind(this);
+
         (global as any).Help = this.HelpConsoleCommand;
     }
 
@@ -241,8 +245,27 @@ export class dokScreeps {
         \tRemoveDeadLocks() - Remove dead or ghost locks.
         \tResetAllLocks() - Wipe the locks data.
 
+        \tClearConstructionQueue('roomId') - Clears the queued constructions from a room.
+        \tClearAllConstructionQueues() - Clears all the construction queues.
+
         \tHelp() - Displays this help command.
         `)
+    }
+
+    public ClearConstructionQueue(room : string) {
+        const roomInstance = this.GetRoomReference(room);
+
+        if (typeof roomInstance === 'undefined') {
+            return;
+        }
+
+        roomInstance.ClearConstructionQueue();
+    }
+
+    public ClearAllConstructionQueues() {
+        for(const room of this.rooms) {
+            room.ClearConstructionQueue();
+        }
     }
 
     // #region Static Methods

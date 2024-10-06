@@ -430,16 +430,12 @@ export class dokRoom {
 
         for(const structure of structures) {
             // queue objects for repairs
-            if (structure.structureType === 'constructedWall' && structure.hits < structure.hitsMax * 0.10) {
-                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.10);
-
-                continue;
+            if (structure.structureType === 'constructedWall' && structure.hits < structure.hitsMax * 0.010) {
+                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.10, 4);
             } else if (structure.structureType === 'rampart' && structure.hits < structure.hitsMax * 0.50) {
-                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50);
-
-                continue;
-            } else {
-                this.QueueRepairStructure(structure.id, structure.hitsMax);
+                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50, 2);
+            } else if (structure.hits < structure.hitsMax * 0.95) {
+                this.QueueRepairStructure(structure.id, structure.hitsMax, 2); 
             }
         }
         
@@ -654,7 +650,7 @@ export class dokRoom {
     }
 
     public PullFromHaulQueue() {
-        const haulEntry = this.haulQueue.shift();
+        const haulEntry = this.haulQueue.sort((a, b) => b.priority - a.priority).shift();
 
         if (typeof haulEntry !== 'undefined') {
             Logger.Log(`HaulQueue:${this.name}`, `Haul request ${haulEntry.item} has been pulled out of queue`);
@@ -736,7 +732,7 @@ export class dokRoom {
         if (roomMemory.constructionQueue.length === 0)
             return undefined;
 
-        const constructionProject = roomMemory.constructionQueue[0];
+        const constructionProject = roomMemory.constructionQueue.sort((a, b) => b.priority - a.priority)[0];
 
         if (typeof constructionProject !== 'undefined') {
             Logger.Log(`ConstructionQueue:${this.name}`, `Construction project ${constructionProject.item} has been pulled out of queue`);
@@ -750,6 +746,10 @@ export class dokRoom {
         const constructionQueue = roomMemory.constructionQueue.filter(i => i.item !== item);
 
         (Memory.rooms[this.name] as dokRoomMemory).constructionQueue = constructionQueue;
+    }
+
+    public ClearConstructionQueue() {
+        (Memory.rooms[this.name] as dokRoomMemory).constructionQueue = [];
     }
 
     public QueueHaulRequest(request : HaulQueueEntry) {
