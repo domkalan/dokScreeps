@@ -1,5 +1,5 @@
 import { dokBootstrapCreep } from "../creeps/Bootstrap";
-import { dokBuilderCreep, RoomConstructionEntry } from "../creeps/Builder";
+import { ConstructionType, dokBuilderCreep, RoomConstructionEntry } from "../creeps/Builder";
 import { dokCreep } from "../creeps/Creep";
 import { dokEnergyMinerCreep } from "../creeps/EnergyMiner";
 import { dokHaulerCreep, HaulQueueEntry, HaulType } from "../creeps/Hauler";
@@ -406,6 +406,25 @@ export class dokRoom {
         this.constructionProjects = totalConstructionSites.length;
 
         // TODO: need to run health checks on build structures, add a repair instruction for builders or a new creep class
+        const ownedStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
+        const publicStructures = this.roomRef.find(FIND_STRUCTURES);
+
+        const structures = [...ownedStructures, ...publicStructures];
+
+        for(const structure of structures) {
+            // queue objects for repairs
+            if (structure.structureType === 'constructedWall' && structure.hits < structure.hitsMax * 0.10) {
+                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.10);
+
+                continue;
+            } else if (structure.structureType === 'rampart' && structure.hits < structure.hitsMax * 0.50) {
+                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50);
+
+                continue;
+            } else {
+                this.QueueRepairStructure(structure.id, structure.hitsMax);
+            }
+        }
         
         // get our assigned flags
         this.assignedFlags = this.dokScreepsRef.GetAssignedFlags(this.name);
@@ -584,7 +603,31 @@ export class dokRoom {
 
         Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
 
-        roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time });
+        roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Build });
+    }
+
+    public QueueRepairStructure(item: string, points: number, priority: number = 3, itemPos: RoomPosition | null = null) {
+        const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
+        
+        const existingEntry = roomMemory.constructionQueue.find(i => i.item === item);
+
+        if (typeof existingEntry !== 'undefined')
+            return;
+
+        let roomPosition = itemPos;
+
+        if (roomPosition === null) {
+            const itemLookup = Game.getObjectById(item) as Resource | Creep | Structure | Ruin;
+
+            if (itemLookup === null)
+                throw new Error(`Failed to add item ${item} to haul queue, could not find by id?`);
+
+            roomPosition = itemLookup.pos;
+        }
+
+        Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
+
+        roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Repair });
     }
 
     public PullFromConstructionQueue() {
