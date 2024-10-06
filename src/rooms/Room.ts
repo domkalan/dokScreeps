@@ -64,6 +64,7 @@ export class dokRoom {
     // keep track of creeps
     private ownedCreeps: dokCreep[] = [];
     private creepSpawnQueue: dokRoomSpawnEntry[] = [];
+    private creepSpawnQueueStuck: number = 0;
 
     // what do we have to haul here?
     private haulQueue: HaulQueueEntry[] = [];
@@ -71,11 +72,13 @@ export class dokRoom {
     // how many sources does this room have
     private sources: number = 0;
 
+    // track hostiles in the room
+    private hostiles: Array<Creep | PowerCreep> = [];
+
     // how many construction projects we have
     private constructionProjects: number = 0;
     private constructionProjectsProgress: number = 0;
     private askedForHelp: boolean = false;
-    private askedForHelpRoom: string | null = null;
 
     // track our assigned flags
     private assignedFlags: dokFlag[] = [];
@@ -191,7 +194,7 @@ export class dokRoom {
         if (typeof existingEntry !== 'undefined')
             return;
 
-        Logger.Log('dokCreep:Spawn', `${creep.buildName} has been queued for spawn`)
+        Logger.Log(`dokCreep:Spawn:${this.name}`, `${creep.buildName} has been queued for spawn`);
 
         this.creepSpawnQueue.push({ room: this.name, creep: creep });
     }
@@ -349,6 +352,20 @@ export class dokRoom {
                 this.creepSpawnQueue.shift();
 
                 this.ownedCreeps.push(creepClassInstance);
+            } else if (spawnCode === -6 && this.creepSpawnQueue.length > 2) {
+                this.creepSpawnQueueStuck++;
+                if (this.creepSpawnQueueStuck > 5) {
+                    const failedSpawn = this.creepSpawnQueue.shift();
+                    const nextSpawn = this.creepSpawnQueue.shift();
+
+                    if (typeof failedSpawn !== 'undefined' && typeof nextSpawn !== 'undefined') {
+                        this.creepSpawnQueue = [ nextSpawn, failedSpawn, ...this.creepSpawnQueue];
+
+                        this.creepSpawnQueueStuck = 0;
+
+                        Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn queue seemed stuck, doing first shuffle`);
+                    }
+                }
             }
 
             // update stored energy
@@ -430,6 +447,80 @@ export class dokRoom {
         this.assignedFlags = this.dokScreepsRef.GetAssignedFlags(this.name);
     }
 
+    public ScanRoomForHostiles() {
+        const hostileCreeps = this.roomRef.find(FIND_CREEPS).filter(i => i.owner.username !== Settings.username);
+        const hostilePowerCreeps = this.roomRef.find(FIND_POWER_CREEPS).filter(i => i.owner.username !== Settings.username);
+
+        this.hostiles = [...hostileCreeps, ...hostilePowerCreeps];
+    }
+
+    public DoTowerTick() {
+        const towers = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => i.structureType === 'tower') as StructureTower[];
+
+        let hostileTargetRotation = 0;
+        let repairOrderRotation = 0;
+
+        for(const tower of towers) {
+            if (tower.store.energy === 0) {
+                continue;
+            }
+
+            if (tower.store.energy < tower.store.getCapacity('energy')) {
+                this.AddDeliveryToHaulQueue(tower.id, 'energy', 2);
+            }
+
+            // blast hostiles
+            if (this.hostiles.length > 0) {
+                const hostileTarget = this.hostiles[hostileTargetRotation];
+
+                const blastCode = tower.attack(hostileTarget);
+
+                if (blastCode === 0) {
+                    hostileTargetRotation++;
+                    if (hostileTargetRotation >= this.hostiles.length) {
+                        hostileTargetRotation = 0;
+                    }
+                }
+
+                continue;
+            }
+
+            if (tower.store.energy < tower.store.getCapacity('energy') * 0.50) {
+                continue;
+            }
+
+            // do structure repairs
+            const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
+            const repairOrders = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair && i.itemPos.roomName === this.name);
+
+            if (repairOrders.length > 0) {
+                const repairTargetOrder = repairOrders[repairOrderRotation];
+                const repairTarget = Game.getObjectById(repairTargetOrder.item) as Structure;
+
+                if (repairTarget === null) {
+                    this.RemoveFromConstructionQueue(repairTargetOrder.item);
+
+                    continue;
+                }
+
+                if (repairTarget.hits >= repairTarget.hitsMax || repairTarget.hits >= repairTargetOrder.points) {
+                    this.RemoveFromConstructionQueue(repairTargetOrder.item);
+
+                    continue;
+                }
+
+                const blastCode = tower.repair(repairTarget);
+
+                if (blastCode === 0) {
+                    repairOrderRotation++;
+                    if (repairOrderRotation >= repairOrders.length) {
+                        repairOrderRotation = 0;
+                    }
+                }
+            }
+        }
+    }
+
     public GetAssignedFlags() {
         return this.assignedFlags;
     }
@@ -446,6 +537,15 @@ export class dokRoom {
 
         // update room ref
         this.roomRef = Game.rooms[this.name];
+
+        // defend against hostiles
+        if (tickNumber % Settings.roomHostileScan) {
+            this.ScanRoomForHostiles();
+        }
+
+        if (tickNumber % Settings.roomTowerTick) {
+            this.DoTowerTick();
+        }
         
         // monitor room health check every x ticks defined by settings
         if (tickNumber % Settings.roomCreepCheck == 0) {
