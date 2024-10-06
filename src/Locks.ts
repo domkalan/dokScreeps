@@ -22,7 +22,7 @@ export class Locks {
         return true;
     }
 
-    public static GetLocks(item: { id: string }) {
+    public static GetLocks(item: { id: string }) : LockEntry[] {
         if (typeof (Memory as any).dokScreeps.locks === 'undefined') {
             return []
         };
@@ -30,7 +30,7 @@ export class Locks {
         return (Memory as any).dokScreeps.locks.filter((i : LockEntry) => i.item === item.id);
     }
 
-    public static GetLocksWithoutMe(item: { id : string }, creep : dokCreep) {
+    public static GetLocksWithoutMe(item: { id : string }, creep : dokCreep) : LockEntry[] {
         if (typeof (Memory as any).dokScreeps.locks === 'undefined') {
             return []
         };
