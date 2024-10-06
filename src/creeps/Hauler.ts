@@ -319,7 +319,7 @@ export class dokHaulerCreep extends dokCreep {
         return false;
     }
 
-    public static buildBody: BodyPartConstant[] = [ MOVE, CARRY, CARRY, CARRY ];
+    public static buildBody: BodyPartConstant[] = [ MOVE, CARRY, MOVE, CARRY ];
     public static buildName: string = 'hauler';
 
     public static BuildInitialMemory(memParams: dokCreepMemory): dokHaulerCreepMemory {
