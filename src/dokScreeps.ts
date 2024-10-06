@@ -3,7 +3,7 @@ import { dokFlag } from "./Flags";
 import { InstanceManager } from "./InstanceManager";
 import { Locks } from "./Locks";
 import { Logger } from "./Logger";
-import { dokRoom } from "./rooms/Room";
+import { dokRoom, RoomState } from "./rooms/Room";
 import { Settings } from "./Settings";
 
 export class dokScreeps {
@@ -192,6 +192,8 @@ export class dokScreeps {
             return;
         }
 
+        this.DrawDebug();
+
         this.tickCount++;
 
         if (this.tickCount % Settings.dokScreepsRefresh === 0) {
@@ -209,6 +211,13 @@ export class dokScreeps {
         this.ProcessTickRooms();
 
         this.ProcessTickCreeps();
+    }
+
+    public DrawDebug() {
+        const debugOverlay = new RoomVisual();
+
+        debugOverlay.text(`Creeps: ${this.creeps.length}`, 0, 0, { align: 'left' });
+        debugOverlay.text(`Rooms: ${this.rooms.filter(i => i.state === RoomState.Controlled).length}`, 0, 1, { align: 'left' });
     }
 
     public GetCreepCounter(): number {
