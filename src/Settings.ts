@@ -7,7 +7,7 @@ export const Settings : SettingsType = {
     roomCreepSpawn: 10,
     roomScan: 50,
     roomHostileScan: 3,
-    roomTowerTick: 0,
+    roomTowerTick: 1,
 
     dokScreepsRefresh: 4000,
     dokScreepsMemoryCleanup: 1000,

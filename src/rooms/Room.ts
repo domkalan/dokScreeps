@@ -430,10 +430,18 @@ export class dokRoom {
 
         for(const structure of structures) {
             // queue objects for repairs
-            if (structure.structureType === 'constructedWall' && structure.hits < structure.hitsMax * 0.010) {
-                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.10, 4);
+            if (structure.structureType === 'constructedWall' && structure.hits < structure.hitsMax * 0.004) {
+                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.004, 4);
             } else if (structure.structureType === 'rampart' && structure.hits < structure.hitsMax * 0.50) {
-                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50, 2);
+                if (structure.hits < structure.hitsMax * 0.20) {
+                    this.QueueRepairStructure(structure.id, structure.hitsMax, 2);
+
+                    continue;
+                }
+
+                this.QueueRepairStructure(structure.id, structure.hitsMax, 4);
+            } else if (structure.structureType === 'container' && structure.hits < structure.hitsMax * 0.50) {
+                this.QueueRepairStructure(structure.id, structure.hitsMax, 3); 
             } else if (structure.hits < structure.hitsMax * 0.95) {
                 this.QueueRepairStructure(structure.id, structure.hitsMax, 2); 
             }
@@ -487,7 +495,7 @@ export class dokRoom {
 
             // do structure repairs
             const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
-            const repairOrders = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair && i.itemPos.roomName === this.name);
+            const repairOrders = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair && i.itemPos.roomName === this.name).sort((a, b) => a.priority - b.priority);
 
             if (repairOrders.length > 0) {
                 const repairTargetOrder = repairOrders[repairOrderRotation];
@@ -636,6 +644,19 @@ export class dokRoom {
         this.haulQueue.push({ item, itemPos: roomPosition, priority, resource, haulType: HaulType.Deliver, addedAt: Game.time });
     }
 
+    public SearchForPickupMatching(resource: ResourceConstant) {
+        const deliveryRequests = this.haulQueue.filter(i => i.haulType === HaulType.Pickup && i.resource === resource || i.haulType === HaulType.Pull && i.resource === resource);
+
+        if (deliveryRequests.length === 0)
+            return undefined;
+
+        const deliveryRequest = deliveryRequests.shift();
+
+        this.haulQueue = this.haulQueue.filter(i => i !== deliveryRequest);
+
+        return deliveryRequest;
+    }
+
     public SearchForDeliveryMatching(resource: ResourceConstant) {
         const deliveryRequests = this.haulQueue.filter(i => i.haulType === HaulType.Deliver && i.resource === resource);
 
@@ -650,7 +671,7 @@ export class dokRoom {
     }
 
     public PullFromHaulQueue() {
-        const haulEntry = this.haulQueue.sort((a, b) => b.priority - a.priority).shift();
+        const haulEntry = this.haulQueue.sort((a, b) => a.priority - b.priority).shift();
 
         if (typeof haulEntry !== 'undefined') {
             Logger.Log(`HaulQueue:${this.name}`, `Haul request ${haulEntry.item} has been pulled out of queue`);
@@ -660,7 +681,7 @@ export class dokRoom {
     }
 
     public PullFromHaulQueueWithConstraint(resource : ResourceConstant) {
-        const haulQueueConstrained = this.haulQueue.filter(i => i.resource === resource);
+        const haulQueueConstrained = this.haulQueue.filter(i => i.resource === resource).sort((a, b) => a.priority - b.priority);
 
         if (haulQueueConstrained.length === 0) {
             return undefined;
@@ -732,7 +753,7 @@ export class dokRoom {
         if (roomMemory.constructionQueue.length === 0)
             return undefined;
 
-        const constructionProject = roomMemory.constructionQueue.sort((a, b) => b.priority - a.priority)[0];
+        const constructionProject = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority)[0];
 
         if (typeof constructionProject !== 'undefined') {
             Logger.Log(`ConstructionQueue:${this.name}`, `Construction project ${constructionProject.item} has been pulled out of queue`);
