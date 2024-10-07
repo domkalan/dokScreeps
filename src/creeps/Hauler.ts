@@ -107,6 +107,16 @@ export class dokHaulerCreep extends dokCreep {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 0;
                 (this.creepRef.memory as dokHaulerCreepMemory).haulTask = null;
 
+                const pickupRequestConstraint = roomRef.SearchForPickupMatching(item.resource);
+
+                if (typeof pickupRequestConstraint === 'undefined') {
+                    return;
+                }
+
+                (this.creepRef.memory as dokHaulerCreepMemory).haulTask = pickupRequestConstraint;
+
+                this.creepRef.say('🔄');
+
                 return;
             }
 
