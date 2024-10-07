@@ -237,6 +237,8 @@ export class dokScreeps {
         (global as any).ClearConstructionQueue = this.ClearConstructionQueue.bind(this);
         (global as any).ClearAllConstructionQueue = this.ClearAllConstructionQueues.bind(this);
 
+        (global as any).Restart = this.RestartInstance.bind(this);
+
         (global as any).Help = this.HelpConsoleCommand;
     }
 
@@ -247,6 +249,8 @@ export class dokScreeps {
 
         \tClearConstructionQueue('roomId') - Clears the queued constructions from a room.
         \tClearAllConstructionQueues() - Clears all the construction queues.
+
+        \t Restart() - Restart dokScreeps instance.
 
         \tHelp() - Displays this help command.
         `)
@@ -266,6 +270,10 @@ export class dokScreeps {
         for(const room of this.rooms) {
             room.ClearConstructionQueue();
         }
+    }
+
+    public RestartInstance() {
+        dokScreeps._activeInstance = null;
     }
 
     // #region Static Methods
