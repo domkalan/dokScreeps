@@ -9,6 +9,7 @@ export interface dokBootstrapCreepMemory extends dokCreepMemory {
 export class dokBootstrapCreep extends dokCreep {
     private focusedSource: string | null = null;
     private focusedSpawn: string | null = null;
+    private focusedSpawnConstruct: string | null = null;
 
     constructor(creep: Creep, dokScreepInstance : dokScreeps) {
         super(creep, dokScreepInstance);
@@ -79,7 +80,7 @@ export class dokBootstrapCreep extends dokCreep {
             const emptySpawns = spawns.filter(i => i.store.energy < i.store.getCapacity('energy'));
 
             if (emptySpawns.length === 0) {
-                (this.creepRef.memory as any).focusedTask = 2;
+                (this.creepRef.memory as any).focusedTask = 3;
 
                 return;
             }
@@ -139,6 +140,38 @@ export class dokBootstrapCreep extends dokCreep {
         }
     }
 
+    private ConstructSpawn() {
+        if (this.focusedSpawnConstruct === null) {
+            const constructionSites = this.GetRoomRefSafe().roomRef.find(FIND_CONSTRUCTION_SITES);
+            const spawnConstruction = constructionSites.find(i => i.structureType === 'spawn');
+
+            if (typeof spawnConstruction === 'undefined') {
+                (this.creepRef.memory as any).focusedTask = 2;
+
+                return;
+            }
+
+            this.focusedSpawnConstruct = spawnConstruction.id;
+        }
+
+        const spawnConstruction = Game.getObjectById(this.focusedSpawnConstruct) as ConstructionSite;
+
+        if (spawnConstruction === null) {
+            (this.creepRef.memory as any).focusedTask = 0;
+            this.focusedSpawnConstruct = null;
+
+            return;
+        }
+
+        const buildCode = this.creepRef.build(spawnConstruction);
+
+        if (buildCode === -9) {
+            this.MoveTo(spawnConstruction);
+        } else if (buildCode === -6) {
+            (this.creepRef.memory as any).focusedTask = 0;
+        }
+    }
+
     public Tick(tickNumber: number, instanceTickNumber: number): boolean {
         if (super.Tick(tickNumber, instanceTickNumber)) {
             return true;
@@ -158,6 +191,8 @@ export class dokBootstrapCreep extends dokCreep {
 
                 break;
             case 3:
+                this.ConstructSpawn();
+
                 break;
             default:
                 break;
