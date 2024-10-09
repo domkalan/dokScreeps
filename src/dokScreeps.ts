@@ -235,7 +235,7 @@ export class dokScreeps {
         (global as any).ResetAllLocks = Locks.ResetAllLocks;
         
         (global as any).ClearConstructionQueue = this.ClearConstructionQueue.bind(this);
-        (global as any).ClearAllConstructionQueue = this.ClearAllConstructionQueues.bind(this);
+        (global as any).ClearAllConstructionQueues = this.ClearAllConstructionQueues.bind(this);
 
         (global as any).Restart = this.RestartInstance.bind(this);
 
@@ -260,20 +260,26 @@ export class dokScreeps {
         const roomInstance = this.GetRoomReference(room);
 
         if (typeof roomInstance === 'undefined') {
-            return;
+            return 'Room not found!';
         }
 
         roomInstance.ClearConstructionQueue();
+
+        return 'Success!'
     }
 
     public ClearAllConstructionQueues() {
         for(const room of this.rooms) {
             room.ClearConstructionQueue();
         }
+
+        return 'Success!'
     }
 
     public RestartInstance() {
         dokScreeps._activeInstance = null;
+
+        return 'Success!'
     }
 
     // #region Static Methods
