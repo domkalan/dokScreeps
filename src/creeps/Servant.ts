@@ -2,8 +2,12 @@ import { dokScreeps } from "../dokScreeps";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokServantCreep extends dokCreep {
+    private energyStorageCap: number = 0;
+
     constructor(creep: Creep, dokScreepInstance : dokScreeps) {
         super(creep, dokScreepInstance);
+
+        this.energyStorageCap = this.creepRef.store.getCapacity('energy');
     }
 
     public DoControllerWork() {
@@ -23,6 +27,13 @@ export class dokServantCreep extends dokCreep {
             this.RequestEnergyDelivery();
 
             return;
+        }
+
+        
+        if (this.creepRef.store.energy < this.energyStorageCap * 0.50) {
+            this.creepRef.say(`🪫⚡`);
+
+            this.RequestEnergyDelivery();
         }
 
         const upgradeCode = this.creepRef.upgradeController(controller);
