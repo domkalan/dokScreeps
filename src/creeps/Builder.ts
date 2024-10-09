@@ -72,6 +72,11 @@ export class dokBuilderCreep extends dokCreep {
 
             if (repairCode === -9) {
                 this.MoveTo(constructionSite);
+            } else if (repairCode === -6) {
+                // creep should reset to check for other work after repair has finished
+                this.focusedConstruct = null;
+                this.focusedConstructType = null;
+                this.focusedConstructPoints = 0;
             }
 
             return;

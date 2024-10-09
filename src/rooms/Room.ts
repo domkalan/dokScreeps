@@ -430,19 +430,25 @@ export class dokRoom {
 
         for(const structure of structures) {
             // queue objects for repairs
-            if (structure.structureType === 'constructedWall' && structure.hits < structure.hitsMax * 0.004) {
-                this.QueueRepairStructure(structure.id, structure.hitsMax * 0.004, 4);
-            } else if (structure.structureType === 'rampart' && structure.hits < structure.hitsMax * 0.50) {
-                if (structure.hits < structure.hitsMax * 0.20) {
-                    this.QueueRepairStructure(structure.id, structure.hitsMax, 2);
-
-                    continue;
+            if (structure.structureType === 'constructedWall') {
+                if (structure.hits < structure.hitsMax * 0.0032) {
+                    this.QueueRepairStructure(structure.id, structure.hitsMax * 0.0032, 4);
+                }
+                
+                continue;
+            } else if (structure.structureType === 'rampart') {
+                if (structure.hits < structure.hitsMax * 0.40) {
+                    this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50, 4);
                 }
 
-                this.QueueRepairStructure(structure.id, structure.hitsMax, 4);
-            } else if (structure.structureType === 'container' && structure.hits < structure.hitsMax * 0.50) {
-                this.QueueRepairStructure(structure.id, structure.hitsMax, 3); 
-            } else if (structure.hits < structure.hitsMax * 0.95) {
+                continue;
+            } else if (structure.structureType === 'container') {
+                if (structure.hits < structure.hitsMax * 0.50) {
+                    this.QueueRepairStructure(structure.id, structure.hitsMax, 3); 
+                }
+
+                continue;
+            } else if (structure.hits < structure.hitsMax * 0.90) {
                 this.QueueRepairStructure(structure.id, structure.hitsMax, 2); 
             }
         }
@@ -464,13 +470,17 @@ export class dokRoom {
         let hostileTargetRotation = 0;
         let repairOrderRotation = 0;
 
-        for(const tower of towers) {
-            if (tower.store.energy === 0) {
-                continue;
-            }
+        const debugTowerVisual = new RoomVisual(this.name);
 
+        for(const tower of towers) {
             if (tower.store.energy < tower.store.getCapacity('energy')) {
                 this.AddDeliveryToHaulQueue(tower.id, 'energy', 2);
+            }
+
+            if (tower.store.energy === 0) {
+                debugTowerVisual.text('🪫', tower.pos);
+
+                continue;
             }
 
             // blast hostiles
@@ -478,6 +488,10 @@ export class dokRoom {
                 const hostileTarget = this.hostiles[hostileTargetRotation];
 
                 const blastCode = tower.attack(hostileTarget);
+
+                debugTowerVisual.line(tower.pos, hostileTarget.pos, { color: 'rgba(255, 0, 0, 0.5)' });
+                debugTowerVisual.circle(hostileTarget.pos, { fill: 'rgba(255, 0, 0, 0.5)', radius: 0.8 });
+                debugTowerVisual.text('💣', hostileTarget.pos);
 
                 if (blastCode === 0) {
                     hostileTargetRotation++;
@@ -489,11 +503,27 @@ export class dokRoom {
                 continue;
             }
 
-            if (tower.store.energy < tower.store.getCapacity('energy') * 0.50) {
+            if (tower.store.energy < tower.store.getCapacity('energy') * 0.75) {
+                debugTowerVisual.text('😴', tower.pos, { opacity: 0.8 });
+
                 continue;
             }
 
-            // do structure repairs
+            const roomCriticalStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => i.hits < i.hitsMax * 0.10).sort((a, b) => a.hits / a.hitsMax - b.hits / b.hitsMax );
+
+            if (roomCriticalStructures.length > 0) {
+                const criticalStructure = roomCriticalStructures[0];
+
+                debugTowerVisual.line(tower.pos, criticalStructure.pos, { color: 'rgba(255, 99, 71, 0.5)' });
+                debugTowerVisual.circle(criticalStructure.pos, { fill: 'rgba(255, 99, 71, 0.5)', radius: 0.8 });
+                debugTowerVisual.text('🔨⚠️', criticalStructure.pos);
+
+                const blastCode = tower.repair(criticalStructure);
+
+                return;
+            } 
+
+            // do structure repairs from construction queue
             const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
             const repairOrders = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair && i.itemPos.roomName === this.name).sort((a, b) => a.priority - b.priority);
 
@@ -513,6 +543,10 @@ export class dokRoom {
                     continue;
                 }
 
+                debugTowerVisual.line(tower.pos, repairTarget.pos, { color: 'rgba(255, 165, 0, 0.5)' });
+                debugTowerVisual.circle(repairTarget.pos, { fill: 'rgba(255, 165, 0, 0.5)', radius: 0.8 });
+                debugTowerVisual.text('🔨', repairTarget.pos);
+
                 const blastCode = tower.repair(repairTarget);
 
                 if (blastCode === 0) {
@@ -521,7 +555,23 @@ export class dokRoom {
                         repairOrderRotation = 0;
                     }
                 }
+
+                return;
             }
+
+            const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => i.hits < i.hitsMax).sort((a, b) => a.hits / a.hitsMax - b.hits / b.hitsMax );
+
+            if (roomStructures.length > 0) {
+                const structure = roomStructures[0];
+
+                debugTowerVisual.line(tower.pos, structure.pos, { color: 'rgba(255, 165, 0, 0.5)' });
+                debugTowerVisual.circle(structure.pos, { fill: 'rgba(255, 165, 0, 0.5)', radius: 0.8 });
+                debugTowerVisual.text('🔨🧑‍⚕️', structure.pos);
+
+                const blastCode = tower.repair(structure);
+
+                return;
+            } 
         }
     }
 
@@ -547,9 +597,8 @@ export class dokRoom {
             this.ScanRoomForHostiles();
         }
 
-        if (tickNumber % Settings.roomTowerTick) {
-            this.DoTowerTick();
-        }
+        // do tower tick regardless
+        this.DoTowerTick();
         
         // monitor room health check every x ticks defined by settings
         if (tickNumber % Settings.roomCreepCheck == 0) {
