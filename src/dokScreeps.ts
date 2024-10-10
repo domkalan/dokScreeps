@@ -80,6 +80,11 @@ export class dokScreeps {
     }
 
     public ManuallyRegisterRooms(room: Room) {
+        const roomExists = this.rooms.find(i => i.name === room.name);
+
+        if (typeof roomExists !== 'undefined')
+            return;
+
         this.rooms.push(InstanceManager.ParseRawRoom(Game.rooms[room.name], this));
     }
 
