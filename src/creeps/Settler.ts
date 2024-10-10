@@ -119,16 +119,6 @@ export class dokSettlerCreep extends dokCreep {
 
             this.focusedController = null;
             this.focusedFlag = null;
-
-            const homeRoom = this.dokScreepsRef.GetRoomReference(this.fromRoom);
-
-            if (typeof homeRoom !== 'undefined') {
-                const constructionProjects = this.creepRef.room.find(FIND_CONSTRUCTION_SITES);
-
-                for(const construction of constructionProjects) {
-                    homeRoom.AddConstructionProject(construction.id, construction.progressTotal);
-                }
-            }
         }
     }
 
