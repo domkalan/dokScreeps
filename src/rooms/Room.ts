@@ -86,6 +86,9 @@ export class dokRoom {
     // track if this is our first tick
     private firstTick: boolean = true;
 
+    private towerLocks: { [id: string] : boolean } = {};
+    private towerEnergySleep: { [id: string] : number } = {};
+
     constructor(room: Room, dokScreepsInstance: dokScreeps) {
         Logger.Log('dokRooms', `Room ${room.name} has been created as a dokRoom`);
 
@@ -473,12 +476,15 @@ export class dokRoom {
         const debugTowerVisual = new RoomVisual(this.name);
 
         for(const tower of towers) {
-            if (tower.store.energy < tower.store.getCapacity('energy')) {
-                this.AddDeliveryToHaulQueue(tower.id, 'energy', 2);
+            if (typeof this.towerEnergySleep[tower.id] === 'undefined') {
+                this.towerEnergySleep[tower.id] = 0;
+                this.towerLocks[tower.id] = false;
             }
 
             if (tower.store.energy === 0) {
                 debugTowerVisual.text('🪫', tower.pos);
+
+                this.AddDeliveryToHaulQueue(tower.id, 'energy', 0);
 
                 continue;
             }
@@ -503,8 +509,29 @@ export class dokRoom {
                 continue;
             }
 
+            if (this.towerLocks[tower.id]) {
+                if (tower.store.energy < tower.store.getCapacity('energy')) {
+                    debugTowerVisual.text('🔋🔒', tower.pos, { opacity: 0.8 });
+
+                    if (this.towerEnergySleep[tower.id] > 10) {
+                        this.AddDeliveryToHaulQueue(tower.id, 'energy', 3);
+
+                        this.towerEnergySleep[tower.id] = 0;
+                    }
+                    this.towerEnergySleep[tower.id]++;
+
+                    return;
+                } else {
+                    this.towerLocks[tower.id] = false;
+                }
+            }
+
             if (tower.store.energy < tower.store.getCapacity('energy') * 0.75) {
                 debugTowerVisual.text('😴', tower.pos, { opacity: 0.8 });
+
+                this.AddDeliveryToHaulQueue(tower.id, 'energy', 3);
+
+                this.towerLocks[tower.id] = true;
 
                 continue;
             }
@@ -558,20 +585,6 @@ export class dokRoom {
 
                 return;
             }
-
-            const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => i.hits < i.hitsMax).sort((a, b) => a.hits / a.hitsMax - b.hits / b.hitsMax );
-
-            if (roomStructures.length > 0) {
-                const structure = roomStructures[0];
-
-                debugTowerVisual.line(tower.pos, structure.pos, { color: 'rgba(255, 165, 0, 0.5)' });
-                debugTowerVisual.circle(structure.pos, { fill: 'rgba(255, 165, 0, 0.5)', radius: 0.8 });
-                debugTowerVisual.text('🔨🧑‍⚕️', structure.pos);
-
-                const blastCode = tower.repair(structure);
-
-                return;
-            } 
         }
     }
 
