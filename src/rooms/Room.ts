@@ -231,6 +231,10 @@ export class dokRoom {
         const settlerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('settler'));
         const settlerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_PURPLE && i.flagRef?.color === COLOR_PURPLE);
 
+        // construction projects
+        const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);
+        const repairProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair);
+
         // do logic based on rcl
         if (this.roomRef.controller?.level || 0 >= 2) {
             if (bootstrapCreeps.length < 1 && servantCreeps.length < 1) {
@@ -258,13 +262,18 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokEnergyMinerCreep);
             }
 
-            // spawn based on projects
-            if (builderCreeps.length < Math.floor((roomMemory.constructionQueue.length / 5) + 1) && roomMemory.constructionQueue.length > 0 && builderCreeps.length < 4) {
+            // spawn based on construction projects
+            if (builderCreeps.length < Math.floor((constructionProjects.length / 5) + 1) && constructionProjects.length > 0 && builderCreeps.length < 4) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
             // spawn based on project points
-            if (builderCreeps.length < Math.floor(this.constructionProjectsProgress / 5000) && roomMemory.constructionQueue.length > 0 && builderCreeps.length < 4) {
+            if (builderCreeps.length < Math.floor(this.constructionProjectsProgress / 5000) && constructionProjects.length > 0 && builderCreeps.length < 4) {
+                this.QueueForSpawnOnce(dokBuilderCreep);
+            }
+
+            // spawn based on repair projects
+            if (builderCreeps.length < 1 && repairProjects.length > 0) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
