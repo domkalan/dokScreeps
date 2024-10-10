@@ -15,6 +15,8 @@ export class dokRancherCreep extends dokCreep {
             this.creepRef.say(`⚡?`);
 
             this.RequestEnergyDelivery();
+
+            this.sleepTime = 10;
             
             return;
         }
@@ -37,7 +39,7 @@ export class dokRancherCreep extends dokCreep {
     public RequestEnergyDelivery() {
         const roomRef = this.GetRoomRefSafe();
 
-        roomRef.AddDeliveryToHaulQueue(this.creepRef.id, 'energy', 3, new RoomPosition(this.creepRef.pos.x, this.creepRef.pos.y - 2, this.creepRef.pos.roomName));
+        roomRef.AddDeliveryToHaulQueue(this.creepRef.id, 'energy', 2, new RoomPosition(this.creepRef.pos.x, this.creepRef.pos.y - 2, this.creepRef.pos.roomName));
     }
 
     public Tick(tickNumber: number, instanceTickNumber: number): boolean {
