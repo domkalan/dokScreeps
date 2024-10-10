@@ -682,6 +682,8 @@ export class dokRoom {
         Logger.Log(`HaulQueue:${this.name}`, `Haul pull requested added to queue for item ${item}`)
 
         this.haulQueue.push({ item, itemPos: roomPosition, priority, resource, haulType: HaulType.Pull, addedAt: Game.time });
+
+        this.haulQueue = this.haulQueue.sort((a, b) => a.priority - b.priority);
     }
 
     public AddDeliveryToHaulQueue(item: string, resource: ResourceConstant, priority: number = 3, itemPos: RoomPosition | null = null) {
@@ -704,6 +706,8 @@ export class dokRoom {
         Logger.Log(`HaulQueue:${this.name}`, `Haul delivery requested added to queue for item ${item}`)
 
         this.haulQueue.push({ item, itemPos: roomPosition, priority, resource, haulType: HaulType.Deliver, addedAt: Game.time });
+
+        this.haulQueue = this.haulQueue.sort((a, b) => a.priority - b.priority);
     }
 
     public SearchForPickupMatching(resource: ResourceConstant) {
@@ -733,7 +737,7 @@ export class dokRoom {
     }
 
     public PullFromHaulQueue() {
-        const haulEntry = this.haulQueue.sort((a, b) => a.priority - b.priority).shift();
+        const haulEntry = this.haulQueue.shift();
 
         if (typeof haulEntry !== 'undefined') {
             Logger.Log(`HaulQueue:${this.name}`, `Haul request ${haulEntry.item} has been pulled out of queue`);
@@ -743,7 +747,7 @@ export class dokRoom {
     }
 
     public PullFromHaulQueueWithConstraint(resource : ResourceConstant) {
-        const haulQueueConstrained = this.haulQueue.filter(i => i.resource === resource).sort((a, b) => a.priority - b.priority);
+        const haulQueueConstrained = this.haulQueue.filter(i => i.resource === resource);
 
         if (haulQueueConstrained.length === 0) {
             return undefined;
@@ -783,6 +787,8 @@ export class dokRoom {
         Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
 
         roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Build });
+
+        roomMemory.constructionQueue = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority);
     }
 
     public QueueRepairStructure(item: string, points: number, priority: number = 3, itemPos: RoomPosition | null = null) {
@@ -807,6 +813,8 @@ export class dokRoom {
         Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
 
         roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Repair });
+
+        roomMemory.constructionQueue = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority);
     }
 
     public PullFromConstructionQueue() {
@@ -815,7 +823,7 @@ export class dokRoom {
         if (roomMemory.constructionQueue.length === 0)
             return undefined;
 
-        const constructionProject = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority)[0];
+        const constructionProject = roomMemory.constructionQueue[0];
 
         if (typeof constructionProject !== 'undefined') {
             Logger.Log(`ConstructionQueue:${this.name}`, `Construction project ${constructionProject.item} has been pulled out of queue`);
