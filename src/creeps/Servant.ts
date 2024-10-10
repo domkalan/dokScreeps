@@ -61,4 +61,15 @@ export class dokServantCreep extends dokCreep {
 
     public static buildBody: BodyPartConstant[] = [ WORK, CARRY, MOVE ];
     public static buildName: string = 'servant';
+
+    public static BuildBodyStack(rlc: number, energy: number): BodyPartConstant[] {
+        // copy build body, we don't want to edit static
+        const buildBody = [...this.buildBody];
+
+        for(var i = 1; i < rlc; i++) {
+            buildBody.push(WORK);
+        }
+
+        return buildBody;
+    }
 }

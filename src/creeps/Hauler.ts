@@ -332,6 +332,17 @@ export class dokHaulerCreep extends dokCreep {
     public static buildBody: BodyPartConstant[] = [ MOVE, CARRY, MOVE, CARRY ];
     public static buildName: string = 'hauler';
 
+    public static BuildBodyStack(rlc: number, energy: number): BodyPartConstant[] {
+        // copy build body, we don't want to edit static
+        const buildBody = [...this.buildBody];
+
+        for(var i = 1; i < rlc; i++) {
+            buildBody.push(CARRY, MOVE);
+        }
+
+        return buildBody;
+    }
+
     public static BuildInitialMemory(memParams: dokCreepMemory): dokHaulerCreepMemory {
         return {
             haulTask: null,
