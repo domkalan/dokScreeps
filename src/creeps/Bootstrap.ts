@@ -80,7 +80,7 @@ export class dokBootstrapCreep extends dokCreep {
             const emptySpawns = spawns.filter(i => i.store.energy < i.store.getCapacity('energy'));
 
             if (emptySpawns.length === 0) {
-                (this.creepRef.memory as any).focusedTask = 3;
+                this.DepositIntoExtensions();
 
                 return;
             }
@@ -110,12 +110,31 @@ export class dokBootstrapCreep extends dokCreep {
             this.MoveTo(spawnObject);
 
             return;
-        }
-
-        if (this.creepRef.store.getUsedCapacity('energy') <= 0) {
+        } else if (transferCode === -6) {
             (this.creepRef.memory as any).focusedTask = 0;
 
             this.focusedSpawn = null;
+        }
+    }
+
+    public DepositIntoExtensions() {
+        const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom);
+
+        const extensions = roomStructures.filter(i => i.structureType === 'extension') as StructureExtension[];
+        const extensionEmpty = extensions.filter(i => i.store.getFreeCapacity('energy') > 0);
+
+        if (extensionEmpty.length === 0) {
+            (this.creepRef.memory as any).focusedTask = 3;
+
+            return;
+        }
+        
+        const transferCode = this.creepRef.transfer(extensionEmpty[0], 'energy');
+
+        if (transferCode === -9) {
+            this.MoveTo(extensionEmpty[0]);
+        } else if (transferCode === -6) {
+            (this.creepRef.memory as any).focusedTask = 0;
         }
     }
 
