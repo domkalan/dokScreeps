@@ -129,4 +129,14 @@ export class dokSettlerCreep extends dokCreep {
 
     public static buildBody: BodyPartConstant[] = [ MOVE, CLAIM ];
     public static buildName: string = 'settler';
+
+    public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
+        // copy build body, we don't want to edit static
+        const buildBody = this.buildBody;
+
+        if (rcl < 4)
+            return buildBody;
+
+        return [...buildBody, CLAIM];
+    }
 }

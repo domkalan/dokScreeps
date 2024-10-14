@@ -59,12 +59,22 @@ export class dokEnergyMinerCreep extends dokCreep {
     public static buildBody: BodyPartConstant[] = [ MOVE, WORK, WORK ];
     public static buildName: string = 'energyminer';
 
-    public static BuildBodyStack(rlc: number, energy: number): BodyPartConstant[] {
+    public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
         // copy build body, we don't want to edit static
         const buildBody = [...this.buildBody];
 
-        for(var i = 1; i < rlc; i++) {
+        if (rcl === 2)
+            return buildBody;
+
+        for(var i = 1; i < rcl; i++) {
             buildBody.push(WORK);
+
+            if (i === 4)
+                break;
+        }
+
+        if (rcl >= 5) {
+            buildBody.push(CARRY);
         }
 
         return buildBody;

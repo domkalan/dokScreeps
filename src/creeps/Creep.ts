@@ -84,7 +84,7 @@ export class dokCreep {
     //#region Static methods
     public static buildName: string = 'creep';
     public static buildBody: BodyPartConstant[] = [ MOVE ];
-    public static BuildBodyStack(rlc: number, energy: number) {
+    public static BuildBodyStack(rcl: number, energy: number) {
         return this.buildBody;
     }
 
