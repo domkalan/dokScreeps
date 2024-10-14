@@ -443,8 +443,16 @@ export class dokRoom {
         for(const structure of structures) {
             // queue objects for repairs
             if (structure.structureType === 'constructedWall') {
+                if (structure.hits < 1000) {
+                    this.QueueRepairStructure(structure.id, 2000, 3);
+
+                    continue;
+                }
+
                 if (structure.hits < structure.hitsMax * 0.0032) {
                     this.QueueRepairStructure(structure.id, structure.hitsMax * 0.0032, 4);
+
+                    continue;
                 }
                 
                 continue;
