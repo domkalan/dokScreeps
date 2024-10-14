@@ -6,10 +6,6 @@ import { dokCreep } from "./Creep";
 export class dokEnergyMinerCreep extends dokCreep {
     private focusedSource: string | null = null;
 
-    constructor(creep: Creep, dokScreepInstance : dokScreeps) {
-        super(creep, dokScreepInstance);
-    }
-
     public GatherSource() {
         if (this.focusedSource === null) {
             const homeRoom = this.dokScreepsRef.GetRoomReference(this.fromRoom);

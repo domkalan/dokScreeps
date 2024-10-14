@@ -20,10 +20,6 @@ export class dokBuilderCreep extends dokCreep {
     private focusedConstructType: ConstructionType | null = null;
     private focusedConstructPoints: number = 0;
 
-    constructor(creep: Creep, dokScreepInstance : dokScreeps) {
-        super(creep, dokScreepInstance);
-    }
-
     public DoConstructionWork() {
         const roomRef = this.GetRoomRefSafe();
 

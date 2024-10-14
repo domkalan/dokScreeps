@@ -9,11 +9,6 @@ import { dokCreep } from "./Creep";
 export class dokSettlerCreep extends dokCreep {
     private focusedFlag: dokFlag | null = null;
     private focusedController: string | null = null;
-    private roomClaimed: boolean = false;
-
-    constructor(creep: Creep, dokScreepInstance : dokScreeps) {
-        super(creep, dokScreepInstance);
-    }
 
     public DoSettlerWork() {
         if (this.focusedFlag === null) {

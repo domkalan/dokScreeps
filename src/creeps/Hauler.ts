@@ -29,10 +29,6 @@ export class dokHaulerCreep extends dokCreep {
     private focusedStorage: string | null = null;
     private haulDeliveryResourceConstraint: ResourceConstant | null = null;
 
-    constructor(creep: Creep, dokScreepInstance : dokScreeps) {
-        super(creep, dokScreepInstance);
-    }
-
     public DoHaulWork() {
         let haulTask = (this.creepRef.memory as dokHaulerCreepMemory).haulTask;
         let haulStep = (this.creepRef.memory as dokHaulerCreepMemory).haulStep;

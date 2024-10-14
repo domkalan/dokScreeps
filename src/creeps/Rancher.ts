@@ -2,12 +2,6 @@ import { dokScreeps } from "../dokScreeps";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokRancherCreep extends dokCreep {
-    private focusedStructure: string | null = null;
-
-    constructor(creep: Creep, dokScreepInstance : dokScreeps) {
-        super(creep, dokScreepInstance);
-    }
-
     public DoRancherWork() {
         const spawnStructures = (this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).filter(i => i.structureType === 'spawn' || i.structureType === 'extension') as StructureSpawn[]).filter(i => i.store.energy < i.store.getCapacity('energy'));
 

@@ -11,10 +11,6 @@ export class dokBootstrapCreep extends dokCreep {
     private focusedSpawn: string | null = null;
     private focusedSpawnConstruct: string | null = null;
 
-    constructor(creep: Creep, dokScreepInstance : dokScreeps) {
-        super(creep, dokScreepInstance);
-    }
-
     public GatherSource() {
         // once we have a hauler, we are no longer needed
         const creeps = this.dokScreepsRef.GetCreepsByRoom(this.fromRoom);
