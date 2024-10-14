@@ -198,13 +198,32 @@ export class dokHaulerCreep extends dokCreep {
         }
 
         if (item.haulType === HaulType.Deliver) {
-            const chosenStorage = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).find(i => i.id === this.focusedStorage) as StructureStorage;
+            if (this.focusedStorage === null) {
+                Logger.Log(`Hauler:${this.fromRoom}`, `Invalid storage pull id.`);
 
-            this.creepRef.withdraw(chosenStorage, item.resource);
+                (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 0;
 
-            if (this.creepRef.store.getFreeCapacity() < 0) {
+                return;
+            }
+
+            const chosenStorage = Game.getObjectById(this.focusedStorage) as StructureStorage;
+
+            if (chosenStorage === null) {
+                Logger.Log(`Hauler:${this.fromRoom}`, `Invalid storage item, does it exist?`);
+
+                (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 0;
+                (this.creepRef.memory as dokHaulerCreepMemory).haulTask = null;
+
+                return;
+            }
+
+            const withdrawCode = this.creepRef.withdraw(chosenStorage, item.resource);
+
+            if (withdrawCode === -9) {
+                this.MoveTo(chosenStorage);
+            } else if (withdrawCode === -8) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
-            } else if (chosenStorage.store[item.resource] < this.creepRef.store.getFreeCapacity()) {
+            } else if (withdrawCode === -6) {
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 2;
             }
 
