@@ -277,7 +277,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
-            if (servantCreeps.length < (this.roomRef.controller?.level || 1)) {
+            if (servantCreeps.length < (this.roomRef.controller?.level || 1) && servantCreeps.length < 3) {
                 this.QueueForSpawnOnce(dokServantCreep);
             }
             
