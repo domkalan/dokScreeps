@@ -1,10 +1,12 @@
 {
   "dependencies": {
+    "@rollup/plugin-node-resolve": "^15.3.0",
     "@rollup/plugin-terser": "^0.4.4",
     "@types/lodash": "^4.14.202",
     "dayjs": "^1.11.10",
     "rollup-plugin-node-resolve": "^5.2.0",
-    "rollup-plugin-progress": "^1.1.2"
+    "rollup-plugin-progress": "^1.1.2",
+    "screeps-profiler": "^2.0.1"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^11.1.6",
