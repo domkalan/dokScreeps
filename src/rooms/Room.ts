@@ -229,7 +229,7 @@ export class dokRoom {
 
         // settler creeps require settler flags
         const settlerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('settler'));
-        const settlerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_PURPLE && i.flagRef?.color === COLOR_PURPLE);
+        const settlerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_PURPLE);
 
         // construction projects
         const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);

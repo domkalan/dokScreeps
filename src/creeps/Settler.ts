@@ -87,6 +87,42 @@ export class dokSettlerCreep extends dokCreep {
 
             return;
         }
+
+        if (flag.flagRef?.color === COLOR_PURPLE && flag.flagRef.secondaryColor === COLOR_GREY) {
+            if (this.focusedController === null) {
+                const controllers = (this.creepRef.room.find(FIND_STRUCTURES) as Structure[]).filter(i => i.structureType === 'controller');
+
+                if (controllers.length === 0) {
+                    this.creepRef.say('?');
+
+                    return;
+                }
+
+                this.focusedController = controllers[0].id;
+            }
+
+            const controller = Game.getObjectById(this.focusedController) as StructureController;
+
+            if (controller === null) {
+                this.focusedController = null;
+
+                return;
+            }
+
+            const claimCode = this.creepRef.reserveController(controller);
+
+            Logger.Log(`${this.name}`, `Claim code resulted in ${claimCode}`);
+
+            if (claimCode === -9) {
+                this.MoveTo(controller);
+
+                return;
+            } else if (claimCode === 0) {
+                this.dokScreepsRef.ManuallyRegisterRooms(this.creepRef.room);
+            }
+
+            return;
+        }
     }
 
     public ConstructSpawn(flag: dokFlag) {
