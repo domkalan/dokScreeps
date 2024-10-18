@@ -344,18 +344,22 @@ export class dokHaulerCreep extends dokCreep {
         return false;
     }
 
-    public static buildBody: BodyPartConstant[] = [ MOVE, CARRY, MOVE, CARRY ];
+    public static buildBody: BodyPartConstant[] = [ MOVE, CARRY ];
     public static buildName: string = 'hauler';
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
-        // copy build body, we don't want to edit static
-        const buildBody = [...this.buildBody];
+        const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
+        const partCost = {
+            move: 50,
+            carry: 50
+        };
 
-        if (rcl === 2)
-            return buildBody;
+        let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
 
-        for(var i = 1; i < rcl; i++) {
-            buildBody.push(CARRY, MOVE);
+        // Add additional parts while respecting the energy limit
+        while (totalCost + partCost.move + partCost.carry <= energy) {
+            buildBody.push(MOVE, CARRY);
+            totalCost += partCost.move + partCost.carry;
         }
 
         return buildBody;
