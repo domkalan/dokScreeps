@@ -19,16 +19,6 @@ export class dokServantCreep extends dokCreep {
             return;
         }
 
-        if (this.creepRef.store.energy === 0) {
-            this.creepRef.say(`⚡?`);
-
-            this.sleepTime = 10;
-
-            this.RequestEnergyDelivery();
-
-            return;
-        }
-
         
         if (this.creepRef.store.energy < this.energyStorageCap * 0.50) {
             this.creepRef.say(`🪫⚡`);
@@ -40,6 +30,12 @@ export class dokServantCreep extends dokCreep {
 
         if (upgradeCode == -9) {
             this.MoveTo(controller);
+        } else if (upgradeCode === -6) {
+            this.creepRef.say(`⚡?`);
+
+            this.sleepTime = 10;
+
+            this.RequestEnergyDelivery();
         }
     }
 

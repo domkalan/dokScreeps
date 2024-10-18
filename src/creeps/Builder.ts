@@ -40,16 +40,6 @@ export class dokBuilderCreep extends dokCreep {
             this.focusedConstructPoints = construction.points;
         }
 
-        if (this.creepRef.store.energy === 0) {
-            this.creepRef.say(`⚡?`);
-
-            this.sleepTime = 10;
-
-            this.RequestEnergyDelivery();
-
-            return;
-        }
-
         // repair structure
         if (this.focusedConstructType === ConstructionType.Repair) {
             const constructionSite = Game.getObjectById(this.focusedConstruct) as Structure;
@@ -73,6 +63,12 @@ export class dokBuilderCreep extends dokCreep {
                 this.focusedConstruct = null;
                 this.focusedConstructType = null;
                 this.focusedConstructPoints = 0;
+
+                this.creepRef.say(`⚡?`);
+
+                this.sleepTime = 10;
+
+                this.RequestEnergyDelivery();
             }
 
             return;
@@ -92,6 +88,12 @@ export class dokBuilderCreep extends dokCreep {
 
         if (buildCode === -9) {
             this.MoveTo(constructionSite);
+        } else if (buildCode === -6) {
+            this.creepRef.say(`⚡?`);
+
+            this.sleepTime = 10;
+
+            this.RequestEnergyDelivery();
         }
     }
 
