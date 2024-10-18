@@ -5,6 +5,8 @@ import { dokCreep } from "./Creep";
 
 export class dokEnergyMinerCreep extends dokCreep {
     private focusedSource: string | null = null;
+    private focusedLink: string | null = null;
+    private focusedLinkBlocked: boolean = false;
 
     public GatherSource() {
         if (this.focusedSource === null) {
@@ -43,6 +45,24 @@ export class dokEnergyMinerCreep extends dokCreep {
             return;
         } else if (harvestCode == -6) {
             this.sleepTime = 10;
+        }
+
+        if (!this.focusedLinkBlocked && this.creepRef.store.getFreeCapacity() <= 0) {
+            if (this.focusedLink === null) {
+                const nearbyLink = this.creepRef.pos.findInRange(FIND_STRUCTURES, 2).filter(i => i.structureType === 'link');
+
+                if (nearbyLink.length === 0) {
+                    this.focusedLinkBlocked = true;
+
+                    return;
+                }
+
+                this.focusedLink = nearbyLink[0].id;
+            }
+
+            const nearbyLink = Game.getObjectById(this.focusedLink) as StructureLink;
+
+            const transferCode = this.creepRef.transfer(nearbyLink, 'energy');
         }
     }
 

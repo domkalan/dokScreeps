@@ -1,11 +1,14 @@
 import { dokBootstrapCreep } from "../creeps/Bootstrap";
 import { ConstructionType, dokBuilderCreep, RoomConstructionEntry } from "../creeps/Builder";
 import { dokCreep } from "../creeps/Creep";
+import { dokDefenderCreep } from "../creeps/Defender";
 import { dokEnergyMinerCreep } from "../creeps/EnergyMiner";
 import { dokHaulerCreep, HaulQueueEntry, HaulType } from "../creeps/Hauler";
+import { dokLinkKeeperCreep } from "../creeps/LinkKeeper";
 import { dokRancherCreep } from "../creeps/Rancher";
 import { dokServantCreep } from "../creeps/Servant";
 import { dokSettlerCreep } from "../creeps/Settler";
+import { Distance } from "../Distance";
 import { dokScreeps } from "../dokScreeps";
 import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
@@ -88,6 +91,8 @@ export class dokRoom {
 
     private towerLocks: { [id: string] : boolean } = {};
     private towerEnergySleep: { [id: string] : number } = {};
+
+    private roomLinks: { id: string, type: number }[] = [];
 
     constructor(room: Room, dokScreepsInstance: dokScreeps) {
         Logger.Log('dokRooms', `Room ${room.name} has been created as a dokRoom`);
@@ -191,6 +196,12 @@ export class dokRoom {
         (Memory.rooms[this.name] as dokRoomMemory).resources = resources;
     }
 
+    private QueueForSpawn(creep: typeof dokCreep) {
+        Logger.Log(`dokCreep:Spawn:${this.name}`, `${creep.buildName} has been queued for spawn`);
+
+        this.creepSpawnQueue.push({ room: this.name, creep: creep });
+    }
+
     private QueueForSpawnOnce(creep: typeof dokCreep) {
         const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === this.name);
 
@@ -200,6 +211,17 @@ export class dokRoom {
         Logger.Log(`dokCreep:Spawn:${this.name}`, `${creep.buildName} has been queued for spawn`);
 
         this.creepSpawnQueue.push({ room: this.name, creep: creep });
+    }
+
+    private PriorityQueueForSpawnOnce(creep: typeof dokCreep) {
+        const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === this.name);
+
+        if (typeof existingEntry !== 'undefined')
+            return;
+
+        Logger.Log(`dokCreep:Spawn:${this.name}`, `${creep.buildName} has been queued for spawn with priority status`);
+
+        this.creepSpawnQueue.unshift({ room: this.name, creep: creep });
     }
 
     private MonitorRoomCreeps() {
@@ -226,6 +248,8 @@ export class dokRoom {
         const servantCreeps = this.ownedCreeps.filter(i => i.name.startsWith('servant'));
         const builderCreeps = this.ownedCreeps.filter(i => i.name.startsWith('builder'));
         const rancherCreeps = this.ownedCreeps.filter(i => i.name.startsWith('rancher'));
+        const defenderCreeps = this.ownedCreeps.filter(i => i.name.startsWith('defender'));
+        const linkKeeperCreeps = this.ownedCreeps.filter(i => i.name.startsWith('linkkeeper'));
 
         // settler creeps require settler flags
         const settlerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('settler'));
@@ -235,15 +259,28 @@ export class dokRoom {
         const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);
         const repairProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair);
 
+        // get structures
+        const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
+
+        const storages = roomStructures.filter(i => i.structureType === 'storage');
+
         // do logic based on rcl
         if (this.roomRef.controller?.level || 0 >= 2) {
-            if (bootstrapCreeps.length < 1 && servantCreeps.length < 1) {
+            if (bootstrapCreeps.length < 1 && energyMinerCreeps.length < this.sources) {
                 // flush spawn queue, we need to bootstrap
                 this.creepSpawnQueue = [];
 
-                this.QueueForSpawnOnce(dokBootstrapCreep);
+                for(var i = 0; i < (this.roomRef.controller?.level || 1); i++) {
+                    this.QueueForSpawn(dokBootstrapCreep);
+                }
 
                 return;
+            }
+
+            if (this.hostiles.length > 0 && defenderCreeps.length < 4) {
+                this.PriorityQueueForSpawnOnce(dokDefenderCreep);
+            } else if (this.hostiles.length) {
+                this.creepSpawnQueue = this.creepSpawnQueue.filter(i => i.creep !== dokDefenderCreep);
             }
 
             if (rancherCreeps.length < 1) {
@@ -287,6 +324,10 @@ export class dokRoom {
 
             if (settlerCreeps.length < 1 && settlerFlags.length > 0) {
                 this.QueueForSpawnOnce(dokSettlerCreep);
+            }
+
+            if (linkKeeperCreeps.length < 1 && storages.length > 0) {
+                this.QueueForSpawnOnce(dokLinkKeeperCreep);
             }
         }
     }
@@ -472,6 +513,28 @@ export class dokRoom {
                 this.QueueRepairStructure(structure.id, structure.hitsMax, 2); 
             }
         }
+
+        // check room for links
+        const links = structures.filter(i => i.structureType === 'link');
+        const storage = structures.find(i => i.structureType === 'storage');
+
+        if (this.roomLinks.length !== links.length && typeof storage !== 'undefined') {
+            this.roomLinks = [];
+
+            for(const link of links) {
+                const distance = Distance.GetDistance(link.pos, storage.pos);
+
+                let linkType = 1;
+
+                if (distance <= 2) {
+                    linkType = 0;
+                }
+
+                this.roomLinks.push({ id: link.id, type: linkType });
+
+                Logger.Log(`RoomScan:${this.name}:LinkCheck`, `Link ${link.id} is link type ${linkType}`)
+            }
+        }
         
         // get our assigned flags
         this.assignedFlags = this.dokScreepsRef.GetAssignedFlags(this.name);
@@ -609,6 +672,45 @@ export class dokRoom {
         return this.assignedFlags;
     }
 
+    public GetHostiles() {
+        return this.hostiles;
+    }
+
+    public GetKnownLinks() {
+        return this.roomLinks;
+    }
+
+    public DoLinkTransfer() {
+        const mainLinkStub = this.roomLinks.find(i => i.type === 0);
+
+        if (typeof mainLinkStub === 'undefined')
+            return;
+
+        const mainLink = Game.getObjectById(mainLinkStub.id) as StructureLink;
+
+        if (mainLink === null)
+            return;
+
+        let energyTransfer = 0;
+
+        for(const linkStub of this.roomLinks) {
+            if (mainLinkStub.id === linkStub.id)
+                continue;
+
+            const link = Game.getObjectById(linkStub.id) as StructureLink;
+
+            if (link === null)
+                continue;
+
+            if (link.store.energy === 0)
+                continue;
+
+            link.transferEnergy(mainLink);
+
+            mainLink.store.energy += link.store.energy;
+        }
+    }
+
     public Tick(tickNumber: number, instanceTickNumber: number) : boolean {
         if (typeof Game.rooms[this.name] === 'undefined') {
             Logger.Log(`Room:${this.name}`, 'Room is inactive, will not tick.')
@@ -641,6 +743,10 @@ export class dokRoom {
 
         if (tickNumber % Settings.roomScan === 0) {
             this.ScanRoom();
+        }
+
+        if (tickNumber % 50) {
+            this.DoLinkTransfer();
         }
 
         // do things on first tick here
