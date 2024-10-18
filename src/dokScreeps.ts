@@ -190,7 +190,10 @@ export class dokScreeps {
         if (this.tickCount === 0) {
             console.log('---------------\n');
 
-            new RoomVisual().text('Starting dokScreeps...', 25, 25, { font: '24px' });
+            const startingOverlay = new RoomVisual();
+
+            startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
+            startingOverlay.text('Starting dokScreeps...', 25, 25, { font: '24px' });
 
             this.tickCount++;
 
