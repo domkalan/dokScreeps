@@ -1,10 +1,11 @@
+import { Distance } from "../Distance";
 import { dokScreeps } from "../dokScreeps";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokRancherCreep extends dokCreep {
-    public DoRancherWork() {
-        const spawnStructures = (this.dokScreepsRef.GetStructuresByRoom(this.fromRoom).filter(i => i.structureType === 'spawn' || i.structureType === 'extension') as StructureSpawn[]).filter(i => i.store.energy < i.store.getCapacity('energy'));
+    private focusedStructure: string | null = null;
 
+    public DoRancherWork() {
         if (this.creepRef.store.energy === 0) {
             this.creepRef.say(`⚡?`);
 
@@ -15,18 +16,37 @@ export class dokRancherCreep extends dokCreep {
             return;
         }
 
-        if (spawnStructures.length < 0) {
-            this.sleepTime = 10;
+        if (this.focusedStructure === null) {
+            const structures = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom);
+            const spawn = structures.filter(i => i.structureType === 'spawn');
+            const extensions = structures.filter(i => i.structureType === 'extension');
 
-            this.creepRef.say(`🔋`);
+            const pos = this.creepRef.pos;
 
-            return;
+            const spawnStructures = ([...spawn, ...extensions] as StructureExtension[]).filter(i => i.store.energy < i.store.getCapacity('energy')).sort((a, b) => Distance.GetDistance(pos, a.pos) - Distance.GetDistance(pos, b.pos));
+
+            if (spawnStructures.length === 0) {
+                this.sleepTime = 10;
+
+                this.creepRef.say(`🔋`);
+
+                return;
+            }
+
+            this.focusedStructure = spawnStructures[0].id;
         }
 
-        const transferCode = this.creepRef.transfer(spawnStructures[0], 'energy');
+        const lowStructure = Game.getObjectById(this.focusedStructure) as Structure;
+
+        if (lowStructure === null)
+            return;
+
+        const transferCode = this.creepRef.transfer(lowStructure, 'energy');
 
         if (transferCode == -9) {
-            this.MoveTo(spawnStructures[0]);
+            this.MoveTo(lowStructure);
+        } else if (transferCode === 0) {
+            this.focusedStructure = null;
         }
     }
 
@@ -48,4 +68,22 @@ export class dokRancherCreep extends dokCreep {
 
     public static buildBody: BodyPartConstant[] = [ MOVE, CARRY, CARRY ];
     public static buildName: string = 'rancher';
+
+    public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
+        const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
+        const partCost = {
+            move: 50,
+            carry: 100
+        };
+
+        let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
+
+        // Add additional parts while respecting the energy limit
+        while (totalCost + partCost.move + partCost.carry <= energy) {
+            buildBody.push(CARRY, MOVE);
+            totalCost += partCost.move + partCost.carry;
+        }
+
+        return buildBody;
+    }
 }
