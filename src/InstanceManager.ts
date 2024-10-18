@@ -1,6 +1,7 @@
 import { dokBootstrapCreep } from "./creeps/Bootstrap";
 import { dokBuilderCreep } from "./creeps/Builder";
 import { dokCreep } from "./creeps/Creep";
+import { dokDefenderCreep } from "./creeps/Defender";
 import { dokEnergyMinerCreep } from "./creeps/EnergyMiner";
 import { dokHaulerCreep } from "./creeps/Hauler";
 import { dokRancherCreep } from "./creeps/Rancher";
@@ -30,6 +31,8 @@ export class InstanceManager {
                 return new dokRancherCreep(creep, dokScreepInstance);
             case 'settler':
                 return new dokSettlerCreep(creep, dokScreepInstance);
+            case 'defender':
+                return new dokDefenderCreep(creep, dokScreepInstance);
             default:
                 return new dokCreep(creep, dokScreepInstance);
         }
