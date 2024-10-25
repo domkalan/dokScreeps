@@ -1,5 +1,4 @@
 import { Distance } from "../Distance";
-import { dokScreeps } from "../dokScreeps";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokRancherCreep extends dokCreep {

@@ -1,6 +1,5 @@
 import { dokScreeps } from "../dokScreeps";
 import { Locks } from "../Locks";
-import { Logger } from "../Logger";
 import { dokRoom } from "../rooms/Room";
 
 export interface dokCreepMemory {

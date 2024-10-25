@@ -1,4 +1,3 @@
-import { dokScreeps } from "../dokScreeps";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokLinkKeeperCreep extends dokCreep {

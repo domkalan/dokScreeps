@@ -1,6 +1,4 @@
-import { dokScreeps } from "../dokScreeps";
 import { Locks } from "../Locks";
-import { dokRoom } from "../rooms/Room";
 import { dokCreep } from "./Creep";
 
 export class dokEnergyMinerCreep extends dokCreep {

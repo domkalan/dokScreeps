@@ -1,5 +1,3 @@
-import { dokScreeps } from "../dokScreeps";
-import { Logger } from "../Logger";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export interface dokBootstrapCreepMemory extends dokCreepMemory {

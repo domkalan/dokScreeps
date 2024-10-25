@@ -1,8 +1,3 @@
-import { dokScreeps } from "../dokScreeps";
-import { dokFlag } from "../Flags";
-import { Logger } from "../Logger";
-import { dokRoom } from "../rooms/Room";
-import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
 
 

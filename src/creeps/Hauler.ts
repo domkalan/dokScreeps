@@ -1,5 +1,4 @@
 import { Distance } from "../Distance";
-import { dokScreeps } from "../dokScreeps";
 import { Logger } from "../Logger";
 import { dokCreep, dokCreepMemory } from "./Creep";
 

@@ -1,4 +1,3 @@
-import { dokScreeps } from "../dokScreeps";
 import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";

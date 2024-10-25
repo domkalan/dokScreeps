@@ -1,4 +1,3 @@
-import { dokScreeps } from "../dokScreeps";
 import { dokCreep } from "./Creep";
 
 export enum ConstructionType {
