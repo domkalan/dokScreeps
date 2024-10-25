@@ -263,6 +263,7 @@ export class dokRoom {
         const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
 
         const storages = roomStructures.filter(i => i.structureType === 'storage');
+        const links = roomStructures.filter(i => i.structureType === 'link')
 
         // do logic based on rcl
         if (this.roomRef.controller?.level || 0 >= 2) {
@@ -326,7 +327,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokSettlerCreep);
             }
 
-            if (linkKeeperCreeps.length < 1 && storages.length > 0) {
+            if (linkKeeperCreeps.length < 1 && storages.length > 0 && links.length >= 2) {
                 this.QueueForSpawnOnce(dokLinkKeeperCreep);
             }
         }
