@@ -166,12 +166,20 @@ export class dokSettlerCreep extends dokCreep {
     public static buildName: string = 'settler';
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
-        // copy build body, we don't want to edit static
-        const buildBody = this.buildBody;
+        const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
+        const partCost = {
+            move: 50,
+            claim: 600
+        };
 
-        if (rcl < 4)
-            return buildBody;
+        let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
 
-        return [...buildBody, CLAIM];
+        // Add additional parts while respecting the energy limit
+        while (totalCost + partCost.move + partCost.claim <= energy && buildBody.length < 50) {
+            buildBody.push(MOVE, CLAIM);
+            totalCost += partCost.move + partCost.claim;
+        }
+
+        return buildBody;
     }
 }
