@@ -17,8 +17,8 @@
   "name": "dokUtil",
   "description": "dokUtil powers my screeps.com account dokman.",
   "scripts": {
-    "build": "rollup.cmd -c .\\rollup.config.js",
-    "build-tools": "rollup.cmd -c .\\rollup-tools.config.js"
+    "build": "rollup -c ./rollup.config.js",
+    "build-tools": "rollup -c ./rollup-tools.config.js"
   },
   "version": "3.0.0"
 }
