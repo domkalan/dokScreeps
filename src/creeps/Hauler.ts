@@ -357,7 +357,7 @@ export class dokHaulerCreep extends dokCreep {
         let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + partCost.move + partCost.carry <= energy) {
+        while (totalCost + partCost.move + partCost.carry <= energy && buildBody.length < 50) {
             buildBody.push(MOVE, CARRY);
             totalCost += partCost.move + partCost.carry;
         }

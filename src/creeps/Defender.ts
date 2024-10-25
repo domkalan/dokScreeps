@@ -66,7 +66,7 @@ export class dokDefenderCreep extends dokCreep {
         let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + partCost.move + partCost.ranged_attack <= energy) {
+        while (totalCost + partCost.move + partCost.ranged_attack <= energy && buildBody.length < 50) {
             buildBody.push(MOVE, RANGED_ATTACK);
             totalCost += partCost.move + partCost.ranged_attack;
         }

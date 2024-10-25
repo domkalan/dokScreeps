@@ -73,13 +73,13 @@ export class dokRancherCreep extends dokCreep {
         const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
         const partCost = {
             move: 50,
-            carry: 100
+            carry: 50
         };
 
         let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + partCost.move + partCost.carry <= energy) {
+        while (totalCost + partCost.move + partCost.carry <= energy && buildBody.length < 50) {
             buildBody.push(CARRY, MOVE);
             totalCost += partCost.move + partCost.carry;
         }
