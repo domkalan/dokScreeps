@@ -1,3 +1,4 @@
+import { dokAttackerCreep } from "./creeps/Attacker";
 import { dokBootstrapCreep } from "./creeps/Bootstrap";
 import { dokBuilderCreep } from "./creeps/Builder";
 import { dokCreep } from "./creeps/Creep";
@@ -34,11 +35,14 @@ export class InstanceManager {
                 return new dokSettlerCreep(creep, dokScreepInstance);
             case 'defender':
                 return new dokDefenderCreep(creep, dokScreepInstance);
+            case 'attacker':
+                return new dokAttackerCreep(creep, dokScreepInstance);
             case 'linkkeeper':
                 return new dokLinkKeeperCreep(creep, dokScreepInstance);
             default:
                 return new dokCreep(creep, dokScreepInstance);
         }
+    }
 
         
     }

@@ -1,3 +1,4 @@
+import { dokAttackerCreep } from "../creeps/Attacker";
 import { dokBootstrapCreep } from "../creeps/Bootstrap";
 import { ConstructionType, dokBuilderCreep, RoomConstructionEntry } from "../creeps/Builder";
 import { dokCreep } from "../creeps/Creep";
@@ -255,6 +256,10 @@ export class dokRoom {
         const settlerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('settler'));
         const settlerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_PURPLE);
 
+        // attack creeps
+        const attackCreeps = this.ownedCreeps.filter(i => i.name.startsWith('attacker'));
+        const attackFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_RED);
+
         // construction projects
         const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);
         const repairProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair);
@@ -329,6 +334,10 @@ export class dokRoom {
 
             if (linkKeeperCreeps.length < 1 && storages.length > 0 && links.length >= 2) {
                 this.QueueForSpawnOnce(dokLinkKeeperCreep);
+            }
+
+            if (attackCreeps.length < 6 && attackFlags.length > 0) {
+                this.QueueForSpawnOnce(dokAttackerCreep);
             }
         }
     }
@@ -535,6 +544,16 @@ export class dokRoom {
 
                 Logger.Log(`RoomScan:${this.name}:LinkCheck`, `Link ${link.id} is link type ${linkType}`)
             }
+        }
+
+        // get extensions
+        const extensions = structures.filter(i => i.structureType === 'extension') as StructureExtension[];
+        const extensionEmpty = extensions.filter(i => i.store.energy === 0);
+
+        Logger.Log(`RoomScan:${this.name}:Extensions`, `Extension check: empty=${extensionEmpty.length}, total=${extensions.length}`)
+
+        if (extensionEmpty.length > extensions.length * 0.5) {
+
         }
         
         // get our assigned flags

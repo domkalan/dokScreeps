@@ -1,5 +1,6 @@
 import { Distance } from "./Distance";
 import { dokScreeps } from "./dokScreeps";
+import { Logger } from "./Logger";
 import { RoomState } from "./rooms/Room";
 
 export class dokFlag {
@@ -25,25 +26,13 @@ export class dokFlag {
 
         // settler flags
         if (this.flagRef.color === COLOR_PURPLE) {
-            const ownedRooms = dokScreeps.GetRooms().filter(i => i.state === RoomState.Controlled);
+            this.AssignByDistance(dokScreeps);
 
-            const sameRoom = ownedRooms.find(i => i.roomRef.name === this.flagRef?.pos.roomName);
+            return;
+        }
 
-            if (typeof sameRoom !== 'undefined') {
-                this.assignedRoom = sameRoom.roomRef.name;
-
-                // do this for debugging purpose
-                (this.flagRef.memory as any).assignedRoom = sameRoom.roomRef.name;
-
-                return;
-            }
-
-            const closerRooms = ownedRooms.filter(i => (i.roomRef.controller?.level || 1) >= 3).sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.room) - Game.map.getRoomLinearDistance(b.name, this.room));
-
-            this.assignedRoom = closerRooms[0].name;
-
-            // do this for debugging purpose
-            (this.flagRef.memory as any).assignedRoom = closerRooms[0].name;
+        if (this.flagRef.color === COLOR_RED && this.flagRef.secondaryColor === COLOR_RED) {
+            this.AssignByDistance(dokScreeps);
 
             return;
         }
@@ -52,6 +41,34 @@ export class dokFlag {
 
         // do this for debugging purpose
         (this.flagRef.memory as any).assignedRoom = '*';
+
+        Logger.Log(`Flag:${this.flagRef.name}`, `Flag registered with assignedRoom *`);
+    }
+
+    public AssignByDistance(dokScreeps: dokScreeps) {
+        const ownedRooms = dokScreeps.GetRooms().filter(i => i.state === RoomState.Controlled);
+
+        const sameRoom = ownedRooms.find(i => i.roomRef.name === this.flagRef?.pos.roomName);
+
+        if (typeof sameRoom !== 'undefined') {
+            this.assignedRoom = sameRoom.roomRef.name;
+
+            // do this for debugging purpose
+            (this.flagRef.memory as any).assignedRoom = sameRoom.roomRef.name;
+
+            return;
+        }
+
+        const closerRooms = ownedRooms.filter(i => (i.roomRef.controller?.level || 1) >= 3).sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.room) - Game.map.getRoomLinearDistance(b.name, this.room));
+
+        this.assignedRoom = closerRooms[0].name;
+
+        // do this for debugging purpose
+        (this.flagRef.memory as any).assignedRoom = closerRooms[0].name;
+
+        Logger.Log(`Flag:${this.flagRef.name}`, `Flag registered with assignedRoom ${closerRooms[0].name}`);
+
+        return;
     }
 
     public DoFlagLogic(dokScreeps: dokScreeps) {
