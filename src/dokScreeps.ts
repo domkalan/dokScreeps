@@ -16,6 +16,7 @@ export class dokScreeps {
     private tickCount: number = 0;
 
     private cpuBucketPause: boolean = false;
+    private cpuNoCPUUnlocks: boolean = false;
 
     constructor() {
         this.initializedAt = Game.time;
@@ -209,6 +210,16 @@ export class dokScreeps {
 
         if (this.cpuBucketPause) {
             Logger.Log(`CPUMonitor:${this.tickCount}`, `CPU is paused low bucket, bucket is at ${Game.cpu.bucket}`);
+
+            if (!Game.cpu.unlocked && typeof (Memory as any).dokScreeps.useCpuUnlock !== 'undefined' && (Memory as any).dokScreeps.useCpuUnlock === true && !this.cpuNoCPUUnlocks) {
+                const unlockCode = Game.cpu.unlock();
+
+                if (unlockCode === -6) {
+                    Logger.Error(`CPUMonitor:${this.tickCount}`, `CPU is paused low bucket, bucket is at ${Game.cpu.bucket}`);
+
+                    this.cpuNoCPUUnlocks = true;
+                }
+            }
         }
     }
 
@@ -269,9 +280,21 @@ export class dokScreeps {
         debugOverlay.text(`Rooms: ${this.rooms.filter(i => i.state === RoomState.Controlled).length}`, 0, 1, { align: 'left' });
 
         // cpu bucket
-        debugOverlay.text(`Bucket: ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+        if (this.cpuBucketPause) {
+            debugOverlay.text(`Bucket: ⏸️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+        } else {
+            debugOverlay.text(`Bucket: ▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+        }
+        
         debugOverlay.rect(0, 2.5, 8, 0.5, { fill: 'rgba(0, 0, 0, 0.5)' });
-        debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#03a5fc' });
+
+        if (Game.cpu.bucket < 2000) {
+            debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#fc032c' });
+        } else if (Game.cpu.bucket < 4000) {
+            debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#fcbe03' });
+        } else {
+            debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#03a5fc' });
+        }
     }
 
     public GetCreepCounter(): number {
@@ -293,6 +316,8 @@ export class dokScreeps {
 
         (global as any).Restart = this.RestartInstance.bind(this);
 
+        (global as any).AutoUnlockCPU = this.AutoUnlockCPU.bind(this);
+
         (global as any).Help = this.HelpConsoleCommand;
     }
 
@@ -304,7 +329,9 @@ export class dokScreeps {
         \tClearConstructionQueue('roomId') - Clears the queued constructions from a room.
         \tClearAllConstructionQueues() - Clears all the construction queues.
 
-        \t Restart() - Restart dokScreeps instance.
+        \tAutoUnlockCPU(true/false) - Allows the utility to use a CPU unlocked automatically. (default: false)
+
+        \tRestart() - Restart dokScreeps instance.
 
         \tHelp() - Displays this help command.
         `)
@@ -334,6 +361,10 @@ export class dokScreeps {
         dokScreeps._activeInstance = null;
 
         return 'Success!'
+    }
+
+    public AutoUnlockCPU(newValue: boolean) {
+        (Memory as any).dokScreeps.useCpuUnlock = newValue;
     }
 
     // #region Static Methods
