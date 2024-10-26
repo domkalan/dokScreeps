@@ -336,7 +336,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokLinkKeeperCreep);
             }
 
-            if (attackCreeps.length < 6 && attackFlags.length > 0) {
+            if (attackCreeps.length < 1 * attackFlags.length && attackFlags.length > 0) {
                 this.QueueForSpawnOnce(dokAttackerCreep);
             }
         }

@@ -215,7 +215,7 @@ export class dokScreeps {
                 const unlockCode = Game.cpu.unlock();
 
                 if (unlockCode === -6) {
-                    Logger.Error(`CPUMonitor:${this.tickCount}`, `CPU is paused low bucket, bucket is at ${Game.cpu.bucket}`);
+                    Logger.Error(`CPUMonitor:${this.tickCount}`, `Attempted to unlock CPU but failed!`);
 
                     this.cpuNoCPUUnlocks = true;
                 }
@@ -282,8 +282,11 @@ export class dokScreeps {
         // cpu bucket
         if (this.cpuBucketPause) {
             debugOverlay.text(`Bucket: ⏸️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
-        } else {
+        } else if (!Game.cpu.unlocked) {
             debugOverlay.text(`Bucket: ▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+        } else if (Game.cpu.unlocked) {
+            debugOverlay.text(`Bucket: 🔓▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+            debugOverlay.text('Unlocked', 8, 2, { align: 'left', color: 'green' });
         }
         
         debugOverlay.rect(0, 2.5, 8, 0.5, { fill: 'rgba(0, 0, 0, 0.5)' });
