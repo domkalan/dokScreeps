@@ -779,6 +779,15 @@ export class dokRoom {
         return true;
     }
 
+    public TickEssential(tickNumber: number, instanceTickNumber: number) {
+        if (tickNumber % Settings.roomHostileScan) {
+            this.ScanRoomForHostiles();
+        }
+
+        // do tower tick regardless
+        this.DoTowerTick();
+    }
+
     public GetSeatsForItem(item: { id: string, pos: RoomPosition }) : number {
         return Seats.GetSeatsForItem(this.roomRef, item);
     }

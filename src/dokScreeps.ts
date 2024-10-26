@@ -15,6 +15,8 @@ export class dokScreeps {
 
     private tickCount: number = 0;
 
+    private cpuBucketPause: boolean = false;
+
     constructor() {
         this.initializedAt = Game.time;
 
@@ -120,6 +122,18 @@ export class dokScreeps {
         })
     }
 
+    private ProcessTickCreepsEssential() {
+        this.creeps.filter(i => InstanceManager.IsEssentialCreep(i.creepRef)).forEach(creep => {
+            creep.Tick(Game.time, this.tickCount);
+        })
+    }
+
+    private ProcessTickRoomsEssential() {
+        this.rooms.forEach(room => {
+            room.TickEssential(Game.time, this.tickCount);
+        })
+    }
+
     private RefreshRefrences() {
         this.GatherCreeps();
 
@@ -186,23 +200,50 @@ export class dokScreeps {
         }
     }
 
+    public MonitorCPUUsage() {
+        if (Game.cpu.bucket <= 2000 && !this.cpuBucketPause) {
+            this.cpuBucketPause = true;
+        } else if (Game.cpu.bucket >= 8000 && this.cpuBucketPause) {
+            this.cpuBucketPause = false;
+        }
+
+        if (this.cpuBucketPause) {
+            Logger.Log(`CPUMonitor:${this.tickCount}`, `CPU is paused low bucket, bucket is at ${Game.cpu.bucket}`);
+        }
+    }
+
+    public DrawInitScreen(step: number) {
+        const startingOverlay = new RoomVisual();
+
+        startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
+        startingOverlay.text('Starting dokScreeps...', 25, 25, { font: '24px' });
+        startingOverlay.text(`Step ${step}/2`, 25, 26, { font: '12px' });
+    }
+
     public ProcessTick() {
         if (this.tickCount === 0) {
             console.log('---------------\n');
 
-            const startingOverlay = new RoomVisual();
-
-            startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
-            startingOverlay.text('Starting dokScreeps...', 25, 25, { font: '24px' });
+            this.DrawInitScreen(2);
 
             this.tickCount++;
 
             return;
         }
 
+        this.MonitorCPUUsage();
+
         this.DrawDebug();
 
         this.tickCount++;
+
+        if (this.cpuBucketPause) {
+            this.ProcessTickCreepsEssential();
+
+            this.ProcessTickRoomsEssential();
+
+            return;
+        }
 
         if (this.tickCount % Settings.dokScreepsRefresh === 0) {
             this.RefreshRefrences();
@@ -226,6 +267,11 @@ export class dokScreeps {
 
         debugOverlay.text(`Creeps: ${this.creeps.length}`, 0, 0, { align: 'left' });
         debugOverlay.text(`Rooms: ${this.rooms.filter(i => i.state === RoomState.Controlled).length}`, 0, 1, { align: 'left' });
+
+        // cpu bucket
+        debugOverlay.text(`Bucket: ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+        debugOverlay.rect(0, 2.5, 8, 0.5, { fill: 'rgba(0, 0, 0, 0.5)' });
+        debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#03a5fc' });
     }
 
     public GetCreepCounter(): number {

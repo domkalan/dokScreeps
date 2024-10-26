@@ -44,7 +44,17 @@ export class InstanceManager {
         }
     }
 
-        
+    public static IsEssentialCreep(creep: Creep) {
+        if (creep.name.startsWith('hauler')) {
+            return true;
+        } else if (creep.name.startsWith('bootstrap')) {
+            return true;
+        } else if (creep.name.startsWith('rancher')) {
+            return true;
+        } else if (creep.name.startsWith('defender')) {
+            return true;
+        }
+        return false;
     }
 
     public static ParseRawRoom(room: Room, dokScreepInstance: dokScreeps) : dokRoom {
