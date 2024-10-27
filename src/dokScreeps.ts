@@ -317,27 +317,29 @@ export class dokScreeps {
         (global as any).ClearConstructionQueue = this.ClearConstructionQueue.bind(this);
         (global as any).ClearAllConstructionQueues = this.ClearAllConstructionQueues.bind(this);
 
-        (global as any).Restart = this.RestartInstance.bind(this);
+        (global as any).KillAllCreeps = this.KillAllCreeps.bind(this);
 
         (global as any).AutoUnlockCPU = this.AutoUnlockCPU.bind(this);
 
-        (global as any).Help = this.HelpConsoleCommand;
-    }
+        (global as any).Restart = this.RestartInstance.bind(this);
 
-    public HelpConsoleCommand() {
-        console.log(`dokScreeps
+        // new help command, easy
+        (global as any).Help = `dokScreeps
         \tRemoveDeadLocks() - Remove dead or ghost locks.
         \tResetAllLocks() - Wipe the locks data.
 
         \tClearConstructionQueue('roomId') - Clears the queued constructions from a room.
         \tClearAllConstructionQueues() - Clears all the construction queues.
 
+        \tKillAllCreeps() - Kills all active creeps.
+
         \tAutoUnlockCPU(true/false) - Allows the utility to use a CPU unlocked automatically. (default: false)
 
         \tRestart() - Restart dokScreeps instance.
 
         \tHelp() - Displays this help command.
-        `)
+        `;
+        (global as any).help = (global as any).Help;
     }
 
     public ClearConstructionQueue(room : string) {
@@ -368,6 +370,16 @@ export class dokScreeps {
 
     public AutoUnlockCPU(newValue: boolean) {
         (Memory as any).dokScreeps.useCpuUnlock = newValue;
+
+        return 'Success!'
+    }
+
+    public KillAllCreeps() {
+        const creepsCount = this.creeps.length;
+
+        this.creeps.forEach(i => i.creepRef.suicide());
+
+        return `Success, killed ${creepsCount} creep(s)!`
     }
 
     // #region Static Methods
