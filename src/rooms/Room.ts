@@ -252,6 +252,9 @@ export class dokRoom {
         const defenderCreeps = this.ownedCreeps.filter(i => i.name.startsWith('defender'));
         const linkKeeperCreeps = this.ownedCreeps.filter(i => i.name.startsWith('linkkeeper'));
 
+        // check how many creeps that are not bootstrap creeps
+        const nonBootstrapCreeps = this.ownedCreeps.filter(i => !i.name.startsWith('bootstrap'));
+
         // settler creeps require settler flags
         const settlerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('settler'));
         const settlerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_PURPLE);
@@ -268,15 +271,15 @@ export class dokRoom {
         const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
 
         const storages = roomStructures.filter(i => i.structureType === 'storage');
-        const links = roomStructures.filter(i => i.structureType === 'link')
+        const links = roomStructures.filter(i => i.structureType === 'link');
 
         // do logic based on rcl
         if (this.roomRef.controller?.level || 0 >= 2) {
-            if (bootstrapCreeps.length < 1 && energyMinerCreeps.length < this.sources) {
+            if (bootstrapCreeps.length < 1 && nonBootstrapCreeps.length === 0) {
                 // flush spawn queue, we need to bootstrap
                 this.creepSpawnQueue = [];
 
-                for(var i = 0; i < (this.roomRef.controller?.level || 1); i++) {
+                for(var i = bootstrapCreeps.length; i < (this.roomRef.controller?.level || 1); i++) {
                     this.QueueForSpawn(dokBootstrapCreep);
                 }
 
