@@ -80,7 +80,7 @@ export class dokCreep {
         let data = {} as any;
         (this.creepRef as any).travelTo(target, { returnData: data });
 
-        if (blocksTick) {
+        if (blocksTick && typeof data.path !== 'undefined') {
             this.travelingFor = data.path.length;
             this.travelingTo = target;
         }
