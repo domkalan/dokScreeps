@@ -1,10 +1,8 @@
 {
   "dependencies": {
     "@rollup/plugin-node-resolve": "^15.3.0",
-    "@rollup/plugin-terser": "^0.4.4",
     "@types/lodash": "^4.14.202",
     "dayjs": "^1.11.10",
-    "rollup-plugin-node-resolve": "^5.2.0",
     "rollup-plugin-progress": "^1.1.2",
     "screeps-profiler": "^2.0.1"
   },
@@ -17,7 +15,12 @@
   "name": "dokUtil",
   "description": "dokUtil powers my screeps.com account dokman.",
   "scripts": {
-    "build": "rollup -c ./rollup.config.js",
+    "setup": "git submodule update --init --recursive",
+
+    "build-main": "rollup -c ./rollup.config.js",
+    "copy-vendor": "cp ./vendor/traveler/Traveler.js ./dist/traveler.js && cp ./vendor/profiler/screeps-profiler.js ./dist/profiler.js",
+    "build": "npm run build-main && npm run copy-vendor",
+
     "build-tools": "rollup -c ./rollup-tools.config.js"
   },
   "version": "3.0.0"
