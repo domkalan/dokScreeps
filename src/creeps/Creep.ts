@@ -15,6 +15,8 @@ export class dokCreep {
     protected dokScreepsRef: dokScreeps;
 
     protected sleepTime: number = 0;
+    protected travelingFor: number = 0;
+    protected travelingTo: RoomObject | null = null;
 
     constructor(creep : Creep, dokScreepsInstance: dokScreeps) {
         this.fromRoom = (creep.memory as any).fromRoom;
@@ -41,6 +43,16 @@ export class dokCreep {
         if (this.creepRef.spawning)
             return true;
 
+        if (this.travelingFor > 1 && this.travelingTo !== null) {
+            this.travelingFor--;
+
+            this.creepRef.say(`🐟`);
+
+            this.MoveTo(this.travelingTo);
+
+            return true;
+        }
+
         if (this.sleepTime > 0) {
             this.creepRef.say('💤');
 
@@ -52,8 +64,8 @@ export class dokCreep {
         return false;
     }
 
-    public MoveTo(target : RoomObject) {
-        this.creepRef.moveTo(target, {
+    public MoveTo(target : RoomObject, blocksTick: boolean = true) {
+        /*this.creepRef.moveTo(target, {
             visualizePathStyle: {
                 fill: 'transparent',
                 stroke: '#fff',
@@ -62,7 +74,16 @@ export class dokCreep {
                 opacity: .1
             },
             reusePath: 150
-        });
+        });*/
+
+        // using traveler
+        let data = {} as any;
+        (this.creepRef as any).travelTo(target, { returnData: data });
+
+        if (blocksTick) {
+            this.travelingFor = data.path.length;
+            this.travelingTo = target;
+        }
     }
 
     public GetRoomRefSafe() : dokRoom {

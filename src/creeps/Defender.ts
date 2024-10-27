@@ -33,7 +33,7 @@ export class dokDefenderCreep extends dokCreep {
 
                 this.fleeCheck--;
             } else if (blastCode === -9) {
-                this.MoveTo(hostileTarget);
+                this.MoveTo(hostileTarget, false);
             }
         }
     }
