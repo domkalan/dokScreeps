@@ -74,8 +74,6 @@ export class dokSettlerCreep extends dokCreep {
 
             const claimCode = this.creepRef.claimController(controller);
 
-            Logger.Log(`${this.name}`, `Claim code resulted in ${claimCode}`);
-
             if (claimCode === -9) {
                 this.MoveTo(controller);
 
@@ -109,8 +107,6 @@ export class dokSettlerCreep extends dokCreep {
             }
 
             const claimCode = this.creepRef.reserveController(controller);
-
-            Logger.Log(`${this.name}`, `Claim code resulted in ${claimCode}`);
 
             if (claimCode === -9) {
                 this.MoveTo(controller);

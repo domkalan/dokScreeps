@@ -812,8 +812,6 @@ export class dokRoom {
             roomPosition = itemLookup.pos;
         }
 
-        Logger.Log(`HaulQueue:${this.name}`, `Haul pickup requested added to queue for item ${item}`)
-
         this.haulQueue.push({ item, itemPos: roomPosition, priority, resource, haulType: HaulType.Pickup, addedAt: Game.time });
     }
 
@@ -833,8 +831,6 @@ export class dokRoom {
 
             roomPosition = itemLookup.pos;
         }
-
-        Logger.Log(`HaulQueue:${this.name}`, `Haul pull requested added to queue for item ${item}`)
 
         this.haulQueue.push({ item, itemPos: roomPosition, priority, resource, haulType: HaulType.Pull, addedAt: Game.time });
 
@@ -857,8 +853,6 @@ export class dokRoom {
 
             roomPosition = itemLookup.pos;
         }
-
-        Logger.Log(`HaulQueue:${this.name}`, `Haul delivery requested added to queue for item ${item}`)
 
         this.haulQueue.push({ item, itemPos: roomPosition, priority, resource, haulType: HaulType.Deliver, addedAt: Game.time });
 
@@ -894,10 +888,6 @@ export class dokRoom {
     public PullFromHaulQueue() {
         const haulEntry = this.haulQueue.shift();
 
-        if (typeof haulEntry !== 'undefined') {
-            Logger.Log(`HaulQueue:${this.name}`, `Haul request ${haulEntry.item} has been pulled out of queue`);
-        }
-
         return haulEntry;
     }
 
@@ -912,10 +902,6 @@ export class dokRoom {
 
         // remove item from queue since we cloned array when we filtered
         this.haulQueue = this.haulQueue.filter(i => i !== haulEntry);
-
-        if (typeof haulEntry !== 'undefined') {
-            Logger.Log(`HaulQueue:${this.name}`, `Haul request ${haulEntry.item} has been pulled out of queue`);
-        }
 
         return haulEntry;
     }
@@ -938,8 +924,6 @@ export class dokRoom {
 
             roomPosition = itemLookup.pos;
         }
-
-        Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
 
         roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Build });
 
@@ -965,8 +949,6 @@ export class dokRoom {
             roomPosition = itemLookup.pos;
         }
 
-        Logger.Log(`HaulQueue:${this.name}`, `Construction project added to queue for item ${item}`)
-
         roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Repair });
 
         roomMemory.constructionQueue = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority);
@@ -979,10 +961,6 @@ export class dokRoom {
             return undefined;
 
         const constructionProject = roomMemory.constructionQueue[0];
-
-        if (typeof constructionProject !== 'undefined') {
-            Logger.Log(`ConstructionQueue:${this.name}`, `Construction project ${constructionProject.item} has been pulled out of queue`);
-        }
 
         return constructionProject;
     }
@@ -1007,12 +985,10 @@ export class dokRoom {
         const itemLookup = Game.getObjectById(request.item) as Resource | Creep | Structure | Ruin;
 
         if (itemLookup === null) {
-            Logger.Log(`HaulQueue:${this.name}`, `Failed to add item ${request.item} to haul queue, could not find by id?`);
+            Logger.Error(`HaulQueue:${this.name}`, `Failed to add item ${request.item} to haul queue, could not find by id?`);
 
             return;
         }
-
-        Logger.Log(`HaulQueue:${this.name}`, `Haul request directly added to queue for ${request.item}`)
 
         this.haulQueue.push(request);
     }
