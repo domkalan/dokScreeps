@@ -27,6 +27,7 @@ export class dokHaulerCreep extends dokCreep {
     private checkedForRequestor: boolean = false;
     private focusedStorage: string | null = null;
     private haulDeliveryResourceConstraint: ResourceConstant | null = null;
+    private timeWithoutJob: number = 0;
 
     public DoHaulWork() {
         let haulTask = (this.creepRef.memory as dokHaulerCreepMemory).haulTask;
@@ -44,12 +45,23 @@ export class dokHaulerCreep extends dokCreep {
             }
 
             if (typeof haulWork === 'undefined') {
+                this.timeWithoutJob++;
+                if (this.timeWithoutJob > 3 && this.haulDeliveryResourceConstraint !== null) {
+                    this.DumpResources();
+
+                    this.haulDeliveryResourceConstraint = null;
+
+                    return;
+                }
+
                 this.sleepTime = 10;
 
                 this.creepRef.say('😴');
     
                 return;
             }
+
+            this.timeWithoutJob = 0;
 
             // save haul task to memory
             (this.creepRef.memory as dokHaulerCreepMemory).haulTask = haulWork;
@@ -291,10 +303,9 @@ export class dokHaulerCreep extends dokCreep {
             const deliveryEndpoint = Game.getObjectById(item.item) as Structure | Creep;
 
             if (deliveryEndpoint === null) {
+                this.haulDeliveryResourceConstraint = item.resource;
                 (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 0;
                 (this.creepRef.memory as dokHaulerCreepMemory).haulTask = null;
-
-                this.DumpResources();
 
                 return;
             }
@@ -304,7 +315,9 @@ export class dokHaulerCreep extends dokCreep {
             if (transferCode == -9) {
                 this.MoveTo(deliveryEndpoint);
             } else if (transferCode == -8) {
-                this.sleepTime = 10;
+                this.haulDeliveryResourceConstraint = item.resource;
+                (this.creepRef.memory as dokHaulerCreepMemory).haulStep = 0;
+                (this.creepRef.memory as dokHaulerCreepMemory).haulTask = null;
             } else if (transferCode == 0) {
                 if (Object.keys(this.creepRef.store).length > 0) {
                     const resourceConstraint = Object.keys(this.creepRef.store)[0] as ResourceConstant;
