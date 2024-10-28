@@ -21,7 +21,7 @@ export class dokScreeps {
     constructor() {
         this.initializedAt = Game.time;
 
-        Logger.Log('dokScreeps', `dokScreeps started running at ${this.initializedAt}`);
+        Logger.Log('CORE', `dokScreeps started running at ${this.initializedAt}`);
 
         this.InitMemory();
 
@@ -59,13 +59,13 @@ export class dokScreeps {
             this.creeps.push(InstanceManager.ParseRawCreep(Game.creeps[creep], this));
         }
 
-        Logger.Log('dokScreeps', `Found ${this.creeps.length} creep(s) active`);
+        Logger.Log('CORE', `Found ${this.creeps.length} creep(s) active`);
     }
 
     public RegisterCreep(creep : dokCreep) {
         this.creeps.push(creep);
 
-        Logger.Log('dokScreeps', `Creep ${creep.creepRef.name} has been registered`);
+        Logger.Log('CORE', `Creep ${creep.creepRef.name} has been registered`);
     }
 
     public RemoveCreep(creep: dokCreep) {
@@ -172,7 +172,7 @@ export class dokScreeps {
         // delete expired flags, do flag logic
         for(const flag of this.flags) {
             if (typeof Game.flags[flag.name] === 'undefined') {
-                Logger.Log('dokScreeps', `Unregistered flag ${flag.name}`)
+                Logger.Log('CORE', `Unregistered flag ${flag.name}`)
 
                 this.flags = this.flags.filter(i => i.name !== flag.name);
             }
@@ -185,7 +185,7 @@ export class dokScreeps {
             if (typeof existingFlag === 'undefined') {
                 const flagObject = new dokFlag(flag);
 
-                Logger.Log('dokScreeps', `Registered new flag ${flag.name}`);
+                Logger.Log('CORE', `Registered new flag ${flag.name}`);
 
                 this.flags.push(flagObject);
 
@@ -276,27 +276,60 @@ export class dokScreeps {
     public DrawDebug() {
         const debugOverlay = new RoomVisual();
 
-        debugOverlay.text(`Creeps: ${this.creeps.length}`, 0, 0, { align: 'left' });
-        debugOverlay.text(`Rooms: ${this.rooms.filter(i => i.state === RoomState.Controlled).length}`, 0, 1, { align: 'left' });
+        let lineNumber = 0;
+
+        debugOverlay.text(`Creeps: ${this.creeps.length}`, 0, lineNumber, { align: 'left' });
+        lineNumber++;
+
+        debugOverlay.text(`Controllers: ${this.rooms.filter(i => i.state === RoomState.Controlled).length}`, 0, lineNumber, { align: 'left' });
+        lineNumber++;
+
+        debugOverlay.text(`Rooms: ${this.rooms.length}`, 0, lineNumber, { align: 'left' });
+        lineNumber++;
+
+        for(const room of this.rooms) {
+            switch(room.state) {
+                case RoomState.Controlled:
+                    debugOverlay.text(`${room.name} (controlled)`, 1, lineNumber, { align: 'left', color: '#03fc49' });
+
+                    break;
+                case RoomState.Inactive:
+                    debugOverlay.text(`${room.name} (inactive)`, 1, lineNumber, { align: 'left', color: '#6b6b6b' });
+
+                    break;
+                case RoomState.Visiting:
+                    debugOverlay.text(`${room.name} (visiting)`, 1, lineNumber, { align: 'left', color: '#3a78d6' });
+
+                    break;
+                case RoomState.Reserved:
+                    debugOverlay.text(`${room.name} (reserved)`, 1, lineNumber, { align: 'left', color: '#853ad6' });
+                    
+                    break;
+                default:
+                    break;
+            }
+
+            lineNumber++;
+        }
 
         // cpu bucket
         if (this.cpuBucketPause) {
-            debugOverlay.text(`Bucket: ⏸️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+            debugOverlay.text(`Bucket: ⏸️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, lineNumber, { align: 'left' });
         } else if (!Game.cpu.unlocked) {
-            debugOverlay.text(`Bucket: ▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+            debugOverlay.text(`Bucket: ▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, lineNumber, { align: 'left' });
         } else if (Game.cpu.unlocked) {
-            debugOverlay.text(`Bucket: 🔓▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, 2, { align: 'left' });
+            debugOverlay.text(`Bucket: 🔓▶️ ${Math.floor(Game.cpu.bucket)}/10000`, 0, lineNumber, { align: 'left' });
             debugOverlay.text('Unlocked', 8, 2, { align: 'left', color: 'green' });
         }
         
-        debugOverlay.rect(0, 2.5, 8, 0.5, { fill: 'rgba(0, 0, 0, 0.5)' });
+        debugOverlay.rect(0, lineNumber + 0.5, 8, 0.5, { fill: 'rgba(0, 0, 0, 0.5)' });
 
         if (Game.cpu.bucket < 2000) {
-            debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#fc032c' });
+            debugOverlay.rect(0, lineNumber + 0.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#fc032c' });
         } else if (Game.cpu.bucket < 4000) {
-            debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#fcbe03' });
+            debugOverlay.rect(0, lineNumber + 0.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#fcbe03' });
         } else {
-            debugOverlay.rect(0, 2.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#03a5fc' });
+            debugOverlay.rect(0, lineNumber + 0.5, (Game.cpu.bucket / 10000) * 8, 0.5, { fill: '#03a5fc' });
         }
     }
 
