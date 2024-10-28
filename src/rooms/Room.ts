@@ -551,12 +551,14 @@ export class dokRoom {
 
         // get extensions
         const extensions = structures.filter(i => i.structureType === 'extension') as StructureExtension[];
-        const extensionEmpty = extensions.filter(i => i.store.energy === 0);
+        const extensionsEmpty = extensions.filter(i => i.store.energy === 0);
 
-        Logger.Log(`RoomScan:${this.name}:Extensions`, `Extension check: empty=${extensionEmpty.length}, total=${extensions.length}`)
-
-        if (extensionEmpty.length > extensions.length * 0.5) {
-
+        if (extensions.length > 0 && extensionsEmpty.length >= extensions.length * 0.5) {
+            Logger.Warn(`RoomScan:${this.name}:ExtensionCheck`, `${extensionsEmpty.length}/${extensions.length} are empty, requesting haulers to help out`);
+            
+            for(const extensionEmpty of extensionsEmpty) {
+                this.AddDeliveryToHaulQueue(extensionEmpty.id, 'energy');
+            }
         }
         
         // get our assigned flags
@@ -736,8 +738,6 @@ export class dokRoom {
 
     public Tick(tickNumber: number, instanceTickNumber: number) : boolean {
         if (typeof Game.rooms[this.name] === 'undefined') {
-            Logger.Log(`Room:${this.name}`, 'Room is inactive, will not tick.')
-
             return false;
         }
 
