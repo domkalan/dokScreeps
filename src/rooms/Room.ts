@@ -273,13 +273,15 @@ export class dokRoom {
         const storages = roomStructures.filter(i => i.structureType === 'storage');
         const links = roomStructures.filter(i => i.structureType === 'link');
 
+        const rcl = this.roomRef.controller?.level || 1;
+
         // do logic based on rcl
-        if (this.roomRef.controller?.level || 0 >= 2) {
+        if (rcl >= 2) {
             if (bootstrapCreeps.length < 1 && nonBootstrapCreeps.length === 0) {
                 // flush spawn queue, we need to bootstrap
                 this.creepSpawnQueue = [];
 
-                for(var i = bootstrapCreeps.length; i < (this.roomRef.controller?.level || 1); i++) {
+                for(var i = bootstrapCreeps.length; i < rcl; i++) {
                     this.QueueForSpawn(dokBootstrapCreep);
                 }
 
@@ -292,7 +294,11 @@ export class dokRoom {
                 this.creepSpawnQueue = this.creepSpawnQueue.filter(i => i.creep !== dokDefenderCreep);
             }
 
-            if (rancherCreeps.length < 1) {
+            if (rancherCreeps.length < 1 && rcl < 5) {
+                this.QueueForSpawnOnce(dokRancherCreep);
+            }
+
+            if (rancherCreeps.length < 2 && rcl >= 5) {
                 this.QueueForSpawnOnce(dokRancherCreep);
             }
 
