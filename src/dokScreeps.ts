@@ -352,6 +352,8 @@ export class dokScreeps {
 
         (global as any).KillAllCreeps = this.KillAllCreeps.bind(this);
 
+        (global as any).LeaveRoom = this.LeaveRoom.bind(this);
+
         (global as any).AutoUnlockCPU = this.AutoUnlockCPU.bind(this);
 
         (global as any).Restart = this.RestartInstance.bind(this);
@@ -365,6 +367,8 @@ export class dokScreeps {
         \tClearAllConstructionQueues() - Clears all the construction queues.
 
         \tKillAllCreeps() - Kills all active creeps.
+
+        \tLeaveRoom(roomName) - Instructs the instance, destroy everything and leave a room.
 
         \tAutoUnlockCPU(true/false) - Allows the utility to use a CPU unlocked automatically. (default: false)
 
@@ -413,6 +417,43 @@ export class dokScreeps {
         this.creeps.forEach(i => i.creepRef.suicide());
 
         return `Success, killed ${creepsCount} creep(s)!`
+    }
+
+    public LeaveRoom(roomName : string) {
+        const roomToLeave = this.rooms.find(i => i.name === roomName);
+
+        if (typeof roomToLeave === 'undefined')
+            return `Room ${roomName} not found!`;
+
+        const roomStructures = this.GetStructuresByRoom(roomName);
+
+        for(const structure of roomStructures) {
+            if (structure.structureType === 'controller') {
+                continue;
+            }
+
+            if (structure.structureType === 'constructedWall') {
+                continue;
+            }
+
+            structure.destroy();
+        }
+
+        const controllerStructure = roomStructures.find(i => i.structureType === 'controller') as StructureController;
+
+        if (typeof controllerStructure !== 'undefined') {
+            controllerStructure.unclaim();
+        }
+
+        const creepsHere = this.creeps.filter(i => i.fromRoom === roomName) as dokCreep[];
+
+        for(const creep of creepsHere) {
+            creep.creepRef.suicide();
+        }
+
+        this.rooms = this.rooms.filter(i => i.name !== roomName);
+
+        return `Success! Room ${roomName} has been left.`;
     }
 
     // #region Static Methods
