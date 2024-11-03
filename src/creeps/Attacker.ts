@@ -72,6 +72,16 @@ export class dokAttackerCreep extends dokCreep {
                 this.MoveTo(attackStructure);
             }
         }
+
+        if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_GREY) {
+            if (this.creepRef.pos.getRangeTo(flag.flagRef) > 8) {
+                this.MoveTo(flag.flagRef);
+
+                return;
+            }
+
+            this.sleepTime = 10;
+        }
     }
 
     public Tick(tickNumber: number, instanceTickNumber: number): boolean {
