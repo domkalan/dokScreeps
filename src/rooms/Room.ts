@@ -556,7 +556,7 @@ export class dokRoom {
         }
 
         // get extensions
-        const extensions = structures.filter(i => i.structureType === 'extension') as StructureExtension[];
+        /*const extensions = structures.filter(i => i.structureType === 'extension') as StructureExtension[];
         const extensionsEmpty = extensions.filter(i => i.store.energy === 0);
 
         if (extensions.length > 0 && extensionsEmpty.length >= extensions.length * 0.5) {
@@ -565,7 +565,7 @@ export class dokRoom {
             for(const extensionEmpty of extensionsEmpty) {
                 this.AddDeliveryToHaulQueue(extensionEmpty.id, 'energy');
             }
-        }
+        }*/
         
         // get our assigned flags
         this.assignedFlags = this.dokScreepsRef.GetAssignedFlags(this.name);
