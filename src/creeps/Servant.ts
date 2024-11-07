@@ -70,8 +70,8 @@ export class dokServantCreep extends dokCreep {
 
         // Add additional parts while respecting the energy limit
         while (totalCost + partCost.move + partCost.carry + partCost.work <= energy && buildBody.length < 50) {
-            buildBody.push(CARRY, MOVE);
-            totalCost += partCost.move + partCost.carry;
+            buildBody.push(CARRY, WORK);
+            totalCost += partCost.work + partCost.carry;
         }
 
         return buildBody;
