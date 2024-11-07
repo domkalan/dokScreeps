@@ -10,6 +10,7 @@
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/node": "^20.11.17",
     "@types/screeps": "^3.3.7",
+    "javascript-obfuscator": "^4.1.1",
     "tslib": "^2.6.2"
   },
   "name": "dokUtil",
@@ -18,9 +19,12 @@
     "setup": "git submodule update --init --recursive",
 
     "build-main": "rollup -c ./rollup.config.js",
-    "copy-vendor": "cp ./vendor/traveler/Traveler.js ./dist/traveler.js && cp ./vendor/profiler/screeps-profiler.js ./dist/profiler.js",
-    "build": "npm run build-main && npm run copy-vendor",
+    "mask-main": "npx javascript-obfuscator dist/main.js --output dist/main.obfuscated.js",
 
+    "copy-vendor": "cp ./vendor/traveler/Traveler.js ./dist/traveler.js && cp ./vendor/profiler/screeps-profiler.js ./dist/profiler.js",
+
+    "build": "npm run build-main ; npm run copy-vendor ; npm run mask-main",
+    
     "build-tools": "rollup -c ./rollup-tools.config.js"
   },
   "version": "3.0.0"
