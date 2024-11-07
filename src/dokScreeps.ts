@@ -351,6 +351,7 @@ export class dokScreeps {
         (global as any).ClearAllConstructionQueues = this.ClearAllConstructionQueues.bind(this);
 
         (global as any).KillAllCreeps = this.KillAllCreeps.bind(this);
+        (global as any).KillAllCreepsMatching = this.KillAllCreepsMatching.bind(this);
 
         (global as any).LeaveRoom = this.LeaveRoom.bind(this);
 
@@ -367,6 +368,9 @@ export class dokScreeps {
         \tClearAllConstructionQueues() - Clears all the construction queues.
 
         \tKillAllCreeps() - Kills all active creeps.
+        \tKillAllCreepsMatching(creepName) - Kills creeps filtered by the the name.startsWith.
+        \t\tExample: Running KillCreepMatching('bootstrap:32') will kill creep bootstrap:32.
+        \t\tUsing "bootstrap" instead will effectively kill all bootstrap creeps.
 
         \tLeaveRoom(roomName) - Instructs the instance, destroy everything and leave a room.
 
@@ -415,6 +419,15 @@ export class dokScreeps {
         const creepsCount = this.creeps.length;
 
         this.creeps.forEach(i => i.creepRef.suicide());
+
+        return `Success, killed ${creepsCount} creep(s)!`
+    }
+
+    public KillAllCreepsMatching(filter: string) {
+        const filterCreeps = this.creeps.filter(i => i.name.startsWith(filter));
+        const creepsCount = filterCreeps.length;
+        
+        filterCreeps.forEach(i => i.creepRef.suicide());
 
         return `Success, killed ${creepsCount} creep(s)!`
     }
