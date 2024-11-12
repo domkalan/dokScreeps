@@ -1,4 +1,5 @@
 import { dokFlag } from "../Flags";
+import { Logger } from "../Logger";
 import { dokCreep } from "./Creep";
 
 
@@ -81,6 +82,38 @@ export class dokAttackerCreep extends dokCreep {
             }
 
             this.sleepTime = 10;
+        }
+
+        if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_PURPLE) {
+            const structuresHere = this.dokScreepsRef.GetStructuresByRoom(this.creepRef.pos.roomName);
+
+            let controller = structuresHere.find(i => i.structureType === 'controller') as StructureController;
+
+            if (typeof controller === 'undefined') {
+                Logger.Warn('Could not locate controller, will attempt fallback method');
+
+                const fallbackController = this.creepRef.room.find(FIND_STRUCTURES).find(i => i.structureType === 'controller') as StructureController;
+
+                if (typeof fallbackController === 'undefined') {
+                    Logger.Warn('Still failed to locate controller, will remove flag.');
+
+                    flag.flagRef.remove();
+
+                    return;
+                }
+
+                controller = fallbackController;
+            }
+
+            const signCode = this.creepRef.signController(controller, flag.name);
+
+            if (signCode === -9) {
+                this.MoveTo(controller);
+
+                return;
+            } else if (signCode === 0) {
+                flag.flagRef.remove();
+            }
         }
     }
 
