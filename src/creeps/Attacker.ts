@@ -90,13 +90,9 @@ export class dokAttackerCreep extends dokCreep {
             let controller = structuresHere.find(i => i.structureType === 'controller') as StructureController;
 
             if (typeof controller === 'undefined') {
-                Logger.Warn('Could not locate controller, will attempt fallback method');
-
                 const fallbackController = this.creepRef.room.find(FIND_STRUCTURES).find(i => i.structureType === 'controller') as StructureController;
 
                 if (typeof fallbackController === 'undefined') {
-                    Logger.Warn('Still failed to locate controller, will remove flag.');
-
                     flag.flagRef.remove();
 
                     return;
