@@ -356,6 +356,7 @@ export class dokScreeps {
         (global as any).LeaveRoom = this.LeaveRoom.bind(this);
 
         (global as any).AutoUnlockCPU = this.AutoUnlockCPU.bind(this);
+        (global as any).PauseCPU = this.PauseCPU.bind(this);
 
         (global as any).Restart = this.RestartInstance.bind(this);
 
@@ -375,8 +376,9 @@ export class dokScreeps {
         \tLeaveRoom(roomName) - Instructs the instance, destroy everything and leave a room.
 
         \tAutoUnlockCPU(true/false) - Allows the utility to use a CPU unlocked automatically. (default: false)
+        \tPauseCPU([true/false]) - Pauses the CPU to let the CPU bucket refill to its full amount.
 
-        \tRestart() - Restart dokScreeps instance.
+        \tRestart() - Restart dokScreeps instance.x
 
         \tHelp() - Displays this help command.
         `;
@@ -467,6 +469,17 @@ export class dokScreeps {
         this.rooms = this.rooms.filter(i => i.name !== roomName);
 
         return `Success! Room ${roomName} has been left.`;
+    }
+
+    private PauseCPU(newBool : boolean | undefined) {
+        if (typeof newBool === 'undefined') {
+            this.cpuBucketPause = !this.cpuBucketPause;
+        } else {
+            this.cpuBucketPause = newBool;
+        }
+        
+
+        return `Success! CPU bucket pause is now set to ${this.cpuBucketPause}.`;
     }
 
     // #region Static Methods
