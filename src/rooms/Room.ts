@@ -118,7 +118,7 @@ export class dokRoom {
             (Memory as any).rooms = {};
         }
 
-        if (typeof (Memory.rooms[this.name] as dokRoomMemory) === 'undefined') {
+        if (typeof (Memory.rooms[this.name] as dokRoomMemory) === 'undefined' || typeof (Memory.rooms[this.name] as dokRoomMemory).dokRoomUnpacked === 'undefined') {
             (Memory.rooms[this.name] as dokRoomMemory) = {
                 owned: false,
                 owner: null,
