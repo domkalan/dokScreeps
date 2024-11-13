@@ -509,6 +509,15 @@ export class dokRoom {
                     continue;
                 }
 
+                // when we hit rcl 5, start beefing walls up in batches
+                if (this.roomRef.controller?.level || 0 >= 5) {
+                    if (structure.hits < structure.hitsMax * 0.0092) {
+                        this.QueueRepairStructure(structure.id, structure.hitsMax + 2000, 4);
+    
+                        continue;
+                    }
+                }
+
                 if (structure.hits < structure.hitsMax * 0.0032) {
                     this.QueueRepairStructure(structure.id, structure.hitsMax * 0.0032, 4);
 
