@@ -149,6 +149,13 @@ export class dokScreeps {
             }
         }
 
+        // Clean dead flag memory
+        for(const flagMemKey in Memory.flags) {
+            if (typeof Game.flags[flagMemKey] === 'undefined') {
+                delete Memory.flags[flagMemKey];
+            }
+        }
+
         Locks.RemoveDeadLocks();
     }
 
