@@ -113,25 +113,41 @@ export class dokScreeps {
 
     private ProcessTickCreeps() {
         this.creeps.forEach(creep => {
-            creep.Tick(Game.time, this.tickCount);
+            try {
+                creep.Tick(Game.time, this.tickCount);
+            } catch(error) {
+                Logger.Error('CORE:CreepTicking', `Failed to tick creep ${creep.name}`)
+            }
         })
     }
 
     private ProcessTickRooms() {
         this.rooms.forEach(room => {
-            room.Tick(Game.time, this.tickCount);
+            try {
+                room.Tick(Game.time, this.tickCount);
+            } catch(error) {
+                Logger.Error('CORE:RoomTicking', `Failed to tick room ${room.name}`)
+            }
         })
     }
 
     private ProcessTickCreepsEssential() {
         this.creeps.filter(i => InstanceManager.IsEssentialCreep(i.creepRef)).forEach(creep => {
-            creep.Tick(Game.time, this.tickCount);
+            try {
+                creep.Tick(Game.time, this.tickCount);
+            } catch(error) {
+                Logger.Error('CORE:CreepTicking', `Failed to tick creep ${creep.name}`)
+            }
         })
     }
 
     private ProcessTickRoomsEssential() {
         this.rooms.forEach(room => {
-            room.TickEssential(Game.time, this.tickCount);
+            try {
+                room.Tick(Game.time, this.tickCount);
+            } catch(error) {
+                Logger.Error('CORE:RoomTicking', `Failed to tick room ${room.name}`)
+            }
         })
     }
 
@@ -356,6 +372,7 @@ export class dokScreeps {
         
         (global as any).ClearConstructionQueue = this.ClearConstructionQueue.bind(this);
         (global as any).ClearAllConstructionQueues = this.ClearAllConstructionQueues.bind(this);
+        (global as any).ClearRoomData = this.ClearRoomData.bind(this);
 
         (global as any).KillAllCreeps = this.KillAllCreeps.bind(this);
         (global as any).KillAllCreepsMatching = this.KillAllCreepsMatching.bind(this);
@@ -374,6 +391,7 @@ export class dokScreeps {
 
         \tClearConstructionQueue('roomId') - Clears the queued constructions from a room.
         \tClearAllConstructionQueues() - Clears all the construction queues.
+        \tClearRoomData() - Clears all stored information about rooms.
 
         \tKillAllCreeps() - Kills all active creeps.
         \tKillAllCreepsMatching(creepName) - Kills creeps filtered by the the name.startsWith.
@@ -487,6 +505,13 @@ export class dokScreeps {
         
 
         return `Success! CPU bucket pause is now set to ${this.cpuBucketPause}.`;
+    }
+
+    private ClearRoomData() {
+        this.rooms = [];
+        (Memory.rooms as any) = [];
+
+        return this.RestartInstance();
     }
 
     // #region Static Methods
