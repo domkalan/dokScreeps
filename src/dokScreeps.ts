@@ -116,7 +116,7 @@ export class dokScreeps {
             try {
                 creep.Tick(Game.time, this.tickCount);
             } catch(error) {
-                Logger.Error('CORE:CreepTicking', `Failed to tick creep ${creep.name}`)
+                Logger.Error('CORE:CreepTicking', `Failed to tick creep ${creep.name}`, error)
             }
         })
     }
@@ -126,7 +126,7 @@ export class dokScreeps {
             try {
                 room.Tick(Game.time, this.tickCount);
             } catch(error) {
-                Logger.Error('CORE:RoomTicking', `Failed to tick room ${room.name}`)
+                Logger.Error('CORE:RoomTicking', `Failed to tick room ${room.name}`, error)
             }
         })
     }
@@ -136,7 +136,7 @@ export class dokScreeps {
             try {
                 creep.Tick(Game.time, this.tickCount);
             } catch(error) {
-                Logger.Error('CORE:CreepTicking', `Failed to tick creep ${creep.name}`)
+                Logger.Error('CORE:CreepTicking', `Failed to tick creep ${creep.name}`, error)
             }
         })
     }
