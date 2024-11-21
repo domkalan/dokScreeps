@@ -3,6 +3,7 @@ import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokServantCreep extends dokCreep {
     private energyStorageCap: number = 0;
+    private moveInstructed: boolean = false;
 
     constructor(creep: Creep, dokScreepInstance : dokScreeps) {
         super(creep, dokScreepInstance);
@@ -17,6 +18,12 @@ export class dokServantCreep extends dokCreep {
             this.creepRef.say(`?`);
 
             return;
+        }
+
+        if (!this.moveInstructed && this.creepRef.pos.getRangeTo(controller) > 3) {
+            this.MoveTo(controller);
+
+            this.moveInstructed = true;
         }
 
         

@@ -6,16 +6,6 @@ export class dokRancherCreep extends dokCreep {
     private focusedStructure: string | null = null;
 
     public DoRancherWork() {
-        if (this.creepRef.store.energy === 0) {
-            this.creepRef.say(`⚡?`);
-
-            this.RequestEnergyDelivery();
-
-            this.sleepTime = 10;
-            
-            return;
-        }
-
         if (this.focusedStructure === null) {
             const structures = this.dokScreepsRef.GetStructuresByRoom(this.fromRoom);
             const spawn = structures.filter(i => i.structureType === 'spawn');
@@ -56,6 +46,14 @@ export class dokRancherCreep extends dokCreep {
             Locks.ReleaseLocks(this);
 
             this.creepRef.say(`🔓`);
+        } else if (transferCode == -6) {
+            if (this.creepRef.store.energy === 0) {
+                this.creepRef.say(`⚡️?`);
+    
+                this.RequestEnergyDelivery();
+    
+                this.sleepTime = 10;
+            }
         }
     }
 
