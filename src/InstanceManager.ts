@@ -10,7 +10,9 @@ import { dokRancherCreep } from "./creeps/Rancher";
 import { dokServantCreep } from "./creeps/Servant";
 import { dokSettlerCreep } from "./creeps/Settler";
 import { dokScreeps } from "./dokScreeps";
-import { dokRoom } from "./rooms/Room";
+import { Logger } from "./Logger";
+import { dokFortifiedRoom } from "./rooms/Fortified";
+import { dokRoom, dokRoomMemory, dokRoomType } from "./rooms/Room";
 
 export class InstanceManager {
     public static ParseRawCreep(creep: Creep, dokScreepInstance: dokScreeps) : dokCreep {
@@ -58,6 +60,28 @@ export class InstanceManager {
     }
 
     public static ParseRawRoom(room: Room, dokScreepInstance: dokScreeps) : dokRoom {
-        return new dokRoom(room, dokScreepInstance);
+        try {
+            switch((Memory.rooms[room.name] as dokRoomMemory).roomType) {
+                case dokRoomType.Fortified:
+                    return new dokFortifiedRoom(room, dokScreepInstance);
+                default:
+                    return new dokRoom(room, dokScreepInstance);
+            }
+        } catch(error) {
+            if (typeof Memory.rooms[room.name] === 'undefined') {
+                Logger.Error(`InstanceManager`, `${room.name} does not exist in room memory, will create`)
+
+                Memory.rooms[room.name] = {};
+            }
+                
+
+            if (typeof (Memory.rooms[room.name] as dokRoomMemory).roomType === 'undefined') {
+                Logger.Error(`InstanceManager`, `${room.name} does not have room type, will assign base type`);
+
+                (Memory.rooms[room.name] as dokRoomMemory).roomType = dokRoomType.Base;
+            }
+
+            return new dokRoom(room, dokScreepInstance);
+        }
     }
 }

@@ -3,6 +3,9 @@ import { dokScreeps} from "./dokScreeps"
 // import traveler
 require('traveler');
 
+// import roomvisualizer
+require('visualizer')
+
 // import screeps-profiler
 const profiler = require('profiler');
 

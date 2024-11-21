@@ -13,6 +13,7 @@ import { Distance } from "../Distance";
 import { dokScreeps } from "../dokScreeps";
 import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
+import { RoomLimits } from "../RoomLimits";
 import { Seats } from "../Seats";
 import { Settings } from "../Settings";
 
@@ -36,19 +37,28 @@ export interface dokRoomResource {
     seats: number
 }
 
+export enum dokRoomType {
+    Base = 'Base',
+    Fortified = 'Fortified'
+}
+
 export interface dokRoomMemory {
     owned: boolean,
     owner: string | null,
     avoid: boolean,
     resources: dokRoomResource[],
     plans: any[],
+    roomType: dokRoomType,
+    constructionOverlay: boolean,
 
     scouted: boolean,
     scoutedAt: number,
 
     lastActive: number,
 
-    constructionQueue: RoomConstructionEntry[]
+    constructionQueue: RoomConstructionEntry[],
+
+    dokRoomUnpacked: true
 }
 
 export interface dokRoomSpawnEntry {
@@ -82,6 +92,8 @@ export class dokRoom {
     // how many construction projects we have
     private constructionProjects: number = 0;
     private constructionProjectsProgress: number = 0;
+    private constructionProjectsTracking: Array<{ id: string, type: StructureConstant }> = [];
+    private constructionProjectsPlanned: Array<{ type: StructureConstant, pos: RoomPosition }> = [];
     private askedForHelp: boolean = false;
 
     // track our assigned flags
@@ -119,18 +131,7 @@ export class dokRoom {
         }
 
         if (typeof (Memory.rooms[this.name] as dokRoomMemory) === 'undefined' || typeof (Memory.rooms[this.name] as dokRoomMemory).dokRoomUnpacked === 'undefined') {
-            (Memory.rooms[this.name] as dokRoomMemory) = {
-                owned: false,
-                owner: null,
-                avoid: false,
-                resources: [],
-                plans: [],
-                constructionQueue: [],
-                scouted: true,
-                scoutedAt: Game.time,
-
-                lastActive: Game.time
-            };
+            this.InitMemory();
         }
 
         // scan room resources, save them into storage if not
@@ -160,6 +161,25 @@ export class dokRoom {
                 (Memory.rooms[this.name] as dokRoomMemory).owned = true;
             }
         }
+    }
+
+    private InitMemory() {
+        (Memory.rooms[this.name] as dokRoomMemory) = {
+            owned: false,
+            owner: null,
+            avoid: false,
+            resources: [],
+            plans: [],
+            constructionQueue: [],
+            scouted: true,
+            scoutedAt: Game.time,
+
+            roomType: dokRoomType.Base,
+            constructionOverlay: false,
+
+            lastActive: Game.time,
+            dokRoomUnpacked: true
+        };
     }
 
     private ScanRoomResources() {
@@ -270,26 +290,25 @@ export class dokRoom {
         // get structures
         const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
 
+        // get storages in room
         const storages = roomStructures.filter(i => i.structureType === 'storage');
         const links = roomStructures.filter(i => i.structureType === 'link');
 
+        // get rcl
         const rcl = this.roomRef.controller?.level || 1;
 
         // do logic based on rcl
         if (rcl >= 2) {
             if (bootstrapCreeps.length < 1 && nonBootstrapCreeps.length === 0) {
-                // flush spawn queue, we need to bootstrap
-                this.creepSpawnQueue = [];
-
-                for(var i = bootstrapCreeps.length; i < rcl; i++) {
-                    this.QueueForSpawn(dokBootstrapCreep);
-                }
-
+                this.PriorityQueueForSpawnOnce(dokDefenderCreep);
                 return;
             }
 
             if (this.hostiles.length > 0 && defenderCreeps.length < 4) {
-                this.PriorityQueueForSpawnOnce(dokDefenderCreep);
+                // double check we have enough energy producers before this action
+                if (bootstrapCreeps.length > 0 || energyMinerCreeps.length > 0) {
+                    this.PriorityQueueForSpawnOnce(dokDefenderCreep);
+                }
             } else if (this.hostiles.length) {
                 this.creepSpawnQueue = this.creepSpawnQueue.filter(i => i.creep !== dokDefenderCreep);
             }
@@ -493,6 +512,9 @@ export class dokRoom {
 
         // total up our construction projects
         this.constructionProjects = totalConstructionSites.length;
+
+        // keep track of our construction projects
+        this.constructionProjectsTracking = totalConstructionSites.map(i => { return { id: i.id, type: i.structureType } });
 
         // TODO: need to run health checks on build structures, add a repair instruction for builders or a new creep class
         const ownedStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
@@ -708,6 +730,32 @@ export class dokRoom {
         }
     }
 
+    public DoConstructionPlanning(rcl : number | undefined) : Array<{ type: StructureConstant, pos: RoomPosition }> {
+        return [];
+    }
+
+    public DoConstructionOverlay() {
+        const debugOverlay = new RoomVisual(this.name);
+
+        // do not draw visuals if room is a base room
+        if (typeof (Memory.rooms[this.name] as dokRoomMemory).roomType === 'undefined' || (Memory.rooms[this.name] as dokRoomMemory).roomType === dokRoomType.Base) {
+            debugOverlay.text(`WARNING: Room ${this.name} does not have a room type set.`, 0, 49, { backgroundColor: 'black', color: 'orange', align: 'left' })
+
+            return;
+        }
+
+        // should we overlay construction plans
+        if (typeof (Memory.rooms[this.name] as any).constructionOverlay !== 'undefined' && (Memory.rooms[this.name] as any).constructionOverlay === true) {
+            this.constructionProjectsPlanned.forEach(i => {
+
+            });
+        }
+    }
+
+    public DoConstructionTick() {
+        return;
+    }
+
     public GetAssignedFlags() {
         return this.assignedFlags;
     }
@@ -756,11 +804,18 @@ export class dokRoom {
             return false;
         }
 
+        // memory checking
+        if (typeof (Memory.rooms[this.name] as dokRoomMemory) === 'undefined') {
+            this.InitMemory();
+        }
+
         // track the last time we ticked here
         (Memory.rooms[this.name] as dokRoomMemory).lastActive = Game.time;
 
         // update room ref
         this.roomRef = Game.rooms[this.name];
+
+        this.DoConstructionOverlay();
 
         // defend against hostiles
         if (tickNumber % Settings.roomHostileScan) {
@@ -785,6 +840,10 @@ export class dokRoom {
 
         if (tickNumber % 50) {
             this.DoLinkTransfer();
+        }
+
+        if (tickNumber % Settings.roomConstructionTick) {
+            this.DoConstructionTick();
         }
 
         // do things on first tick here
