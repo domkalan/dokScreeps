@@ -67,18 +67,13 @@ export class dokServantCreep extends dokCreep {
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
         const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
-        const partCost = {
-            move: 50,
-            carry: 50,
-            work: 100
-        };
 
-        let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
+        let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + partCost.move + partCost.carry + partCost.work <= energy && buildBody.length < 50) {
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry + BODYPART_COST.work <= energy && buildBody.length < 50) {
             buildBody.push(CARRY, WORK);
-            totalCost += partCost.work + partCost.carry;
+            totalCost += BODYPART_COST.work + BODYPART_COST.carry;
         }
 
         return buildBody;

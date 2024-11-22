@@ -53,17 +53,13 @@ export class dokDefenderCreep extends dokCreep {
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
         const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
-        const partCost = {
-            move: 50,
-            ranged_attack: 150,
-        };
-
-        let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
+        
+        let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + partCost.move + partCost.ranged_attack <= energy && buildBody.length < 50) {
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.ranged_attack <= energy && buildBody.length < 50) {
             buildBody.push(MOVE, RANGED_ATTACK);
-            totalCost += partCost.move + partCost.ranged_attack;
+            totalCost += BODYPART_COST.move + BODYPART_COST.ranged_attack;
         }
 
         return buildBody;

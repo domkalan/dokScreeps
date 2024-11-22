@@ -78,17 +78,13 @@ export class dokRancherCreep extends dokCreep {
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
         const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
-        const partCost = {
-            move: 50,
-            carry: 50
-        };
 
-        let totalCost = buildBody.reduce((sum, part) => sum + partCost[part as keyof typeof partCost], 0);
+        let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + partCost.move + partCost.carry <= energy && buildBody.length < 50) {
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry <= energy && buildBody.length < 50) {
             buildBody.push(CARRY, MOVE);
-            totalCost += partCost.move + partCost.carry;
+            totalCost += BODYPART_COST.move + BODYPART_COST.carry;
         }
 
         return buildBody;
