@@ -28,7 +28,7 @@
     "upload": "npm run copy-vendor && npx screeps-api upload --server ${SERVER:-main} ./dist/main.js ./dist/profiler.js ./dist/traveler.js ./dist/visualizer.js",
     "build-upload": "npm run build && npm run upload",
     "build-upload-obf": "npm run build && rm ./dist/main.js && mv ./dist/main.obfuscated.js ./dist/main.js && npm run upload",
-    "upload-toall": "node ./scripts/UploadToAll.js"
+    "build-upload-toall": "node ./scripts/UploadToAll.js"
   },
   "version": "3.0.0"
 }
