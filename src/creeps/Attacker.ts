@@ -1,3 +1,4 @@
+import { Distance } from "../Distance";
 import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
 import { dokCreep } from "./Creep";
@@ -110,6 +111,44 @@ export class dokAttackerCreep extends dokCreep {
             } else if (signCode === 0) {
                 flag.flagRef.remove();
             }
+        }
+
+        if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_BROWN) {
+            if (this.focusedAttackStructure === null) {
+                const structureNearFlag = (flag.flagRef.room?.find(FIND_STRUCTURES) as Structure[]).sort((a, b) => Distance.GetDistance(a.pos, flag.flagRef.pos) - Distance.GetDistance(b.pos, flag.flagRef.pos));
+
+                if (structureNearFlag.length === 0) {
+                    flag.flagRef.remove();
+
+                    return;
+                }
+
+                this.focusedAttackStructure = structureNearFlag[0].id;
+            }
+            
+            const attackStructure = Game.getObjectById(this.focusedAttackStructure) as Structure;
+
+            if (attackStructure === null) {
+                this.focusedAttackStructure = null;
+
+                return;
+            }
+
+            const attackCode = this.creepRef.attack(attackStructure);
+
+            if (attackCode === -9) {
+                this.MoveTo(attackStructure);
+            }
+        }
+
+        if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_GREY) {
+            if (this.creepRef.pos.getRangeTo(flag.flagRef) > 8) {
+                this.MoveTo(flag.flagRef);
+
+                return;
+            }
+
+            this.sleepTime = 10;
         }
     }
 
