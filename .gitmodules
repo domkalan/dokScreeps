@@ -1,0 +1,12 @@
+[submodule "vendor/visuals"]
+	path = vendor/visuals
+	url = https://github.com/screepers/RoomVisual
+[submodule "vendor/traveler"]
+	path = vendor/traveler
+	url = https://github.com/screepers/traveler
+[submodule "vendor/profiler"]
+	path = vendor/profiler
+	url = https://github.com/screepers/profiler
+[submodule "vendor/screeps-api"]
+	path = vendor/screeps-api
+	url = https://github.com/screepers/node-screeps-api
