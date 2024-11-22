@@ -509,7 +509,7 @@ export class dokScreeps {
 
     private ClearRoomData() {
         this.rooms = [];
-        (Memory.rooms as any) = [];
+        (Memory.rooms as any) = {};
 
         return this.RestartInstance();
     }
