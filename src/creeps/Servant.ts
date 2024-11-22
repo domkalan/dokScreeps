@@ -19,13 +19,6 @@ export class dokServantCreep extends dokCreep {
 
             return;
         }
-
-        if (!this.moveInstructed && this.creepRef.pos.getRangeTo(controller) > 3) {
-            this.MoveTo(controller);
-
-            this.moveInstructed = true;
-        }
-
         
         if (this.creepRef.store.energy < this.energyStorageCap * 0.50) {
             this.creepRef.say(`🪫⚡`);
@@ -38,6 +31,14 @@ export class dokServantCreep extends dokCreep {
         if (upgradeCode == -9) {
             this.MoveTo(controller);
         } else if (upgradeCode === -6) {
+            if (!this.moveInstructed && this.creepRef.pos.getRangeTo(controller) > 3) {
+                this.MoveTo(controller);
+    
+                this.moveInstructed = true;
+    
+                return;
+            }
+
             this.creepRef.say(`⚡?`);
 
             this.sleepTime = 10;

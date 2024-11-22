@@ -18,6 +18,7 @@ export class dokBuilderCreep extends dokCreep {
     private focusedConstruct: string | null = null;
     private focusedConstructType: ConstructionType | null = null;
     private focusedConstructPoints: number = 0;
+    private moveInstructed: boolean = false;
 
     public DoConstructionWork() {
         const roomRef = this.GetRoomRefSafe();
@@ -58,6 +59,14 @@ export class dokBuilderCreep extends dokCreep {
             if (repairCode === -9) {
                 this.MoveTo(constructionSite);
             } else if (repairCode === -6) {
+                if (!this.moveInstructed && this.creepRef.pos.getRangeTo(constructionSite) > 3) {
+                    this.MoveTo(constructionSite);
+        
+                    this.moveInstructed = true;
+        
+                    return;
+                }
+
                 // creep should reset to check for other work after repair has finished
                 this.focusedConstruct = null;
                 this.focusedConstructType = null;
@@ -88,6 +97,14 @@ export class dokBuilderCreep extends dokCreep {
         if (buildCode === -9) {
             this.MoveTo(constructionSite);
         } else if (buildCode === -6) {
+            if (!this.moveInstructed && this.creepRef.pos.getRangeTo(constructionSite) > 3) {
+                this.MoveTo(constructionSite);
+    
+                this.moveInstructed = true;
+    
+                return;
+            }
+            
             this.creepRef.say(`⚡?`);
 
             this.sleepTime = 10;
@@ -114,4 +131,18 @@ export class dokBuilderCreep extends dokCreep {
 
     public static buildBody: BodyPartConstant[] = [ WORK, CARRY, MOVE ];
     public static buildName: string = 'builder';
+
+    public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
+        const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
+
+        let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
+
+        // Add additional parts while respecting the energy limit
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry + BODYPART_COST.work <= energy && buildBody.length < 50) {
+            buildBody.push(CARRY, WORK);
+            totalCost += BODYPART_COST.work + BODYPART_COST.carry;
+        }
+
+        return buildBody;
+    }
 }
