@@ -378,6 +378,8 @@ export class dokScreeps {
         (global as any).KillAllCreepsMatching = this.KillAllCreepsMatching.bind(this);
 
         (global as any).LeaveRoom = this.LeaveRoom.bind(this);
+        (global as any).DebugRoomMemory = this.DebugRoomMemory.bind(this);
+        (global as any).DebugRoomSpawnQueue = this.DebugRoomSpawnQueue.bind(this);
 
         (global as any).AutoUnlockCPU = this.AutoUnlockCPU.bind(this);
         (global as any).PauseCPU = this.PauseCPU.bind(this);
@@ -399,6 +401,7 @@ export class dokScreeps {
         \t\tUsing "bootstrap" instead will effectively kill all bootstrap creeps.
 
         \tLeaveRoom(roomName) - Instructs the instance, destroy everything and leave a room.
+        \tDebugRoomMemory(roomName) - Instructs the instance to print raw the memory of a room.
 
         \tAutoUnlockCPU(true/false) - Allows the utility to use a CPU unlocked automatically. (default: false)
         \tPauseCPU([true/false]) - Pauses the CPU to let the CPU bucket refill to its full amount.
@@ -479,21 +482,47 @@ export class dokScreeps {
             structure.destroy();
         }
 
-        const controllerStructure = roomStructures.find(i => i.structureType === 'controller') as StructureController;
-
-        if (typeof controllerStructure !== 'undefined') {
-            controllerStructure.unclaim();
-        }
-
         const creepsHere = this.creeps.filter(i => i.fromRoom === roomName) as dokCreep[];
 
         for(const creep of creepsHere) {
             creep.creepRef.suicide();
         }
 
+        const roomConstructions = roomToLeave.roomRef.find(FIND_CONSTRUCTION_SITES);
+
+        for(const construction of roomConstructions) {
+            construction.remove();
+        }
+
+        const controllerStructure = roomStructures.find(i => i.structureType === 'controller') as StructureController;
+
+        if (typeof controllerStructure !== 'undefined') {
+            controllerStructure.unclaim();
+        }
+
         this.rooms = this.rooms.filter(i => i.name !== roomName);
 
+        Memory.rooms[roomName] = {};
+
         return `Success! Room ${roomName} has been left.`;
+    }
+
+    public DebugRoomMemory(roomName : string) {
+        const roomToDebug = this.rooms.find(i => i.name === roomName);
+
+        if (typeof roomToDebug === 'undefined')
+            return `Room ${roomName} not found!`;
+
+        return JSON.stringify(Memory.rooms[roomName], null, 4);
+    }
+
+    public DebugRoomSpawnQueue(roomName : string) {
+        const roomToDebug = this.rooms.find(i => i.name === roomName);
+
+        if (typeof roomToDebug === 'undefined')
+            return `Room ${roomName} not found!`;
+
+        return JSON.stringify(roomToDebug.GetSpawnQueue().map(i => i.creep.buildName).join(', '), null, 4);
     }
 
     private PauseCPU(newBool : boolean | undefined) {
