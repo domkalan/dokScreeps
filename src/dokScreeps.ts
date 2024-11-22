@@ -3,7 +3,7 @@ import { dokFlag } from "./Flags";
 import { InstanceManager } from "./InstanceManager";
 import { Locks } from "./Locks";
 import { Logger } from "./Logger";
-import { dokRoom, RoomState } from "./rooms/Room";
+import { dokRoom, dokRoomMemory, dokRoomType, RoomState } from "./rooms/Room";
 import { Settings } from "./Settings";
 
 export class dokScreeps {
@@ -313,7 +313,7 @@ export class dokScreeps {
         for(const room of this.rooms) {
             switch(room.state) {
                 case RoomState.Controlled:
-                    debugOverlay.text(`${room.name} (controlled)`, 1, lineNumber, { align: 'left', color: '#03fc49' });
+                    debugOverlay.text(`${room.name} (controlled:${room.roomType.toLowerCase()})`, 1, lineNumber, { align: 'left', color: '#03fc49' });
 
                     break;
                 case RoomState.Inactive:
@@ -380,6 +380,7 @@ export class dokScreeps {
         (global as any).LeaveRoom = this.LeaveRoom.bind(this);
         (global as any).DebugRoomMemory = this.DebugRoomMemory.bind(this);
         (global as any).DebugRoomSpawnQueue = this.DebugRoomSpawnQueue.bind(this);
+        (global as any).SetRoomType = this.SetRoomType.bind(this);
 
         (global as any).AutoUnlockCPU = this.AutoUnlockCPU.bind(this);
         (global as any).PauseCPU = this.PauseCPU.bind(this);
@@ -402,6 +403,8 @@ export class dokScreeps {
 
         \tLeaveRoom(roomName) - Instructs the instance, destroy everything and leave a room.
         \tDebugRoomMemory(roomName) - Instructs the instance to print raw the memory of a room.
+        \tDebugRoomSpawnQueue(roomName) - Instructs the instance to print raw the current spawn queue.
+        \tSetRoomType(roomName) - Changes the room type to a new room type specified in the instance manager.
 
         \tAutoUnlockCPU(true/false) - Allows the utility to use a CPU unlocked automatically. (default: false)
         \tPauseCPU([true/false]) - Pauses the CPU to let the CPU bucket refill to its full amount.
@@ -523,6 +526,25 @@ export class dokScreeps {
             return `Room ${roomName} not found!`;
 
         return JSON.stringify(roomToDebug.GetSpawnQueue().map(i => i.creep.buildName).join(', '), null, 4);
+    }
+
+    public SetRoomType(roomName : string, roomType: dokRoomType) {
+        const roomToDebug = this.rooms.find(i => i.name === roomName);
+
+        if (typeof roomToDebug === 'undefined')
+            return `Room ${roomName} not found!`;
+
+        const currentRoomType = (Memory.rooms[roomName] as dokRoomMemory).roomType;
+
+        (Memory.rooms[roomName] as dokRoomMemory).roomType = roomType;
+
+        this.rooms = this.rooms.filter(i => i.name !== roomName);
+
+        const recreatedRoomType = InstanceManager.ParseRawRoom(Game.rooms[roomName], this);
+
+        this.rooms.push(recreatedRoomType);
+
+        return `Success! Room was ${currentRoomType}, but is now ${roomType}`;
     }
 
     private PauseCPU(newBool : boolean | undefined) {

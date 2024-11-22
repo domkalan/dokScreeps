@@ -12,6 +12,8 @@ import { dokSettlerCreep } from "./creeps/Settler";
 import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
 import { dokFortifiedRoom } from "./rooms/Fortified";
+import { dokOutpostRoom } from "./rooms/Outpost";
+import { dokPuppetRoom } from "./rooms/Puppet";
 import { dokRoom, dokRoomMemory, dokRoomType } from "./rooms/Room";
 
 export class InstanceManager {
@@ -64,6 +66,10 @@ export class InstanceManager {
             switch((Memory.rooms[room.name] as dokRoomMemory).roomType) {
                 case dokRoomType.Fortified:
                     return new dokFortifiedRoom(room, dokScreepInstance);
+                case dokRoomType.Puppet:
+                    return new dokPuppetRoom(room, dokScreepInstance);
+                case dokRoomType.Outpost:
+                    return new dokOutpostRoom(room, dokScreepInstance);
                 default:
                     return new dokRoom(room, dokScreepInstance);
             }

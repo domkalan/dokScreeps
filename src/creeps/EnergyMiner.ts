@@ -2,9 +2,9 @@ import { Locks } from "../Locks";
 import { dokCreep } from "./Creep";
 
 export class dokEnergyMinerCreep extends dokCreep {
-    private focusedSource: string | null = null;
-    private focusedLink: string | null = null;
-    private focusedLinkBlocked: boolean = false;
+    protected focusedSource: string | null = null;
+    protected focusedLink: string | null = null;
+    protected focusedLinkBlocked: boolean = false;
 
     public GatherSource() {
         if (this.focusedSource === null) {

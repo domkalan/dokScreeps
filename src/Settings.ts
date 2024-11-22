@@ -10,6 +10,8 @@ export const Settings : SettingsType = {
     roomTowerTick: 1,
     roomConstructionTick: 100,
 
+    doStackReduce: true,
+
     dokScreepsRefresh: 4000,
     dokScreepsMemoryCleanup: 1000,
 
@@ -26,6 +28,8 @@ export type SettingsType = {
     roomHostileScan: number,
     roomTowerTick: number,
     roomConstructionTick: number,
+
+    doStackReduce: boolean,
 
     dokScreepsRefresh: number,
     dokScreepsMemoryCleanup: number,

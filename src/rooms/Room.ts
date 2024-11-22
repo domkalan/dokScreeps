@@ -39,7 +39,9 @@ export interface dokRoomResource {
 
 export enum dokRoomType {
     Base = 'Base',
-    Fortified = 'Fortified'
+    Fortified = 'Fortified',
+    Puppet = 'Puppet',
+    Outpost = 'Outpost'
 }
 
 export interface dokRoomMemory {
@@ -70,42 +72,45 @@ export class dokRoom {
     // store room references
     public roomRef: Room;
     public name: string;
-    private dokScreepsRef: dokScreeps;
+    protected dokScreepsRef: dokScreeps;
 
     // what is the state of this room?
     public state: RoomState = RoomState.Visiting;
 
     // keep track of creeps
-    private ownedCreeps: dokCreep[] = [];
-    private creepSpawnQueue: dokRoomSpawnEntry[] = [];
-    private creepSpawnQueueStuck: number = 0;
+    protected ownedCreeps: dokCreep[] = [];
+    protected creepSpawnQueue: dokRoomSpawnEntry[] = [];
+    protected creepSpawnQueueStuck: number = 0;
 
     // what do we have to haul here?
-    private haulQueue: HaulQueueEntry[] = [];
+    protected haulQueue: HaulQueueEntry[] = [];
 
     // how many sources does this room have
-    private sources: number = 0;
+    protected sources: number = 0;
 
     // track hostiles in the room
-    private hostiles: Array<Creep | PowerCreep> = [];
+    protected hostiles: Array<Creep | PowerCreep> = [];
 
     // how many construction projects we have
-    private constructionProjects: number = 0;
-    private constructionProjectsProgress: number = 0;
-    private constructionProjectsTracking: Array<{ id: string, type: StructureConstant }> = [];
-    private constructionProjectsPlanned: Array<{ type: StructureConstant, pos: RoomPosition }> = [];
-    private askedForHelp: boolean = false;
+    protected constructionProjects: number = 0;
+    protected constructionProjectsProgress: number = 0;
+    protected constructionProjectsTracking: Array<{ id: string, type: StructureConstant }> = [];
+    protected constructionProjectsPlanned: Array<{ type: StructureConstant, pos: RoomPosition }> = [];
+    protected askedForHelp: boolean = false;
 
     // track our assigned flags
-    private assignedFlags: dokFlag[] = [];
+    protected assignedFlags: dokFlag[] = [];
 
     // track if this is our first tick
-    private firstTick: boolean = true;
+    protected firstTick: boolean = true;
 
-    private towerLocks: { [id: string] : boolean } = {};
-    private towerEnergySleep: { [id: string] : number } = {};
+    protected towerLocks: { [id: string] : boolean } = {};
+    protected towerEnergySleep: { [id: string] : number } = {};
 
-    private roomLinks: { id: string, type: number }[] = [];
+    protected roomLinks: { id: string, type: number }[] = [];
+
+    // room type
+    public readonly roomType: dokRoomType = dokRoomType.Base;
 
     constructor(room: Room, dokScreepsInstance: dokScreeps) {
         Logger.Log('dokRooms', `Room ${room.name} has been created as a dokRoom`);
@@ -163,7 +168,7 @@ export class dokRoom {
         }
     }
 
-    private InitMemory() {
+    protected InitMemory() {
         (Memory.rooms[this.name] as dokRoomMemory) = {
             owned: false,
             owner: null,
@@ -182,7 +187,7 @@ export class dokRoom {
         };
     }
 
-    private ScanRoomResources() {
+    protected ScanRoomResources() {
         const resources: dokRoomResource[] = [];
 
         const sources = this.roomRef.find(FIND_SOURCES);
@@ -217,13 +222,13 @@ export class dokRoom {
         (Memory.rooms[this.name] as dokRoomMemory).resources = resources;
     }
 
-    private QueueForSpawn(creep: typeof dokCreep) {
+    protected QueueForSpawn(creep: typeof dokCreep) {
         Logger.Log(`dokCreep:Spawn:${this.name}`, `${creep.buildName} has been queued for spawn`);
 
         this.creepSpawnQueue.push({ room: this.name, creep: creep });
     }
 
-    private QueueForSpawnOnce(creep: typeof dokCreep) {
+    protected QueueForSpawnOnce(creep: typeof dokCreep) {
         const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === this.name);
 
         if (typeof existingEntry !== 'undefined')
@@ -234,7 +239,7 @@ export class dokRoom {
         this.creepSpawnQueue.push({ room: this.name, creep: creep });
     }
 
-    private PriorityQueueForSpawnOnce(creep: typeof dokCreep) {
+    protected PriorityQueueForSpawnOnce(creep: typeof dokCreep) {
         const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === this.name);
 
         if (typeof existingEntry !== 'undefined')
@@ -245,7 +250,11 @@ export class dokRoom {
         this.creepSpawnQueue.unshift({ room: this.name, creep: creep });
     }
 
-    private MonitorRoomCreeps() {
+    public GetSpawnQueue() {
+        return this.creepSpawnQueue;
+    }
+
+    protected MonitorRoomCreeps() {
         if (this.state !== RoomState.Controlled)
             return;
 
@@ -371,7 +380,7 @@ export class dokRoom {
     }
 
     // monitor our spawns in the room
-    private MonitorSpawnCreeps() {
+    protected MonitorSpawnCreeps() {
         if (this.creepSpawnQueue.length === 0)
             return;
 
@@ -424,13 +433,27 @@ export class dokRoom {
             const bodyStack = creepClass.creep.BuildBodyStack(this.roomRef.controller?.level || 1, standbyEnergy);
             const startingMemory = creepClass.creep.BuildInitialMemory({ fromRoom: creepClass.room });
 
+            let maxBodyStack = 50;
+
+            if (Settings.doStackReduce) {
+                // limit the build stack, but calculate some math if we have spawns waiting reduce stack size
+                let spawnQueueStackReduce = this.creepSpawnQueue.length;
+
+                if (spawnQueueStackReduce <= 0)
+                    spawnQueueStackReduce = 1;
+
+                maxBodyStack = Math.floor(50 / spawnQueueStackReduce);
+            }
+
+            const properBuildStack = bodyStack.splice(0, maxBodyStack);
+
             // spawn creep
-            const spawnCode = spawn.spawnCreep(bodyStack, creepNameFull, {
+            const spawnCode = spawn.spawnCreep(properBuildStack, creepNameFull, {
                 energyStructures: [spawn, ...extensions],
                 memory: startingMemory
             });
 
-            Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} resulted in ${spawnCode}`)
+            Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} resulted in ${spawnCode}. Queue size ${this.creepSpawnQueue.length}, stack size ${properBuildStack.length}`)
 
             // bump the counter
             if (spawnCode === OK) {
@@ -457,6 +480,31 @@ export class dokRoom {
                         Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn queue seemed stuck, doing first shuffle`);
                     }
                 }
+            } else if (spawnCode === -10) {
+                const buildBody = properBuildStack.map(i => {
+                    switch(i) {
+                        case "move":
+                            return 'move';
+                        case "work":
+                            return 'work';
+                        case "carry":
+                            return 'carry';
+                        case "attack":
+                            return 'attack';
+                        case "ranged_attack":
+                            return 'ranged_attack';
+                        case "tough":
+                            return 'tough';
+                        case "heal":
+                            return 'heal';
+                        case "claim":
+                            return 'claim';
+                        default:
+                            return 'UNKNOWN';
+                    }
+                }).join(', ')
+
+                Logger.Warn(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} failed, code -10...? ${buildBody} (length: ${buildBody.length})`)
             }
 
             // update stored energy
@@ -533,7 +581,7 @@ export class dokRoom {
 
                 // when we hit rcl 5, start beefing walls up in batches
                 if (this.roomRef.controller?.level || 0 >= 5) {
-                    if (structure.hits < structure.hitsMax * 0.0092) {
+                    if (structure.hits < structure.hitsMax * 0.018) {
                         this.QueueRepairStructure(structure.id, structure.hitsMax + 2000, 4);
     
                         continue;
@@ -1067,7 +1115,7 @@ export class dokRoom {
         this.haulQueue.push(request);
     }
 
-    private CommandeerSpawn(creep : typeof dokCreep, room : string) {
+    public CommandeerSpawn(creep : typeof dokCreep, room : string) {
         Logger.Log(`Room:${this.name}`, `Will spawn ${creep.buildName} for room ${room}`);
 
         const existingEntry = this.creepSpawnQueue.find(i => i.creep === creep && i.room === room);
@@ -1078,7 +1126,7 @@ export class dokRoom {
         this.creepSpawnQueue.push({ room: room, creep: creep });
     }
 
-    private RequestRemoteRoomHelp() {
+    protected RequestRemoteRoomHelp() {
         if (this.askedForHelp && this.ownedCreeps.length > 0)
             return;
 
