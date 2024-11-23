@@ -309,7 +309,7 @@ export class dokRoom {
 
         // do logic based on rcl
         if (rcl >= 2) {
-            if (bootstrapCreeps.length < 1 && nonBootstrapCreeps.length === 0) {
+            if (bootstrapCreeps.length < 2 && nonBootstrapCreeps.length === 0) {
                 this.PriorityQueueForSpawnOnce(dokBootstrapCreep);
                 return;
             }
@@ -465,6 +465,14 @@ export class dokRoom {
                         this.creepSpawnQueueStuck = 0;
 
                         Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn queue seemed stuck, doing first shuffle`);
+                    }
+
+                    // if we are having trouble spawning an energy miner, we need a bootstrap creep to come in and help
+                    const bootstrapCreeps = this.ownedCreeps.filter(i => i.name.startsWith('bootstrap'));
+                    const energyMinerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('energyminer'));
+
+                    if (energyMinerCreeps.length < 0 && bootstrapCreeps.length < 0) {
+                        this.PriorityQueueForSpawnOnce(dokBootstrapCreep);
                     }
                 }
             } else if (spawnCode === -10) {
