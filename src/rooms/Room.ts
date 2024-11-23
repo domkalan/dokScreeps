@@ -41,7 +41,8 @@ export enum dokRoomType {
     Base = 'Base',
     Fortified = 'Fortified',
     Puppet = 'Puppet',
-    Outpost = 'Outpost'
+    Outpost = 'Outpost',
+    Jumper = 'Jumper'
 }
 
 export interface dokRoomMemory {
@@ -309,7 +310,7 @@ export class dokRoom {
         // do logic based on rcl
         if (rcl >= 2) {
             if (bootstrapCreeps.length < 1 && nonBootstrapCreeps.length === 0) {
-                this.PriorityQueueForSpawnOnce(dokDefenderCreep);
+                this.PriorityQueueForSpawnOnce(dokBootstrapCreep);
                 return;
             }
 
@@ -433,27 +434,13 @@ export class dokRoom {
             const bodyStack = creepClass.creep.BuildBodyStack(this.roomRef.controller?.level || 1, standbyEnergy);
             const startingMemory = creepClass.creep.BuildInitialMemory({ fromRoom: creepClass.room });
 
-            let maxBodyStack = 50;
-
-            if (Settings.doStackReduce) {
-                // limit the build stack, but calculate some math if we have spawns waiting reduce stack size
-                let spawnQueueStackReduce = this.creepSpawnQueue.length;
-
-                if (spawnQueueStackReduce <= 0)
-                    spawnQueueStackReduce = 1;
-
-                maxBodyStack = Math.floor(50 / spawnQueueStackReduce);
-            }
-
-            const properBuildStack = bodyStack.splice(0, maxBodyStack);
-
             // spawn creep
-            const spawnCode = spawn.spawnCreep(properBuildStack, creepNameFull, {
+            const spawnCode = spawn.spawnCreep(bodyStack.splice(0, 50), creepNameFull, {
                 energyStructures: [spawn, ...extensions],
                 memory: startingMemory
             });
 
-            Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} resulted in ${spawnCode}. Queue size ${this.creepSpawnQueue.length}, stack size ${properBuildStack.length}`)
+            Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} resulted in ${spawnCode}`)
 
             // bump the counter
             if (spawnCode === OK) {
@@ -481,30 +468,16 @@ export class dokRoom {
                     }
                 }
             } else if (spawnCode === -10) {
-                const buildBody = properBuildStack.map(i => {
-                    switch(i) {
-                        case "move":
-                            return 'move';
-                        case "work":
-                            return 'work';
-                        case "carry":
-                            return 'carry';
-                        case "attack":
-                            return 'attack';
-                        case "ranged_attack":
-                            return 'ranged_attack';
-                        case "tough":
-                            return 'tough';
-                        case "heal":
-                            return 'heal';
-                        case "claim":
-                            return 'claim';
-                        default:
-                            return 'UNKNOWN';
-                    }
-                }).join(', ')
+                const failedSpawn = this.creepSpawnQueue.shift();
+                const nextSpawn = this.creepSpawnQueue.shift();
 
-                Logger.Warn(`dokRooms:${this.roomRef.name}`, `Spawn request for ${creepClass.creep.buildName} failed, code -10...? ${buildBody} (length: ${buildBody.length})`)
+                if (typeof failedSpawn !== 'undefined' && typeof nextSpawn !== 'undefined') {
+                    this.creepSpawnQueue = [ nextSpawn, ...this.creepSpawnQueue, failedSpawn];
+
+                    this.creepSpawnQueueStuck = 0;
+
+                    Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn queue had invalid spawn body, will move to last. ${JSON.stringify(bodyStack, null, 4)}`);
+                }
             }
 
             // update stored energy

@@ -78,21 +78,20 @@ export class dokEnergyMinerCreep extends dokCreep {
     public static buildName: string = 'energyminer';
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
-        // copy build body, we don't want to edit static
-        const buildBody = [...this.buildBody];
+        const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
 
-        if (rcl === 2)
-            return buildBody;
-
-        for(var i = 1; i < rcl; i++) {
-            buildBody.push(WORK);
-
-            if (i === 4)
-                break;
-        }
+        let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
 
         if (rcl >= 5) {
             buildBody.push(CARRY);
+
+            totalCost += BODYPART_COST.carry;
+        }
+
+        // Add additional parts while respecting the energy limit
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry <= energy && buildBody.length < 50) {
+            buildBody.push(WORK);
+            totalCost += BODYPART_COST.work + BODYPART_COST.carry;
         }
 
         return buildBody;

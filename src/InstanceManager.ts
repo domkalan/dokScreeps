@@ -12,6 +12,7 @@ import { dokSettlerCreep } from "./creeps/Settler";
 import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
 import { dokFortifiedRoom } from "./rooms/Fortified";
+import { dokJumperRoom } from "./rooms/Jumper";
 import { dokOutpostRoom } from "./rooms/Outpost";
 import { dokPuppetRoom } from "./rooms/Puppet";
 import { dokRoom, dokRoomMemory, dokRoomType } from "./rooms/Room";
@@ -62,32 +63,29 @@ export class InstanceManager {
     }
 
     public static ParseRawRoom(room: Room, dokScreepInstance: dokScreeps) : dokRoom {
-        try {
-            switch((Memory.rooms[room.name] as dokRoomMemory).roomType) {
-                case dokRoomType.Fortified:
-                    return new dokFortifiedRoom(room, dokScreepInstance);
-                case dokRoomType.Puppet:
-                    return new dokPuppetRoom(room, dokScreepInstance);
-                case dokRoomType.Outpost:
-                    return new dokOutpostRoom(room, dokScreepInstance);
-                default:
-                    return new dokRoom(room, dokScreepInstance);
-            }
-        } catch(error) {
-            if (typeof Memory.rooms[room.name] === 'undefined') {
-                Logger.Error(`InstanceManager`, `${room.name} does not exist in room memory, will create`)
+        if (typeof Memory.rooms[room.name] === 'undefined') {
+            Logger.Error(`InstanceManager`, `${room.name} does not exist in room memory, will create`)
 
-                Memory.rooms[room.name] = {};
-            }
-                
+            Memory.rooms[room.name] = {};
+        }
 
-            if (typeof (Memory.rooms[room.name] as dokRoomMemory).roomType === 'undefined') {
-                Logger.Error(`InstanceManager`, `${room.name} does not have room type, will assign base type`);
+        if (typeof (Memory.rooms[room.name] as dokRoomMemory).roomType === 'undefined') {
+            Logger.Error(`InstanceManager`, `${room.name} does not have room type, will assign base type`);
 
-                (Memory.rooms[room.name] as dokRoomMemory).roomType = dokRoomType.Base;
-            }
+            (Memory.rooms[room.name] as dokRoomMemory).roomType = dokRoomType.Base;
+        }
 
-            return new dokRoom(room, dokScreepInstance);
+        switch((Memory.rooms[room.name] as dokRoomMemory).roomType) {
+            case dokRoomType.Fortified:
+                return new dokFortifiedRoom(room, dokScreepInstance);
+            case dokRoomType.Puppet:
+                return new dokPuppetRoom(room, dokScreepInstance);
+            case dokRoomType.Outpost:
+                return new dokOutpostRoom(room, dokScreepInstance);
+            case dokRoomType.Jumper:
+                return new dokJumperRoom(room, dokScreepInstance);
+            default:
+                return new dokRoom(room, dokScreepInstance);
         }
     }
 }
