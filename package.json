@@ -20,7 +20,8 @@
   "description": "dokUtil powers my screeps.com account dokman.",
   "scripts": {
     "setup": "git submodule update --init --recursive",
-    "build-main": "rollup -c ./rollup.config.js",
+    "buildmark": "node scripts/BuildStamp.js",
+    "build-main": "rollup -c ./rollup.config.js && npm run buildmark",
     "mask-main": "npx javascript-obfuscator dist/main.js --output dist/main.obfuscated.js",
     "copy-vendor": "cp ./vendor/traveler/Traveler.js ./dist/traveler.js && cp ./vendor/profiler/screeps-profiler.js ./dist/profiler.js && cp ./vendor/visuals/RoomVisual.js ./dist/visualizer.js",
     "build": "npm run build-main ; npm run copy-vendor ; npm run mask-main",
