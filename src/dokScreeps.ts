@@ -35,6 +35,19 @@ export class dokScreeps {
     }
 
     private InitMemory() {
+        // ensure basic memory exists
+        if (typeof (Memory as any).rooms === 'undefined') {
+            (Memory as any).rooms = {};
+        }
+
+        if (typeof (Memory as any).creeps === 'undefined') {
+            (Memory as any).creeps = {};
+        }
+
+        if (typeof (Memory as any).flags === 'undefined') {
+            (Memory as any).flags = {};
+        }
+
         if (typeof (Memory as any).dokScreeps === 'undefined') {
             (Memory as any).dokScreeps = {};
         }
@@ -176,7 +189,7 @@ export class dokScreeps {
     }
 
     public GetFlags() {
-        return Object.values(Game.flags);
+        return Object.values(Game.flags).reverse();
     }
 
     public GetDokFlags() {
