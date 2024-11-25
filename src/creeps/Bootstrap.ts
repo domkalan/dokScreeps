@@ -223,4 +223,8 @@ export class dokBootstrapCreep extends dokCreep {
             ...memParams
         }
     }
+
+    public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
+        return this.buildBody;
+    }
 }

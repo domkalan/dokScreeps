@@ -47,4 +47,8 @@ export class dokLinkKeeperCreep extends dokCreep {
 
     public static buildBody: BodyPartConstant[] = [ MOVE, CARRY ];
     public static buildName: string = 'linkkeeper';
+
+    public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
+        return this.buildBody;
+    }
 }
