@@ -4,6 +4,7 @@ import { dokBuilderCreep } from "./creeps/Builder";
 import { dokCreep } from "./creeps/Creep";
 import { dokDefenderCreep } from "./creeps/Defender";
 import { dokEnergyMinerCreep } from "./creeps/EnergyMiner";
+import { dokEnergyMinerRemoteCreep } from "./creeps/EnergyMinerRemote";
 import { dokHaulerCreep } from "./creeps/Hauler";
 import { dokLinkKeeperCreep } from "./creeps/LinkKeeper";
 import { dokRancherCreep } from "./creeps/Rancher";
@@ -44,6 +45,8 @@ export class InstanceManager {
                 return new dokAttackerCreep(creep, dokScreepInstance);
             case 'linkkeeper':
                 return new dokLinkKeeperCreep(creep, dokScreepInstance);
+            case 'rem':
+                return new dokEnergyMinerRemoteCreep(creep, dokScreepInstance);
             default:
                 return new dokCreep(creep, dokScreepInstance);
         }

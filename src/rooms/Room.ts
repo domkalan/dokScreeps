@@ -4,6 +4,7 @@ import { ConstructionType, dokBuilderCreep, RoomConstructionEntry } from "../cre
 import { dokCreep } from "../creeps/Creep";
 import { dokDefenderCreep } from "../creeps/Defender";
 import { dokEnergyMinerCreep } from "../creeps/EnergyMiner";
+import { dokEnergyMinerRemoteCreep } from "../creeps/EnergyMinerRemote";
 import { dokHaulerCreep, HaulQueueEntry, HaulType } from "../creeps/Hauler";
 import { dokLinkKeeperCreep } from "../creeps/LinkKeeper";
 import { dokRancherCreep } from "../creeps/Rancher";
@@ -293,6 +294,10 @@ export class dokRoom {
         const attackCreeps = this.ownedCreeps.filter(i => i.name.startsWith('attacker'));
         const attackFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_RED);
 
+        // miner creeps require miner flags
+        const remoteMinerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('rem'));
+        const remoteMinerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_ORANGE);
+
         // construction projects
         const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);
         const repairProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair);
@@ -366,7 +371,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokHaulerCreep);
             }
 
-            if (settlerCreeps.length < 1 && settlerFlags.length > 0) {
+            if (settlerCreeps.length < settlerFlags.length && settlerFlags.length > 0) {
                 this.QueueForSpawnOnce(dokSettlerCreep);
             }
 
@@ -374,8 +379,12 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokLinkKeeperCreep);
             }
 
-            if (attackCreeps.length < 1 * attackFlags.length && attackFlags.length > 0) {
+            if (attackCreeps.length < attackFlags.length && attackFlags.length > 0) {
                 this.QueueForSpawnOnce(dokAttackerCreep);
+            }
+
+            if (remoteMinerCreeps.length < remoteMinerFlags.length && remoteMinerFlags.length > 0) {
+                this.QueueForSpawnOnce(dokEnergyMinerRemoteCreep);
             }
         }
     }
@@ -430,12 +439,12 @@ export class dokRoom {
 
             // get initial creep building info
             const creepName = creepClass.creep.buildName;
-            const creepNameFull = `${creepName}:${creepCounter}`;
+            const creepNameFull = `${creepName}:${this.name}:${creepCounter}`;
             const bodyStack = creepClass.creep.BuildBodyStack(this.roomRef.controller?.level || 1, standbyEnergy);
             const startingMemory = creepClass.creep.BuildInitialMemory({ fromRoom: creepClass.room });
 
             // spawn creep
-            const spawnCode = spawn.spawnCreep(bodyStack.splice(0, 50), creepNameFull, {
+            const spawnCode = spawn.spawnCreep(bodyStack, creepNameFull, {
                 energyStructures: [spawn, ...extensions],
                 memory: startingMemory
             });

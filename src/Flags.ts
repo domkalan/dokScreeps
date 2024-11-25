@@ -31,6 +31,13 @@ export class dokFlag {
             return;
         }
 
+        // remote miner flags
+        if (this.flagRef.color === COLOR_ORANGE) {
+            this.AssignByDistance(dokScreeps);
+
+            return;
+        }
+
         if (this.flagRef.color === COLOR_RED && this.flagRef.secondaryColor === COLOR_RED) {
             this.AssignByDistance(dokScreeps);
 
