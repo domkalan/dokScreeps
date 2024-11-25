@@ -1,8 +1,7 @@
 import { Distance } from "./Distance";
 import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
-import { RoomState } from "./rooms/Room";
-
+import { dokRoomType, RoomState } from "./rooms/Room";
 
 /**
  * dokFlag
@@ -66,7 +65,7 @@ export class dokFlag {
     }
 
     public AssignByDistance(dokScreeps: dokScreeps) {
-        const ownedRooms = dokScreeps.GetRooms().filter(i => i.state === RoomState.Controlled);
+        const ownedRooms = dokScreeps.GetRooms().filter(i => i.state === RoomState.Controlled && i.roomType !== dokRoomType.Puppet);
 
         const sameRoom = ownedRooms.find(i => i.roomRef.name === this.flagRef?.pos.roomName);
 
