@@ -89,7 +89,7 @@ export class dokEnergyMinerCreep extends dokCreep {
         }
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry <= energy && buildBody.length < 50) {
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry <= energy && buildBody.length < 6) {
             buildBody.push(WORK);
             totalCost += BODYPART_COST.work + BODYPART_COST.carry;
         }

@@ -9,6 +9,7 @@ export const Settings : SettingsType = {
     roomHostileScan: 3,
     roomTowerTick: 1,
     roomConstructionTick: 100,
+    roomMaxCreepStack: 20,
 
     dokScreepsRefresh: 4000,
     dokScreepsMemoryCleanup: 1000,
@@ -26,6 +27,7 @@ export type SettingsType = {
     roomHostileScan: number,
     roomTowerTick: number,
     roomConstructionTick: number,
+    roomMaxCreepStack: number,
 
     dokScreepsRefresh: number,
     dokScreepsMemoryCleanup: number,

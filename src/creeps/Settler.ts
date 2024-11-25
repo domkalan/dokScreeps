@@ -1,4 +1,5 @@
 import { dokFlag } from "../Flags";
+import { Locks } from "../Locks";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
@@ -12,10 +13,12 @@ export class dokSettlerCreep extends dokCreep {
     public DoSettlerWork() {
         if (this.focusedFlag === null) {
             const roomFlags = this.dokScreepsRef.GetAssignedFlags(this.fromRoom);
-            const settlerFlags = roomFlags.filter(i => i.flagRef?.color === COLOR_PURPLE);
+            const settlerFlags = roomFlags.filter(i => i.flagRef?.color === COLOR_PURPLE && Locks.GetLocksWithoutMe({ id:`flag:${i.flagRef.name}` }, this).length === 0);
     
             if (settlerFlags.length > 0) {
                 this.focusedFlag = settlerFlags[0];
+
+                Locks.PlaceLock({ id:`flag:${settlerFlags[0].name}` }, this);
             } else {
                 this.creepRef.say(`😴`);
 
@@ -158,7 +161,7 @@ export class dokSettlerCreep extends dokCreep {
         return false;
     }
 
-    public static buildBody: BodyPartConstant[] = [ MOVE, CLAIM ];
+    public static buildBody: BodyPartConstant[] = [ MOVE, CLAIM, MOVE, CLAIM ];
     public static buildName: string = 'settler';
 
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
