@@ -43,7 +43,8 @@ export enum dokRoomType {
     Fortified = 'Fortified',
     Puppet = 'Puppet',
     Outpost = 'Outpost',
-    Jumper = 'Jumper'
+    Jumper = 'Jumper',
+    Custom = "Custom"
 }
 
 export interface dokRoomMemory {

@@ -5,6 +5,11 @@ import { dokScreeps } from "../dokScreeps";
 import { Logger } from "../Logger";
 import { dokRoom, dokRoomMemory, dokRoomType, RoomState } from "./Room"
 
+/**
+ * dokPuppetRoom
+ * A basic room that will not construct anything on its own, essentially leaches off another room.
+ * Useful for when you need to defend a walkway room, but are not interested in expanding the room.
+ */
 export class dokPuppetRoom extends dokRoom {
     private leachingRoom: dokRoom | null = null;
 

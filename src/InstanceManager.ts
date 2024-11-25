@@ -12,6 +12,7 @@ import { dokServantCreep } from "./creeps/Servant";
 import { dokSettlerCreep } from "./creeps/Settler";
 import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
+import { dokCustomRoom } from "./rooms/Custom";
 import { dokFortifiedRoom } from "./rooms/Fortified";
 import { dokJumperRoom } from "./rooms/Jumper";
 import { dokOutpostRoom } from "./rooms/Outpost";
@@ -87,6 +88,8 @@ export class InstanceManager {
                 return new dokOutpostRoom(room, dokScreepInstance);
             case dokRoomType.Jumper:
                 return new dokJumperRoom(room, dokScreepInstance);
+            case dokRoomType.Custom:
+                return new dokCustomRoom(room, dokScreepInstance);
             default:
                 return new dokRoom(room, dokScreepInstance);
         }
