@@ -3,6 +3,19 @@ import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
 import { RoomState } from "./rooms/Room";
 
+
+/**
+ * dokFlag
+ * 
+ * Flags are an essential part of commanding and interacting with dokScreeps.
+ * 
+ * Some flags require an assigned room to operate correctly, others will work with all assigned rooms.
+ * 
+ * Red Flags - Attack Operations
+ * Purple Flags - Claim/Settlement Operations
+ * Orange Flags - Remote Mining and Power Harvesting Operations
+ * Brown Flags - Instructions for dokScreeps
+ */
 export class dokFlag {
     public name: string;
     public room: string;
