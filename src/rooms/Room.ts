@@ -54,7 +54,6 @@ export interface dokRoomMemory {
     resources: dokRoomResource[],
     plans: any[],
     roomType: dokRoomType,
-    constructionOverlay: boolean,
 
     scouted: boolean,
     scoutedAt: number,
@@ -97,8 +96,6 @@ export class dokRoom {
     // how many construction projects we have
     protected constructionProjects: number = 0;
     protected constructionProjectsProgress: number = 0;
-    protected constructionProjectsTracking: Array<{ id: string, type: StructureConstant }> = [];
-    protected constructionProjectsPlanned: Array<{ type: StructureConstant, pos: RoomPosition }> = [];
     protected askedForHelp: boolean = false;
 
     // track our assigned flags
@@ -183,7 +180,6 @@ export class dokRoom {
             scoutedAt: Game.time,
 
             roomType: dokRoomType.Base,
-            constructionOverlay: false,
 
             lastActive: Game.time,
             dokRoomUnpacked: true
@@ -552,9 +548,6 @@ export class dokRoom {
         // total up our construction projects
         this.constructionProjects = totalConstructionSites.length;
 
-        // keep track of our construction projects
-        this.constructionProjectsTracking = totalConstructionSites.map(i => { return { id: i.id, type: i.structureType } });
-
         // TODO: need to run health checks on build structures, add a repair instruction for builders or a new creep class
         const ownedStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
         const publicStructures = this.roomRef.find(FIND_STRUCTURES);
@@ -773,23 +766,16 @@ export class dokRoom {
         return [];
     }
 
-    public DoConstructionOverlay() {
-        const debugOverlay = new RoomVisual(this.name);
+    public DoConstructionTick() {
+        const roomStructures = this.dokScreepsRef.GetStructuresByRoom(this.name);
 
-        // do not draw visuals if room is a base room
-        if (typeof (Memory.rooms[this.name] as dokRoomMemory).roomType === 'undefined' || (Memory.rooms[this.name] as dokRoomMemory).roomType === dokRoomType.Base) {
-            debugOverlay.text(`WARNING: Room ${this.name} does not have a room type set.`, 0, 49, { backgroundColor: 'black', color: 'orange', align: 'left' })
+        const extensions = roomStructures.filter(i => i.structureType === 'extension');
 
-            return;
-        }
+        if (this.roomRef.controller?.level || 1 >= 3 && extensions.length === 0) {
+            this.dokScreepsRef.SetRoomType(this.name, dokRoomType.Fortified);
 
-        // should we overlay construction plans
-        if (typeof (Memory.rooms[this.name] as any).constructionOverlay !== 'undefined' && (Memory.rooms[this.name] as any).constructionOverlay === true) {
-            this.constructionProjectsPlanned.forEach(i => {
-
-            });
-        }
-    }
+            Game.notify(`Room ${this.name} has been auto converted to a Fortified room due to lack of built extensions.`)
+        } 
 
     public DoConstructionTick() {
         return;
@@ -854,10 +840,8 @@ export class dokRoom {
         // update room ref
         this.roomRef = Game.rooms[this.name];
 
-        this.DoConstructionOverlay();
-
         // defend against hostiles
-        if (tickNumber % Settings.roomHostileScan) {
+        if (tickNumber % Settings.roomHostileScan === 0) {
             this.ScanRoomForHostiles();
         }
 
@@ -877,11 +861,11 @@ export class dokRoom {
             this.ScanRoom();
         }
 
-        if (tickNumber % 50) {
+        if (tickNumber % 50 === 0) {
             this.DoLinkTransfer();
         }
 
-        if (tickNumber % Settings.roomConstructionTick) {
+        if (tickNumber % Settings.roomConstructionTick === 0) {
             this.DoConstructionTick();
         }
 
@@ -896,7 +880,7 @@ export class dokRoom {
     }
 
     public TickEssential(tickNumber: number, instanceTickNumber: number) {
-        if (tickNumber % Settings.roomHostileScan) {
+        if (tickNumber % Settings.roomHostileScan === 0) {
             this.ScanRoomForHostiles();
         }
 

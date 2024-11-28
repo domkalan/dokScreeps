@@ -97,6 +97,10 @@ export class dokPuppetRoom extends dokRoom {
         return []
     }
 
+    public override DoConstructionTick(): void {
+        
+    }
+
     protected GetNearestRoom() : dokRoom | null {
         const ownedRooms = this.dokScreepsRef.GetRooms().filter(i => i.state === RoomState.Controlled && i.name !== this.name && i.roomType !== dokRoomType.Puppet).filter(i => {
             return this.dokScreepsRef.GetStructuresByRoom(i.name).filter(i => i.structureType === 'spawn').length > 0;

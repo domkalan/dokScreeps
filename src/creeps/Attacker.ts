@@ -176,7 +176,7 @@ export class dokAttackerCreep extends dokCreep {
 
             totalCost += BODYPART_COST.move + BODYPART_COST.attack;
 
-            if (buildBody.length % 6) {
+            if (buildBody.length % 6 === 0) {
                 buildBody.unshift(TOUGH);
 
                 totalCost += BODYPART_COST.tough;

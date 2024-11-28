@@ -32,6 +32,8 @@ export class dokScreeps {
         Locks.RemoveDeadLocks();
 
         this.AddConsoleCommands();
+
+        this.DrawInitScreen(1);
     }
 
     private InitMemory() {
@@ -63,6 +65,7 @@ export class dokScreeps {
         if (typeof (Memory as any).dokScreeps.creepsCount === 'undefined') {
             (Memory as any).dokScreeps.creepsCount = 0;
         }
+        if (typeof (Memory as any).dokScreeps.pixelGen === 'undefined') {
     }
 
     private GatherCreeps() {
@@ -265,6 +268,8 @@ export class dokScreeps {
         startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
         startingOverlay.text('Starting dokScreeps...', 25, 25, { font: '24px' });
         startingOverlay.text(`Step ${step}/2`, 25, 26, { font: '12px' });
+
+        this.DrawDebug(this.tickCount);
     }
 
     public ProcessTick() {
@@ -278,7 +283,17 @@ export class dokScreeps {
             return;
         }
 
-        this.MonitorCPUUsage();
+        this.DrawDebug(this.tickCount);
+
+        // pixel generation
+        if ((Memory as any).dokScreeps.pixelGen === true && typeof Game.cpu.generatePixel !== 'undefined') {
+            if (Game.cpu.bucket >= 10000) {
+                Game.cpu.generatePixel();
+
+                const startingOverlay = new RoomVisual();
+
+                startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
+                startingOverlay.text('Pixel Generated', 25, 25, { font: '24px' });
 
         this.DrawDebug();
 
@@ -309,10 +324,13 @@ export class dokScreeps {
         this.ProcessTickCreeps();
     }
 
-    public DrawDebug() {
+    public DrawDebug(instanceTick: number) {
         const debugOverlay = new RoomVisual();
 
         let lineNumber = 0;
+
+        debugOverlay.text(`Tick: ${Game.time}, ${instanceTick}`, 0, lineNumber, { align: 'left' });
+        lineNumber++;
 
         debugOverlay.text(`Creeps: ${this.creeps.length}`, 0, lineNumber, { align: 'left' });
         lineNumber++;
@@ -585,6 +603,8 @@ export class dokScreeps {
         // if no active instance exists, create one
         if (this._activeInstance === null) {
             this._activeInstance = new dokScreeps();
+
+            return;
         }
 
         this._activeInstance.ProcessTick();

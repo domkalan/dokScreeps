@@ -15,8 +15,6 @@ class PrefabUtil {
                 const prefabSlots = scanResult.filter(i => i.object !== null);
 
                 const prefabStampFormat = prefabSlots.map(item => {
-                    
-
                     return {
                         structureType: item.object,
                         x: flag.pos.x - item.pos.x,

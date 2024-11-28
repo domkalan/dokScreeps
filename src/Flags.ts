@@ -56,6 +56,40 @@ export class dokFlag {
             return;
         }
 
+        // Signal to instance to add room to pathing, set flag name to true/false to toggle
+        if (this.flagRef.color === COLOR_WHITE && this.flagRef.secondaryColor === COLOR_BLUE) {
+            if (typeof Memory.flags[this.flagRef.pos.roomName] === 'undefined') {
+                Memory.flags[this.flagRef.pos.roomName] = {};
+            }
+
+            if (typeof (Memory.flags[this.flagRef.pos.roomName] as dokRoomMemory).avoid === 'undefined') {
+                (Memory.flags[this.flagRef.pos.roomName] as dokRoomMemory).avoid = false;
+            }
+
+            const oldValue = (Memory.flags[this.flagRef.pos.roomName] as dokRoomMemory).avoid;
+            const newValue = JSON.parse(this.flagRef.name.toLowerCase());
+
+            (Memory.flags[this.flagRef.pos.roomName] as dokRoomMemory).avoid = newValue;
+
+            new RoomVisual(this.flagRef.pos.roomName).text(`Room pathing updated, value was ${oldValue}, but is now ${newValue}`, this.flagRef.pos);
+
+            this.flagRef.remove();
+        }
+
+        // Signal to instance to toggle pixel generation
+        if (this.flagRef.color === COLOR_WHITE && this.flagRef.secondaryColor === COLOR_RED) {
+            
+
+            const oldValue = (Memory as any).dokScreeps.pixelGen;
+            const newValue = JSON.parse(this.flagRef.name.toLowerCase());
+
+            (Memory as any).dokScreeps.pixelGen = newValue;
+
+            new RoomVisual(this.flagRef.pos.roomName).text(`Pixel generation setting updated! Was ${oldValue}, but is now ${newValue}`, this.flagRef.pos);
+
+            this.flagRef.remove();
+        }
+
         this.assignedRoom = '*';
 
         // do this for debugging purpose

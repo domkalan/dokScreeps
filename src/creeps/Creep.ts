@@ -1,5 +1,6 @@
 import { dokScreeps } from "../dokScreeps";
 import { Locks } from "../Locks";
+import { Pathing } from "../Pathing";
 import { dokRoom } from "../rooms/Room";
 
 export interface dokCreepMemory {
@@ -76,9 +77,15 @@ export class dokCreep {
             reusePath: 150
         });*/
 
+        const getRoomsToAvoid = Pathing.GetRoomsToAvoid();
+
         // using traveler
         let data = {} as any;
-        (this.creepRef as any).travelTo(target, { returnData: data });
+        (this.creepRef as any).travelTo(target, { 
+            returnData: data,
+            allowHostile: false,
+            avoid: getRoomsToAvoid
+        });
 
         if (blocksTick && typeof data.path !== 'undefined') {
             this.travelingFor = data.path.length;
