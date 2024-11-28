@@ -85,6 +85,7 @@ export class dokRoom {
     protected creepSpawnQueueStuck: number = 0;
 
     // what do we have to haul here?
+    // TODO: move off of cpu and into memory
     protected haulQueue: HaulQueueEntry[] = [];
 
     // how many sources does this room have
@@ -108,6 +109,9 @@ export class dokRoom {
     protected towerEnergySleep: { [id: string] : number } = {};
 
     protected roomLinks: { id: string, type: number }[] = [];
+
+    // handle incoming nukes
+    protected nukeIncomingHandle: boolean = false;
 
     // room type
     public readonly roomType: dokRoomType = dokRoomType.Base;
@@ -442,7 +446,7 @@ export class dokRoom {
 
             // spawn creep
             const spawnCode = spawn.spawnCreep(bodyStack, creepNameFull, {
-                energyStructures: [spawn, ...extensions],
+                energyStructures: [...spawns, ...extensions],
                 memory: startingMemory
             });
 
@@ -777,7 +781,6 @@ export class dokRoom {
             Game.notify(`Room ${this.name} has been auto converted to a Fortified room due to lack of built extensions.`)
         } 
 
-    public DoConstructionTick() {
         return;
     }
 
@@ -867,6 +870,10 @@ export class dokRoom {
 
         if (tickNumber % Settings.roomConstructionTick === 0) {
             this.DoConstructionTick();
+        }
+
+        if (tickNumber % Settings.roomNukeCheck === 0) {
+            this.ScanForIncomingNuke();
         }
 
         // do things on first tick here
@@ -1143,6 +1150,18 @@ export class dokRoom {
             Logger.Log(`Room:${this.name}`, `Will ask ${closerRoom.name} to spawn ${dokBootstrapCreep.buildName}`);
 
             closerRoom.CommandeerSpawn(dokBootstrapCreep, this.name);
+        }
+    }
+
+    protected ScanForIncomingNuke() {
+        const nukes = this.roomRef.find(FIND_NUKES);
+
+        if (nukes.length > 0 && !this.nukeIncomingHandle) {
+            const nukeFrom = nukes.map(i => i.launchRoomName).join(', ')
+
+            Game.notify(`DANGER: Room ${this.name} is being nuked! Nuke was launched from ${nukeFrom}.`);
+
+            // TODO: take evasive action, fire nuke back evacuate...?
         }
     }
 }

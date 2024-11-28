@@ -1,0 +1,59 @@
+{
+    "name": "LabStack",
+    "version": "1",
+    "author": "dokman",
+    "data": [
+        {
+            "structureType": "lab",
+            "x": 3,
+            "y": -1
+        },
+        {
+            "structureType": "lab",
+            "x": 2,
+            "y": 0
+        },
+        {
+            "structureType": "lab",
+            "x": 1,
+            "y": 1
+        },
+        {
+            "structureType": "lab",
+            "x": 1,
+            "y": -1
+        },
+        {
+            "structureType": "lab",
+            "x": 0,
+            "y": 0
+        },
+        {
+            "structureType": "lab",
+            "x": -1,
+            "y": 0
+        },
+        {
+            "structureType": "lab",
+            "x": -2,
+            "y": 1
+        },
+        {
+            "structureType": "lab",
+            "x": -2,
+            "y": -1
+        },
+        {
+            "structureType": "lab",
+            "x": -3,
+            "y": 0
+        },
+        {
+            "structureType": "lab",
+            "x": -4,
+            "y": -1
+        }
+    ],
+    "created": 1732774428,
+    "updated": 1732774428
+}

@@ -10,6 +10,7 @@ export const Settings : SettingsType = {
     roomTowerTick: 1,
     roomConstructionTick: 100,
     roomMaxCreepStack: 20,
+    roomNukeCheck: 1000,
 
     remUseCan: false,
 
@@ -30,6 +31,7 @@ export type SettingsType = {
     roomTowerTick: number,
     roomConstructionTick: number,
     roomMaxCreepStack: number,
+    roomNukeCheck: number,
 
     remUseCan: boolean,
 

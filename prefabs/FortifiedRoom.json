@@ -1,10 +1,4 @@
-import { ConstructionType } from "../creeps/Builder";
-import { Logger } from "../Logger";
-import { Prefab } from "../Prefab";
-import { RoomLimits } from "../RoomLimits";
-import { dokRoom, dokRoomMemory, dokRoomType } from "./Room"
-
-const roomLayout = {
+{
     "name": "FortifiedRoom",
     "version": "1",
     "author": "dokman",
@@ -717,62 +711,4 @@ const roomLayout = {
     ],
     "created": 1732774167,
     "updated": 1732774167
-}
-
-/**
- * dokFortifiedRoomA
- * A full featured room layout that with full base design, with fortification first.
- */
-export class dokFortifiedRoom extends dokRoom {
-    public override roomType: dokRoomType = dokRoomType.Fortified;
-
-    public DoConstructionPlanning(rcl : number | undefined): Array<{ type: StructureConstant, pos: RoomPosition }>  {
-        Logger.Warn(`${this.name}:ConstructionPlanning`, 'Running room construction planning, expect very high CPU usage!');
-
-        const structures = this.dokScreepsRef.GetStructuresByRoom(this.name);
-        const limits = RoomLimits.getRclLimits(rcl || 1);
-
-        const spawn = structures.find(i => i.structureType === 'spawn');
-
-        if (typeof spawn === 'undefined') {
-            // TODO
-            return [];
-        }
-
-        const adaptedPlan = Prefab.RecenterPrefabAround(spawn.pos, roomLayout.data);
-
-        const extensions = structures.filter(i => i.structureType === 'extension');
-        const allotedExtensions = adaptedPlan.filter(i => i.type === 'extension');
-
-        const terrainMask = this.roomRef.getTerrain();
-
-        if (extensions.length < limits.extensions && extensions.length < allotedExtensions.length) {
-            return Prefab.FilterOutBuilt(allotedExtensions, structures, terrainMask);
-        }
-
-        const towers = structures.filter(i => i.structureType === 'tower');
-        const allotedTowers = adaptedPlan.filter(i => i.type === 'tower');
-
-        if (towers.length < limits.towers && towers.length < allotedTowers.length) {
-            return Prefab.FilterOutBuilt(allotedTowers, structures, terrainMask);
-        }
-
-        return [];
-    }
-
-    public override DoConstructionTick(): void {
-        Logger.Warn(`${this.name}:ConstructionPlanning`, 'Running construction processing tick, CPU may spike!');
-
-        const roomMemory = (Memory.rooms[this.name] as dokRoomMemory);
-
-        const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);
-
-        if (constructionProjects.length <= 0) {
-            const projects = this.DoConstructionPlanning(this.roomRef.controller?.level || 1);
-
-            if (projects.length > 0) {
-                this.roomRef.createConstructionSite(projects[0].pos, projects[0].type);
-            }
-        }
-    }
 }

@@ -1,7 +1,7 @@
 import { Distance } from "./Distance";
 import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
-import { dokRoomType, RoomState } from "./rooms/Room";
+import { dokRoomMemory, dokRoomType, RoomState } from "./rooms/Room";
 
 /**
  * dokFlag
@@ -13,7 +13,7 @@ import { dokRoomType, RoomState } from "./rooms/Room";
  * Red Flags - Attack Operations
  * Purple Flags - Claim/Settlement Operations
  * Orange Flags - Remote Mining and Power Harvesting Operations
- * Brown Flags - Instructions for dokScreeps
+ * White Flags - Instructions for dokScreeps
  */
 export class dokFlag {
     public name: string;

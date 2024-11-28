@@ -7,7 +7,7 @@ import { dokRoom, dokRoomType } from "./Room"
 export class dokCustomRoom extends dokRoom {
     public  override readonly roomType: dokRoomType = dokRoomType.Custom;
 
-    public override DoConstructionOverlay(): void {
+    public override DoConstructionTick(): void {
         
     }
 }

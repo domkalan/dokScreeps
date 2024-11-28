@@ -65,7 +65,10 @@ export class dokScreeps {
         if (typeof (Memory as any).dokScreeps.creepsCount === 'undefined') {
             (Memory as any).dokScreeps.creepsCount = 0;
         }
+
         if (typeof (Memory as any).dokScreeps.pixelGen === 'undefined') {
+            (Memory as any).dokScreeps.pixelGen = false;
+        }
     }
 
     private GatherCreeps() {
@@ -295,7 +298,11 @@ export class dokScreeps {
                 startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
                 startingOverlay.text('Pixel Generated', 25, 25, { font: '24px' });
 
-        this.DrawDebug();
+                return;
+            }
+        }
+
+        this.MonitorCPUUsage();
 
         this.tickCount++;
 
