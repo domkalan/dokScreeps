@@ -93,11 +93,11 @@ const main = async () => {
         if (typeof serverInfo.obfuscate !== 'undefined' && serverInfo.obfuscate == true) {
             console.log(`Will upload to ${serverName} via an obfuscator`)
 
-            execSync(`SERVER=${serverName} npm run build-upload-obf`, {stdio: 'inherit'});
+            execSync(`SERVER=${serverName} npm run upload-masked`, {stdio: 'inherit'});
         } else {
             console.log(`Will upload to ${serverName} via regular build`)
 
-            execSync(`SERVER=${serverName} npm run build-upload`, {stdio: 'inherit'});
+            execSync(`SERVER=${serverName} npm run upload`, {stdio: 'inherit'});
         }
     }
 }

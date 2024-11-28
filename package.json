@@ -20,16 +20,21 @@
   "description": "dokUtil powers my screeps.com account dokman.",
   "scripts": {
     "setup": "git submodule update --init --recursive",
+
     "buildmark": "node scripts/BuildStamp.js",
-    "build-main": "rollup -c ./rollup.config.js && npm run buildmark",
-    "mask-main": "npx javascript-obfuscator dist/main.js --output dist/main.obfuscated.js",
     "copy-vendor": "cp ./vendor/traveler/Traveler.js ./dist/traveler.js && cp ./vendor/profiler/screeps-profiler.js ./dist/profiler.js && cp ./vendor/visuals/RoomVisual.js ./dist/visualizer.js",
-    "build": "npm run build-main ; npm run copy-vendor ; npm run mask-main",
+    "patch-vendor": "node scripts/TravelerPatching.js",
+    "mask-main": "mkdir -p ./dist/obf && npx javascript-obfuscator dist/main.js --output ./dist/obf/main.js",
+
+    "build-main": "rollup -c ./rollup.config.js",
+    "build": "npm run build-main && npm run copy-vendor && npm run patch-vendor && npm run mask-main && npm run buildmark",
     "build-tools": "rollup -c ./rollup-tools.config.js",
-    "upload": "npm run copy-vendor && npx screeps-api upload --server ${SERVER:-main} ./dist/main.js ./dist/profiler.js ./dist/traveler.js ./dist/visualizer.js",
+
+    "upload": "npx screeps-api upload --server ${SERVER:-main} ./dist/main.js ./dist/profiler.js ./dist/traveler.js ./dist/visualizer.js",
+    "upload-masked": "npx screeps-api upload --server ${SERVER:-main} ./dist/obf/main.js ./dist/profiler.js ./dist/traveler.js ./dist/visualizer.js",
+    
     "build-upload": "npm run build && npm run upload",
-    "build-upload-obf": "npm run build && rm ./dist/main.js && mv ./dist/main.obfuscated.js ./dist/main.js && npm run upload",
-    "build-upload-toall": "node ./scripts/UploadToAll.js"
+    "build-upload-toall": "npm run build && node ./scripts/UploadToAll.js"
   },
   "version": "3.0.0"
 }
