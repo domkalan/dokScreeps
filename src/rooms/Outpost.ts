@@ -191,7 +191,11 @@ const roomLayout = {
  * Operates similar to a puppet room, but contains its own spawner/extensions but will not expand past RCL 4.
  */
 export class dokOutpostRoom extends dokRoom {
-    public  override readonly roomType: dokRoomType = dokRoomType.Outpost;
+    public override readonly roomType: dokRoomType = dokRoomType.Outpost;
+    public override servantCreepLimit: number = 1;
+    public override rancherCreepLimit: number = 1;
+
+    protected roadCheck: number = 0;
 
     public DoConstructionPlanning(rcl : number | undefined): Array<{ type: StructureConstant, pos: RoomPosition }>  {
         Logger.Warn(`${this.name}:ConstructionPlanning`, 'Running room construction planning, expect very high CPU usage!');
@@ -206,22 +210,45 @@ export class dokOutpostRoom extends dokRoom {
             return [];
         }
 
-        const adaptedPlan = Prefab.RecenterPrefabAround(spawn.pos, roomLayout.data);
-
-        const extensions = structures.filter(i => i.structureType === 'extension');
-        const allotedExtensions = adaptedPlan.filter(i => i.type === 'extension');
+        const adaptedPlan = Prefab.RecenterPrefabAround(spawn.pos, JSON.parse(JSON.stringify(roomLayout.data)));
 
         const terrainMask = this.roomRef.getTerrain();
-
-        if (extensions.length < limits.extensions && extensions.length < allotedExtensions.length) {
-            return Prefab.FilterOutBuilt(allotedExtensions, structures, terrainMask);
-        }
 
         const towers = structures.filter(i => i.structureType === 'tower');
         const allotedTowers = adaptedPlan.filter(i => i.type === 'tower');
 
         if (towers.length < limits.towers && towers.length < allotedTowers.length) {
             return Prefab.FilterOutBuilt(allotedTowers, structures, terrainMask);
+        }
+
+        const extensions = structures.filter(i => i.structureType === 'extension');
+        const allotedExtensions = adaptedPlan.filter(i => i.type === 'extension');
+
+        if (extensions.length < limits.extensions && extensions.length < allotedExtensions.length) {
+            return Prefab.FilterOutBuilt(allotedExtensions, structures, terrainMask);
+        }
+
+        const storages = structures.filter(i => i.structureType === 'storage');
+        const allotedStorages = adaptedPlan.filter(i => i.type === 'storage');
+
+        if (storages.length < limits.storage && storages.length < allotedStorages.length) {
+            return Prefab.FilterOutBuilt(allotedStorages, structures, terrainMask);
+        }
+
+        const links = structures.filter(i => i.structureType === 'link');
+        const allotedLinks = adaptedPlan.filter(i => i.type === 'link');
+
+        if (links.length < limits.links && links.length < allotedLinks.length) {
+            return Prefab.FilterOutBuilt(allotedLinks, structures, terrainMask);
+        }
+
+        this.roadCheck--;
+        if (rcl || 1 >= 4 && this.roadCheck <= 0) {
+            const plannedRoads = adaptedPlan.filter(i => i.type === 'road');
+
+            this.roadCheck = 200;
+
+            return Prefab.FilterOutBuilt(plannedRoads, structures, terrainMask);
         }
 
         return [];
