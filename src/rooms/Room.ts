@@ -107,6 +107,7 @@ export class dokRoom {
 
     protected towerLocks: { [id: string] : boolean } = {};
     protected towerEnergySleep: { [id: string] : number } = {};
+    protected towerLastBlast: { [id: string] : number } = {};
 
     protected roomLinks: { id: string, type: number }[] = [];
 
@@ -115,6 +116,13 @@ export class dokRoom {
 
     // room type
     public readonly roomType: dokRoomType = dokRoomType.Base;
+
+    // creep spawn limits
+    protected haulerCreepLimit: number = 10;
+    protected builderCreepLimit: number = 4;
+    protected defenderCreepLimit: number = 4;
+    protected servantCreepLimit: number = 3;
+    protected rancherCreepLimit: number = 2;
 
     constructor(room: Room, dokScreepsInstance: dokScreeps) {
         Logger.Log('dokRooms', `Room ${room.name} has been created as a dokRoom`);
@@ -320,7 +328,7 @@ export class dokRoom {
                 return;
             }
 
-            if (this.hostiles.length > 0 && defenderCreeps.length < 4) {
+            if (this.hostiles.length > 0 && defenderCreeps.length < this.defenderCreepLimit) {
                 // double check we have enough energy producers before this action
                 if (bootstrapCreeps.length > 0 || energyMinerCreeps.length > 0) {
                     this.PriorityQueueForSpawnOnce(dokDefenderCreep);
@@ -333,7 +341,7 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokRancherCreep);
             }
 
-            if (rancherCreeps.length < 2 && rcl >= 5) {
+            if (rancherCreeps.length < this.rancherCreepLimit && rcl >= 5) {
                 this.QueueForSpawnOnce(dokRancherCreep);
             }
 
@@ -350,12 +358,12 @@ export class dokRoom {
             }
 
             // spawn based on construction projects
-            if (builderCreeps.length < Math.floor((constructionProjects.length / 5) + 1) && constructionProjects.length > 0 && builderCreeps.length < 4) {
+            if (builderCreeps.length < Math.floor((constructionProjects.length / 5) + 1) && constructionProjects.length > 0 && builderCreeps.length < this.builderCreepLimit) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
             // spawn based on project points
-            if (builderCreeps.length < Math.floor(this.constructionProjectsProgress / 5000) && constructionProjects.length > 0 && builderCreeps.length < 4) {
+            if (builderCreeps.length < Math.floor(this.constructionProjectsProgress / 5000) && constructionProjects.length > 0 && builderCreeps.length < this.builderCreepLimit) {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
@@ -364,11 +372,11 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
-            if (servantCreeps.length < (this.roomRef.controller?.level || 1) && servantCreeps.length < 3) {
+            if (servantCreeps.length < (this.roomRef.controller?.level || 1) && servantCreeps.length < this.servantCreepLimit) {
                 this.QueueForSpawnOnce(dokServantCreep);
             }
             
-            if (haulerCreeps.length < Math.floor((this.haulQueue.length / 3) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < 10) {
+            if (haulerCreeps.length < Math.floor((this.haulQueue.length / 3) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < this.haulerCreepLimit) {
                 this.QueueForSpawnOnce(dokHaulerCreep);
             }
 
@@ -648,8 +656,9 @@ export class dokRoom {
     public DoTowerTick() {
         const towers = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => i.structureType === 'tower') as StructureTower[];
 
-        let hostileTargetRotation = 0;
-        let repairOrderRotation = 0;
+        const controller = this.roomRef.controller;
+
+        let towersOut = 0;
 
         const debugTowerVisual = new RoomVisual(this.name);
 
@@ -657,6 +666,7 @@ export class dokRoom {
             if (typeof this.towerEnergySleep[tower.id] === 'undefined') {
                 this.towerEnergySleep[tower.id] = 0;
                 this.towerLocks[tower.id] = false;
+                this.towerLastBlast[tower.id] = 0;
             }
 
             if (tower.store.energy === 0) {
@@ -664,25 +674,25 @@ export class dokRoom {
 
                 this.AddDeliveryToHaulQueue(tower.id, 'energy', 0);
 
+                towersOut++;
+
                 continue;
             }
 
             // blast hostiles
-            if (this.hostiles.length > 0) {
-                const hostileTarget = this.hostiles[hostileTargetRotation];
+            if (this.hostiles.length > 0 && (controller?.safeMode || 0) <= 0) {
+                if (this.towerLastBlast[tower.id] >= this.hostiles.length)
+                    this.towerLastBlast[tower.id] = 0;
+
+                const hostileTarget = this.hostiles[this.towerLastBlast[tower.id]];
 
                 const blastCode = tower.attack(hostileTarget);
+
+                this.towerLastBlast[tower.id]++;
 
                 debugTowerVisual.line(tower.pos, hostileTarget.pos, { color: 'rgba(255, 0, 0, 0.5)' });
                 debugTowerVisual.circle(hostileTarget.pos, { fill: 'rgba(255, 0, 0, 0.5)', radius: 0.8 });
                 debugTowerVisual.text('💣', hostileTarget.pos);
-
-                if (blastCode === 0) {
-                    hostileTargetRotation++;
-                    if (hostileTargetRotation >= this.hostiles.length) {
-                        hostileTargetRotation = 0;
-                    }
-                }
 
                 continue;
             }
@@ -692,13 +702,13 @@ export class dokRoom {
                     debugTowerVisual.text('🔋🔒', tower.pos, { opacity: 0.8 });
 
                     if (this.towerEnergySleep[tower.id] > 10) {
-                        this.AddDeliveryToHaulQueue(tower.id, 'energy', 3);
+                        this.AddDeliveryToHaulQueue(tower.id, 'energy', 2);
 
                         this.towerEnergySleep[tower.id] = 0;
                     }
                     this.towerEnergySleep[tower.id]++;
 
-                    return;
+                    continue;
                 } else {
                     this.towerLocks[tower.id] = false;
                 }
@@ -707,17 +717,23 @@ export class dokRoom {
             if (tower.store.energy < tower.store.getCapacity('energy') * 0.75) {
                 debugTowerVisual.text('😴', tower.pos, { opacity: 0.8 });
 
-                this.AddDeliveryToHaulQueue(tower.id, 'energy', 3);
+                this.AddDeliveryToHaulQueue(tower.id, 'energy', 2);
 
                 this.towerLocks[tower.id] = true;
 
                 continue;
             }
 
-            const roomCriticalStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => i.hits < i.hitsMax * 0.10).sort((a, b) => a.hits / a.hitsMax - b.hits / b.hitsMax );
+            // get room critical structures
+            let roomCriticalStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i =>  i.hits < i.hitsMax * 0.05).sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
 
             if (roomCriticalStructures.length > 0) {
-                const criticalStructure = roomCriticalStructures[0];
+                if (this.towerLastBlast[tower.id] >= roomCriticalStructures.length)
+                    this.towerLastBlast[tower.id] = 0;
+
+                const criticalStructure = roomCriticalStructures[this.towerLastBlast[tower.id]];
+
+                this.towerLastBlast[tower.id]++;
 
                 debugTowerVisual.line(tower.pos, criticalStructure.pos, { color: 'rgba(255, 99, 71, 0.5)' });
                 debugTowerVisual.circle(criticalStructure.pos, { fill: 'rgba(255, 99, 71, 0.5)', radius: 0.8 });
@@ -725,16 +741,22 @@ export class dokRoom {
 
                 const blastCode = tower.repair(criticalStructure);
 
-                return;
+                continue;
             } 
 
             // do structure repairs from construction queue
             const roomMemory = Memory.rooms[this.name] as dokRoomMemory;
-            const repairOrders = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair && i.itemPos.roomName === this.name).sort((a, b) => a.priority - b.priority);
+            const repairOrders = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair && i.itemPos.roomName === this.name);
 
             if (repairOrders.length > 0) {
-                const repairTargetOrder = repairOrders[repairOrderRotation];
+                if (this.towerLastBlast[tower.id] >= repairOrders.length)
+                    this.towerLastBlast[tower.id] = 0;
+
+
+                const repairTargetOrder = repairOrders[this.towerLastBlast[tower.id]];
                 const repairTarget = Game.getObjectById(repairTargetOrder.item) as Structure;
+
+                this.towerLastBlast[tower.id]++;
 
                 if (repairTarget === null) {
                     this.RemoveFromConstructionQueue(repairTargetOrder.item);
@@ -754,14 +776,25 @@ export class dokRoom {
 
                 const blastCode = tower.repair(repairTarget);
 
-                if (blastCode === 0) {
-                    repairOrderRotation++;
-                    if (repairOrderRotation >= repairOrders.length) {
-                        repairOrderRotation = 0;
-                    }
+                continue;
+            }
+        }
+
+        if (towersOut === towers.length && this.hostiles.length > 0) {
+            if (typeof controller !== 'undefined') {
+                if (controller.safeModeAvailable && (controller.safeModeCooldown || 0) <= 0) {
+                    controller.activateSafeMode();
+
+                    Game.notify(`Room ${this.name} is under siege, safe mode has been activated.`);
                 }
 
-                return;
+                const protectFlagName = `protect ${controller.id.slice(0, 5)}`;
+
+                if (typeof Game.flags[protectFlagName] === 'undefined') {
+                    controller.pos.createFlag(protectFlagName, COLOR_RED, COLOR_WHITE);
+
+                    Game.notify(`Room ${this.name} is under siege, protect flag has been issued.`);
+                }
             }
         }
     }
@@ -829,6 +862,8 @@ export class dokRoom {
 
     public Tick(tickNumber: number, instanceTickNumber: number) : boolean {
         if (typeof Game.rooms[this.name] === 'undefined') {
+            this.state = RoomState.Inactive;
+
             return false;
         }
 
@@ -902,8 +937,11 @@ export class dokRoom {
     public AddPickupToHaulQueue(item: string, resource: ResourceConstant, priority: number = 3, itemPos: RoomPosition | null = null) {
         const existingEntry = this.haulQueue.find(i => i.item === item);
 
-        if (typeof existingEntry !== 'undefined')
+        if (typeof existingEntry !== 'undefined') {
+            existingEntry.priority = priority;
+
             return;
+        }
 
         let roomPosition = itemPos;
 
@@ -922,8 +960,11 @@ export class dokRoom {
     public AddPullToHaulQueue(item: string, resource: ResourceConstant, priority: number = 3, itemPos: RoomPosition | null = null) {
         const existingEntry = this.haulQueue.find(i => i.item === item);
 
-        if (typeof existingEntry !== 'undefined')
+        if (typeof existingEntry !== 'undefined') {
+            existingEntry.priority = priority;
+
             return;
+        }
 
         let roomPosition = itemPos;
 
@@ -944,8 +985,12 @@ export class dokRoom {
     public AddDeliveryToHaulQueue(item: string, resource: ResourceConstant, priority: number = 3, itemPos: RoomPosition | null = null) {
         const existingEntry = this.haulQueue.find(i => i.item === item);
 
-        if (typeof existingEntry !== 'undefined')
+        if (typeof existingEntry !== 'undefined') {
+            existingEntry.priority = priority;
+
             return;
+        }
+            
 
         let roomPosition = itemPos;
 
@@ -990,7 +1035,7 @@ export class dokRoom {
     }
 
     public PullFromHaulQueue() {
-        const haulEntry = this.haulQueue.shift();
+        const haulEntry = this.haulQueue.sort((a, b) => a.priority - b.priority).shift();
 
         return haulEntry;
     }
@@ -1002,7 +1047,7 @@ export class dokRoom {
             return undefined;
         }
 
-        const haulEntry = haulQueueConstrained.shift();
+        const haulEntry = haulQueueConstrained.sort((a, b) => a.priority - b.priority).shift();
 
         // remove item from queue since we cloned array when we filtered
         this.haulQueue = this.haulQueue.filter(i => i !== haulEntry);
@@ -1030,8 +1075,6 @@ export class dokRoom {
         }
 
         roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Build });
-
-        roomMemory.constructionQueue = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority);
     }
 
     public QueueRepairStructure(item: string, points: number, priority: number = 3, itemPos: RoomPosition | null = null) {
@@ -1054,8 +1097,6 @@ export class dokRoom {
         }
 
         roomMemory.constructionQueue.push({ item, itemPos: roomPosition, points, priority, addedAt: Game.time, constructionType: ConstructionType.Repair });
-
-        roomMemory.constructionQueue = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority);
     }
 
     public PullFromConstructionQueue() {
@@ -1064,7 +1105,7 @@ export class dokRoom {
         if (roomMemory.constructionQueue.length === 0)
             return undefined;
 
-        const constructionProject = roomMemory.constructionQueue[0];
+        const constructionProject = roomMemory.constructionQueue.sort((a, b) => a.priority - b.priority)[0];
 
         return constructionProject;
     }
