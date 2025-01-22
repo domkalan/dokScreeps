@@ -1,6 +1,7 @@
 import { Distance } from "../Distance";
 import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
+import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
 
 
@@ -75,16 +76,6 @@ export class dokAttackerCreep extends dokCreep {
             }
         }
 
-        if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_GREY) {
-            if (this.creepRef.pos.getRangeTo(flag.flagRef) > 8) {
-                this.MoveTo(flag.flagRef);
-
-                return;
-            }
-
-            this.sleepTime = 10;
-        }
-
         if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_PURPLE) {
             const structuresHere = this.dokScreepsRef.GetStructuresByRoom(this.creepRef.pos.roomName);
 
@@ -138,6 +129,28 @@ export class dokAttackerCreep extends dokCreep {
 
             if (attackCode === -9) {
                 this.MoveTo(attackStructure);
+            }
+        }
+
+        if (flag.flagRef?.color === COLOR_RED && flag.flagRef.secondaryColor === COLOR_WHITE) {
+            // TODO: convert this to use dokRoom.hostiles()?, dokRoom should scan even if room is not owned
+            const hostilesCreeps = this.creepRef.room.find(FIND_CREEPS).filter(i => i.owner.username !== Settings.username);
+            const hostilePowerCreeps = this.creepRef.room.find(FIND_POWER_CREEPS).filter(i => i.owner.username !== Settings.username);
+
+            const hostilesHere = [...hostilesCreeps, ...hostilePowerCreeps];
+
+            if (hostilesHere.length > 0) {
+                const attackCode = this.creepRef.attack(hostilesHere[0]);
+
+                if (attackCode === -9) {
+                    this.creepRef.moveTo(hostilesHere[0]);
+                }
+            } else {
+                if (this.creepRef.pos.getRangeTo(flag.flagRef) >= 6) {
+                    this.creepRef.moveTo(flag.flagRef);
+                } else {
+                    this.creepRef.say('👀');
+                }
             }
         }
 
