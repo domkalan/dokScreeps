@@ -12,6 +12,21 @@ export const Settings : SettingsType = {
     roomMaxCreepStack: 20,
     roomNukeCheck: 1000,
 
+    roomControllerSign: [
+        'Don\'t test in prod! Unless it is on Screeps...?',
+        'Hi mom!',
+        'If a creep dies and nobody hears it does it make a sound?',
+        'Send source code 😏',
+        'Send pixels 😏',
+        '$19 Fornite card, who wants it?',
+        'Because of Screeps, I sit at my desk way too long',
+        'Wasting CPU since 2023',
+        'Overmind? 🤢',
+        'shard4 when?',
+        'sudo rm -rf /'
+    ],
+    roomControllerSignCheck: 60,
+
     remUseCan: false,
 
     dokScreepsRefresh: 4000,
@@ -32,6 +47,9 @@ export type SettingsType = {
     roomConstructionTick: number,
     roomMaxCreepStack: number,
     roomNukeCheck: number,
+
+    roomControllerSign: Array<string> | string | undefined,
+    roomControllerSignCheck: number,
 
     remUseCan: boolean,
 
