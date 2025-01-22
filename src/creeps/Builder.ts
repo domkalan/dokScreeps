@@ -110,6 +110,18 @@ export class dokBuilderCreep extends dokCreep {
             this.sleepTime = 10;
 
             this.RequestEnergyDelivery();
+        } else if (buildCode === 0) {
+            if (constructionSite.structureType === 'rampart') {
+                const newRampart = this.creepRef.pos.findInRange(FIND_STRUCTURES, 1).filter(i => i.structureType === 'rampart');
+
+                if (newRampart.length > 0) {
+                    this.focusedConstructType = ConstructionType.Repair;
+                    this.focusedConstructPoints = 200;
+                    this.focusedConstruct = newRampart[0].id;
+
+                    this.creepRef.say(`🚨🔨`);
+                }
+            }
         }
     }
 
