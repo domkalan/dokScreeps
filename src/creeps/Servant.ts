@@ -1,9 +1,11 @@
 import { dokScreeps } from "../dokScreeps";
+import { Settings } from "../Settings";
 import { dokCreep, dokCreepMemory } from "./Creep";
 
 export class dokServantCreep extends dokCreep {
     private energyStorageCap: number = 0;
     private moveInstructed: boolean = false;
+    private controllerSignCheck: number = Settings.roomControllerSignCheck;
 
     constructor(creep: Creep, dokScreepInstance : dokScreeps) {
         super(creep, dokScreepInstance);
@@ -24,6 +26,45 @@ export class dokServantCreep extends dokCreep {
             this.creepRef.say(`🪫⚡`);
 
             this.RequestEnergyDelivery();
+        }
+
+        this.controllerSignCheck--;
+        if (typeof Settings.roomControllerSign !== 'undefined' && this.controllerSignCheck <= 0) {
+            if (typeof Settings.roomControllerSign === 'string' && controller.sign?.text !== Settings.roomControllerSign) {
+                const roomControllerSign = this.creepRef.signController(controller, Settings.roomControllerSign);
+
+                if (roomControllerSign === -9) {
+                    this.MoveTo(controller);
+
+                    return;
+                } else if (roomControllerSign === 0) {
+                    this.controllerSignCheck = 240;
+
+                    this.creepRef.say(`🪧`);
+
+                    return;
+                }
+            } else {
+                if (!Settings.roomControllerSign.includes(controller.sign?.text || '')) {
+                    const randomText = Settings.roomControllerSign[Math.floor(Math.random() * Settings.roomControllerSign.length)];
+
+                    const roomControllerSign = this.creepRef.signController(controller, randomText);
+
+                    if (roomControllerSign === -9) {
+                        this.MoveTo(controller);
+
+                        return;
+                    } else if (roomControllerSign === 0) {
+                        this.controllerSignCheck = 240;
+
+                        this.creepRef.say(`🪧`);
+
+                        return;
+                    }
+                }
+            }
+
+            this.controllerSignCheck = Settings.roomControllerSignCheck;
         }
 
         const upgradeCode = this.creepRef.upgradeController(controller);
