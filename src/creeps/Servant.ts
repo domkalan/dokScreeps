@@ -72,7 +72,7 @@ export class dokServantCreep extends dokCreep {
         let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
 
         // Add additional parts while respecting the energy limit
-        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry + BODYPART_COST.work <= energy && buildBody.length < 50) {
+        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry + BODYPART_COST.work <= energy && buildBody.length < 7) {
             buildBody.push(CARRY, WORK);
             totalCost += BODYPART_COST.work + BODYPART_COST.carry;
         }

@@ -80,18 +80,8 @@ export class dokEnergyMinerCreep extends dokCreep {
     public static BuildBodyStack(rcl: number, energy: number): BodyPartConstant[] {
         const buildBody: BodyPartConstant[] = [...this.buildBody]; // Base body
 
-        let totalCost = buildBody.reduce((sum, part) => sum + BODYPART_COST[part as keyof typeof BODYPART_COST], 0);
-
         if (rcl >= 5) {
-            buildBody.push(CARRY);
-
-            totalCost += BODYPART_COST.carry;
-        }
-
-        // Add additional parts while respecting the energy limit
-        while (totalCost + BODYPART_COST.move + BODYPART_COST.carry <= energy && buildBody.length < 6) {
-            buildBody.push(WORK);
-            totalCost += BODYPART_COST.work + BODYPART_COST.carry;
+            buildBody.push(CARRY, WORK, WORK, WORK)
         }
 
         return buildBody;
