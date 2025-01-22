@@ -577,7 +577,7 @@ export class dokRoom {
 
                 // when we hit rcl 5, start beefing walls up in batches
                 if (this.roomRef.controller?.level || 0 >= 5) {
-                    if (structure.hits < structure.hitsMax * 0.018) {
+                    if (structure.hits < structure.hitsMax * 0.010) {
                         this.QueueRepairStructure(structure.id, structure.hitsMax + 2000, 4);
     
                         continue;
@@ -585,7 +585,7 @@ export class dokRoom {
                 }
 
                 if (structure.hits < structure.hitsMax * 0.0032) {
-                    this.QueueRepairStructure(structure.id, structure.hitsMax * 0.0032, 4);
+                    this.QueueRepairStructure(structure.id, structure.hitsMax + 2000, 4);
 
                     continue;
                 }
@@ -725,7 +725,9 @@ export class dokRoom {
             }
 
             // get room critical structures
-            let roomCriticalStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i =>  i.hits < i.hitsMax * 0.05).sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
+            let roomCriticalStructures = this.dokScreepsRef.GetStructuresByRoom(this.name).filter(i => {
+                return i.structureType !== 'constructedWall'
+            }).filter(i =>  i.hits < i.hitsMax * 0.05).sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
 
             if (roomCriticalStructures.length > 0) {
                 if (this.towerLastBlast[tower.id] >= roomCriticalStructures.length)
