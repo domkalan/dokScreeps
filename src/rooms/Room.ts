@@ -804,20 +804,22 @@ export class dokRoom {
             }
         }
 
-        if (towersOut === towers.length && this.hostiles.length > 0) {
-            if (typeof controller !== 'undefined') {
-                if (controller.safeModeAvailable && (controller.safeModeCooldown || 0) <= 0) {
-                    controller.activateSafeMode();
-
-                    Game.notify(`Room ${this.name} is under siege, safe mode has been activated.`);
-                }
-
-                const protectFlagName = `protect ${controller.id.slice(0, 5)}`;
-
-                if (typeof Game.flags[protectFlagName] === 'undefined') {
-                    controller.pos.createFlag(protectFlagName, COLOR_RED, COLOR_WHITE);
-
-                    Game.notify(`Room ${this.name} is under siege, protect flag has been issued.`);
+        if (this.state === RoomState.Controlled || this.state === RoomState.Reserved) {
+            if (towersOut === towers.length && this.hostiles.length > 0) {
+                if (typeof controller !== 'undefined') {
+                    if (controller.safeModeAvailable && (controller.safeModeCooldown || 0) <= 0) {
+                        controller.activateSafeMode();
+    
+                        Game.notify(`Room ${this.name} is under siege, safe mode has been activated.`);
+                    }
+    
+                    const protectFlagName = `protect ${controller.id.slice(0, 5)}`;
+    
+                    if (typeof Game.flags[protectFlagName] === 'undefined') {
+                        controller.pos.createFlag(protectFlagName, COLOR_RED, COLOR_WHITE);
+    
+                        Game.notify(`Room ${this.name} is under siege, protect flag has been issued.`);
+                    }
                 }
             }
         }
