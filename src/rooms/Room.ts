@@ -372,8 +372,10 @@ export class dokRoom {
                 this.QueueForSpawnOnce(dokBuilderCreep);
             }
 
-            if (servantCreeps.length < (this.roomRef.controller?.level || 1) && servantCreeps.length < this.servantCreepLimit) {
-                this.QueueForSpawnOnce(dokServantCreep);
+            if ((this.roomRef.controller?.level || 1) < 8) {
+                if (servantCreeps.length < (this.roomRef.controller?.level || 1) && servantCreeps.length < this.servantCreepLimit) {
+                    this.QueueForSpawnOnce(dokServantCreep);
+                }
             }
             
             if (haulerCreeps.length < Math.floor((this.haulQueue.length / 3) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < this.haulerCreepLimit) {
@@ -575,8 +577,17 @@ export class dokRoom {
                     continue;
                 }
 
+                // target for walls at RCL 8 should be 30,000,000
+                if (this.roomRef.controller?.level || 0 >= 8) {
+                    if (structure.hits >= 30000000) {
+                        continue;
+                    }
+    
+                    this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50, 4);
+
+                    continue;
                 // when we hit rcl 5, start beefing walls up in batches
-                if (this.roomRef.controller?.level || 0 >= 5) {
+                } else if (this.roomRef.controller?.level || 0 >= 5) {
                     if (structure.hits < structure.hitsMax * 0.010) {
                         this.QueueRepairStructure(structure.id, structure.hitsMax + 2000, 4);
     
@@ -592,6 +603,17 @@ export class dokRoom {
                 
                 continue;
             } else if (structure.structureType === 'rampart') {
+                // target for ramparts at rcl 8 should be 30,000,000
+                if (this.roomRef.controller?.level || 0 >= 8) {
+                    if (structure.hits >= 30000000) {
+                        continue;
+                    }
+
+                    this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50, 4);
+
+                    continue;
+                }
+
                 if (structure.hits < structure.hitsMax * 0.40) {
                     this.QueueRepairStructure(structure.id, structure.hitsMax * 0.50, 4);
                 }
