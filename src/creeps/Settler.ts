@@ -121,6 +121,23 @@ export class dokSettlerCreep extends dokCreep {
 
             return;
         }
+
+        if (flag.flagRef?.color === COLOR_PURPLE && flag.flagRef.secondaryColor === COLOR_WHITE) {
+            if (typeof flag.flagRef === 'undefined') {
+                // remove flag
+                delete Game.flags[flag.name];
+
+                return;
+            }
+            
+            if (this.creepRef.pos.getRangeTo(flag.flagRef) >= 1) {
+                this.MoveTo(flag.flagRef);
+            } else {
+                this.sleepTime = 5;
+            }
+
+            return;
+        }
     }
 
     public ConstructSpawn(flag: dokFlag) {
