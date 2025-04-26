@@ -10,6 +10,7 @@ import { dokLinkKeeperCreep } from "./creeps/LinkKeeper";
 import { dokRancherCreep } from "./creeps/Rancher";
 import { dokServantCreep } from "./creeps/Servant";
 import { dokSettlerCreep } from "./creeps/Settler";
+import { dokShardBuilder } from "./creeps/ShardBuilder";
 import { dokScreeps } from "./dokScreeps";
 import { Logger } from "./Logger";
 import { dokCustomRoom } from "./rooms/Custom";
@@ -48,6 +49,8 @@ export class InstanceManager {
                 return new dokLinkKeeperCreep(creep, dokScreepInstance);
             case 'rem':
                 return new dokEnergyMinerRemoteCreep(creep, dokScreepInstance);
+            case 's-builder':
+                return new dokShardBuilder(creep, dokScreepInstance);
             default:
                 return new dokCreep(creep, dokScreepInstance);
         }

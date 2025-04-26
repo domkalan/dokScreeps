@@ -14,6 +14,7 @@ import { dokRoomMemory, dokRoomType, RoomState } from "./rooms/Room";
  * Purple Flags - Claim/Settlement Operations
  * Orange Flags - Remote Mining and Power Harvesting Operations
  * White Flags - Instructions for dokScreeps
+ * Grey Flags - Shard Jumper Specific Creeps
  */
 export class dokFlag {
     public name: string;
@@ -112,7 +113,27 @@ export class dokFlag {
             return;
         }
 
-        const closerRooms = ownedRooms.filter(i => (i.roomRef.controller?.level || 1) >= 3).sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.room) - Game.map.getRoomLinearDistance(b.name, this.room));
+        const closerRooms = ownedRooms.filter((i) => {
+            const storage = dokScreeps.GetStructuresByRoom(i.name).filter(i => i.structureType === 'storage') as StructureStorage[];
+
+            if (storage.length === 0) {
+                return false;
+            }
+
+            if (storage[0].store.energy < 5000) {
+                return false;
+            }
+
+            return (i.roomRef.controller?.level || 1) >= 3
+        }).sort((a, b) => Game.map.getRoomLinearDistance(a.name, this.room) - Game.map.getRoomLinearDistance(b.name, this.room));
+
+        if (closerRooms.length === 0) {
+            Logger.Log(`Flag:${this.flagRef.name}`, `Flag could not find a good room`);
+
+            this.assignedRoom = '*';
+
+            return;
+        }
 
         this.assignedRoom = closerRooms[0].name;
 

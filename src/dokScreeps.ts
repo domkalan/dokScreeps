@@ -131,6 +131,18 @@ export class dokScreeps {
     }
 
     private ProcessTickCreeps() {
+        if (this.creeps.length !== Object.keys(Game.creeps).length && Game.time % 10 === 0 && this.flags.filter(i => i.flagRef.color === COLOR_GREY).length >= 1) {
+            this.GatherCreeps();
+
+            const startingOverlay = new RoomVisual();
+
+            startingOverlay.rect(0, 0, 50, 50, { fill: 'rgba(0, 0, 0, 0.8)' });
+            startingOverlay.text('Processing active Creeps', 25, 25, { font: '24px' });
+            startingOverlay.text(`Remove all grey flags to disable this.`, 25, 26, { font: '12px' });
+
+            return;
+        }
+
         this.creeps.forEach(creep => {
             try {
                 creep.Tick(Game.time, this.tickCount);
@@ -282,6 +294,13 @@ export class dokScreeps {
             this.DrawInitScreen(2);
 
             this.tickCount++;
+
+            return;
+        }
+
+        // restart every 10000 ticks, cleans out dead memory
+        if (this.tickCount > 10000) {
+            this.RestartInstance();
 
             return;
         }

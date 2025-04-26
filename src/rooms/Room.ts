@@ -10,6 +10,7 @@ import { dokLinkKeeperCreep } from "../creeps/LinkKeeper";
 import { dokRancherCreep } from "../creeps/Rancher";
 import { dokServantCreep } from "../creeps/Servant";
 import { dokSettlerCreep } from "../creeps/Settler";
+import { dokShardBuilder } from "../creeps/ShardBuilder";
 import { Distance } from "../Distance";
 import { dokScreeps } from "../dokScreeps";
 import { dokFlag } from "../Flags";
@@ -307,6 +308,10 @@ export class dokRoom {
         const remoteMinerCreeps = this.ownedCreeps.filter(i => i.name.startsWith('rem'));
         const remoteMinerFlags = this.assignedFlags.filter(i => i.flagRef?.color === COLOR_ORANGE);
 
+        // shard builder creeps
+        const shardBuilderCreeps = this.ownedCreeps.filter(i => i.name.startsWith('s-builder'));
+        const shardBuildOpFlags = this.assignedFlags.filter(i => i.flagRef.color === COLOR_GREY && i.flagRef.secondaryColor === COLOR_ORANGE);
+
         // construction projects
         const constructionProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Build);
         const repairProjects = roomMemory.constructionQueue.filter(i => i.constructionType === ConstructionType.Repair);
@@ -376,6 +381,10 @@ export class dokRoom {
                 if (servantCreeps.length < (this.roomRef.controller?.level || 1) && servantCreeps.length < this.servantCreepLimit) {
                     this.QueueForSpawnOnce(dokServantCreep);
                 }
+            } else if ((this.roomRef.controller?.level || 1) >= 8) {
+                if ((this.roomRef.controller?.ticksToDowngrade || 1000) <= 100000 && servantCreeps.length < 1) {
+                    this.QueueForSpawnOnce(dokServantCreep);
+                }
             }
             
             if (haulerCreeps.length < Math.floor((this.haulQueue.length / 3) + 1) && this.haulQueue.length > 0 && haulerCreeps.length < this.haulerCreepLimit) {
@@ -396,6 +405,10 @@ export class dokRoom {
 
             if (remoteMinerCreeps.length < remoteMinerFlags.length && remoteMinerFlags.length > 0) {
                 this.QueueForSpawnOnce(dokEnergyMinerRemoteCreep);
+            }
+
+            if (shardBuildOpFlags.length > 0 && shardBuilderCreeps.length < 1) {
+                this.QueueForSpawnOnce(dokShardBuilder);
             }
         }
     }
@@ -504,7 +517,7 @@ export class dokRoom {
 
                     this.creepSpawnQueueStuck = 0;
 
-                    Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn queue had invalid spawn body, will move to last. ${JSON.stringify(bodyStack, null, 4)}`);
+                    Logger.Log(`dokRooms:${this.roomRef.name}`, `Spawn queue had invalid spawn body, will move to last. ${JSON.stringify(bodyStack, null, 4)} len:${bodyStack.length}`);
                 }
             }
 
