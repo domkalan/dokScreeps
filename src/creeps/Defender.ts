@@ -8,6 +8,12 @@ export class dokDefenderCreep extends dokCreep {
     private fleeCheck: number = 0;
     private noHostilesFor: number = 0;
 
+    constructor(ref: Creep, dks: dokScreeps) {
+        super(ref, dks);
+
+        this.creepRef.notifyWhenAttacked(false);
+    }
+
     public DoDefenderWork() {
         const homeRoom = this.GetRoomRefSafe();
         const hostiles = homeRoom.GetHostiles();

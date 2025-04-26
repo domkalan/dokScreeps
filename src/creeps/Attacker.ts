@@ -1,4 +1,5 @@
 import { Distance } from "../Distance";
+import { dokScreeps } from "../dokScreeps";
 import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
@@ -9,6 +10,12 @@ import { dokCreep } from "./Creep";
 export class dokAttackerCreep extends dokCreep {
     private focusedFlag: dokFlag | null = null;
     private focusedAttackStructure: string | null = null;
+
+    constructor(ref: Creep, dks: dokScreeps) {
+        super(ref, dks);
+
+        this.creepRef.notifyWhenAttacked(false);
+    }
 
     public DoAttackerWork() {
         if (this.focusedFlag === null) {
