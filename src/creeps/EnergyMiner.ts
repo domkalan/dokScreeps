@@ -1,5 +1,6 @@
 import { Locks } from "../Locks";
 import { dokCreep } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 export class dokEnergyMinerCreep extends dokCreep {
     protected focusedSource: string | null = null;
@@ -29,7 +30,7 @@ export class dokEnergyMinerCreep extends dokCreep {
             return;
         }
         
-        const targetedSource = Game.getObjectById(this.focusedSource) as Source;
+        const targetedSource = ObjectPool.getObjectById(this.focusedSource) as Source;
 
         if (targetedSource === null) {
             return;
@@ -58,7 +59,7 @@ export class dokEnergyMinerCreep extends dokCreep {
                 this.focusedLink = nearbyLink[0].id;
             }
 
-            const nearbyLink = Game.getObjectById(this.focusedLink) as StructureLink;
+            const nearbyLink = ObjectPool.getObjectById(this.focusedLink) as StructureLink;
 
             const transferCode = this.creepRef.transfer(nearbyLink, 'energy');
         }

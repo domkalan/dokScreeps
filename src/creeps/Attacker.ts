@@ -4,6 +4,7 @@ import { dokFlag } from "../Flags";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 
 
@@ -68,7 +69,7 @@ export class dokAttackerCreep extends dokCreep {
                 this.focusedAttackStructure = structureNearFlag[0].id;
             }
             
-            const attackStructure = Game.getObjectById(this.focusedAttackStructure) as Structure;
+            const attackStructure = ObjectPool.getObjectById(this.focusedAttackStructure) as Structure;
 
             if (attackStructure === null) {
                 this.focusedAttackStructure = null;
@@ -124,7 +125,7 @@ export class dokAttackerCreep extends dokCreep {
                 this.focusedAttackStructure = structureNearFlag[0].id;
             }
             
-            const attackStructure = Game.getObjectById(this.focusedAttackStructure) as Structure;
+            const attackStructure = ObjectPool.getObjectById(this.focusedAttackStructure) as Structure;
 
             if (attackStructure === null) {
                 this.focusedAttackStructure = null;

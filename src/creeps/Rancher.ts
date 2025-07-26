@@ -1,6 +1,7 @@
 import { Distance } from "../Distance";
 import { Locks } from "../Locks";
 import { dokCreep, dokCreepMemory } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 export class dokRancherCreep extends dokCreep {
     private focusedStructure: string | null = null;
@@ -31,7 +32,7 @@ export class dokRancherCreep extends dokCreep {
             this.creepRef.say(`🔒`);
         }
 
-        const lowStructure = Game.getObjectById(this.focusedStructure) as Structure;
+        const lowStructure = ObjectPool.getObjectById(this.focusedStructure) as Structure;
 
         if (lowStructure === null)
             return;

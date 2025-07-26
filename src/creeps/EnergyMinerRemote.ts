@@ -3,6 +3,7 @@ import { Locks } from "../Locks";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 export class dokEnergyMinerRemoteCreep extends dokCreep {
     private focusedFlag: dokFlag | null = null;
@@ -51,7 +52,7 @@ export class dokEnergyMinerRemoteCreep extends dokCreep {
                         this.focusedCan = canNearby[0].id;
                     }
         
-                    const focusedCan = Game.getObjectById(this.focusedCan) as ConstructionSite;
+                    const focusedCan = ObjectPool.getObjectById(this.focusedCan) as ConstructionSite;
         
                     if (focusedCan === null) {
                         this.focusedOnCanConstruct = false;
@@ -83,7 +84,7 @@ export class dokEnergyMinerRemoteCreep extends dokCreep {
                         this.focusedCan = canNearby[0].id;
                     }
         
-                    const focusedCan = Game.getObjectById(this.focusedCan) as StructureContainer;
+                    const focusedCan = ObjectPool.getObjectById(this.focusedCan) as StructureContainer;
     
                     if (focusedCan === null) {
                         this.focusedCan = null;
@@ -138,7 +139,7 @@ export class dokEnergyMinerRemoteCreep extends dokCreep {
                 }
             }
             
-            const targetedSource = Game.getObjectById(this.focusedSource) as Source;
+            const targetedSource = ObjectPool.getObjectById(this.focusedSource) as Source;
     
             if (targetedSource === null) {
                 return;
@@ -197,7 +198,7 @@ export class dokEnergyMinerRemoteCreep extends dokCreep {
                 return;
             }
             
-            const targetedSource = Game.getObjectById(this.focusedSource) as Mineral;
+            const targetedSource = ObjectPool.getObjectById(this.focusedSource) as Mineral;
     
             if (targetedSource === null) {
                 return;

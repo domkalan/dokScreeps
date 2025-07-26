@@ -1,6 +1,7 @@
 import { Distance } from "../Distance";
 import { Logger } from "../Logger";
 import { dokCreep, dokCreepMemory } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 export interface dokHaulerCreepMemory extends dokCreepMemory {
     haulTask: HaulQueueEntry | null,
@@ -139,7 +140,7 @@ export class dokHaulerCreep extends dokCreep {
 
     public LocateHaulItem(item : HaulQueueEntry) {
         if (item.haulType === HaulType.Pickup) {
-            const itemLookup = Game.getObjectById(item.item) as Resource;
+            const itemLookup = ObjectPool.getObjectById(item.item) as Resource;
 
             if (itemLookup === null) {
                 Logger.Log('Hauler', `Haul pickup request for item ${item.item} voided, could not locate`);
@@ -172,7 +173,7 @@ export class dokHaulerCreep extends dokCreep {
         }
 
         if (item.haulType === HaulType.Pull) {
-            const itemLookup = Game.getObjectById(item.item) as StructureContainer | Ruin;
+            const itemLookup = ObjectPool.getObjectById(item.item) as StructureContainer | Ruin;
 
             if (itemLookup === null) {
                 Logger.Log('Hauler', `Haul pickup request for item ${item.item} voided, could not locate`);
@@ -217,7 +218,7 @@ export class dokHaulerCreep extends dokCreep {
                 return;
             }
 
-            const chosenStorage = Game.getObjectById(this.focusedStorage) as StructureStorage;
+            const chosenStorage = ObjectPool.getObjectById(this.focusedStorage) as StructureStorage;
 
             if (chosenStorage === null) {
                 Logger.Log(`Hauler:${this.fromRoom}`, `Invalid storage item, does it exist?`);
@@ -300,7 +301,7 @@ export class dokHaulerCreep extends dokCreep {
         }
 
         if (item.haulType === HaulType.Deliver) {
-            const deliveryEndpoint = Game.getObjectById(item.item) as Structure | Creep;
+            const deliveryEndpoint = ObjectPool.getObjectById(item.item) as Structure | Creep;
 
             if (deliveryEndpoint === null) {
                 this.haulDeliveryResourceConstraint = item.resource;

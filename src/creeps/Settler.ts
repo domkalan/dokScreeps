@@ -3,6 +3,7 @@ import { Locks } from "../Locks";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 
 
@@ -61,7 +62,7 @@ export class dokSettlerCreep extends dokCreep {
                 this.focusedController = controllers[0].id;
             }
 
-            const controller = Game.getObjectById(this.focusedController) as StructureController;
+            const controller = ObjectPool.getObjectById(this.focusedController) as StructureController;
 
             if (controller === null) {
                 this.focusedController = null;
@@ -101,7 +102,7 @@ export class dokSettlerCreep extends dokCreep {
                 this.focusedController = controllers[0].id;
             }
 
-            const controller = Game.getObjectById(this.focusedController) as StructureController;
+            const controller = ObjectPool.getObjectById(this.focusedController) as StructureController;
 
             if (controller === null) {
                 this.focusedController = null;

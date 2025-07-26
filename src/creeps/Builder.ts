@@ -1,4 +1,5 @@
 import { dokCreep } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 export enum ConstructionType {
     Build,
@@ -42,7 +43,7 @@ export class dokBuilderCreep extends dokCreep {
 
         // repair structure
         if (this.focusedConstructType === ConstructionType.Repair) {
-            const constructionSite = Game.getObjectById(this.focusedConstruct) as Structure;
+            const constructionSite = ObjectPool.getObjectById(this.focusedConstruct) as Structure;
 
             if (constructionSite === null || constructionSite.hits > this.focusedConstructPoints || constructionSite.hits >= constructionSite.hitsMax) {
                 roomRef.RemoveFromConstructionQueue(this.focusedConstruct);
@@ -82,7 +83,7 @@ export class dokBuilderCreep extends dokCreep {
             return;
         }
 
-        const constructionSite = Game.getObjectById(this.focusedConstruct) as ConstructionSite;
+        const constructionSite = ObjectPool.getObjectById(this.focusedConstruct) as ConstructionSite;
 
         if (constructionSite === null) {
             roomRef.RemoveFromConstructionQueue(this.focusedConstruct);

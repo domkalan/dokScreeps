@@ -2,6 +2,7 @@ import { dokScreeps } from "../dokScreeps";
 import { Locks } from "../Locks";
 import { Pathing } from "../Pathing";
 import { dokRoom } from "../rooms/Room";
+import { ObjectPool } from '../ObjectPool';
 
 export interface dokCreepMemory {
     fromRoom: string;

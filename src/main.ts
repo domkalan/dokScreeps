@@ -1,4 +1,5 @@
 import { dokScreeps} from "./dokScreeps"
+import { ObjectPool } from "./ObjectPool";
 
 // import traveler
 require('traveler');
@@ -12,6 +13,8 @@ const profiler = require('profiler');
 // Entry point
 profiler.enable();
 module.exports.loop = () => {
+    ObjectPool.resetPool();
+
     profiler.wrap(function() {
         dokScreeps.RunLoop();
     });

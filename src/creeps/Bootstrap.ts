@@ -1,4 +1,5 @@
 import { dokCreep, dokCreepMemory } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 export interface dokBootstrapCreepMemory extends dokCreepMemory {
     focusedTask: number
@@ -36,7 +37,7 @@ export class dokBootstrapCreep extends dokCreep {
             return;
         }
         
-        const targetedSource = Game.getObjectById(this.focusedSource) as Source;
+        const targetedSource = ObjectPool.getObjectById(this.focusedSource) as Source;
 
         if (targetedSource === null) {
             return;
@@ -167,7 +168,7 @@ export class dokBootstrapCreep extends dokCreep {
             this.focusedSpawnConstruct = spawnConstruction.id;
         }
 
-        const spawnConstruction = Game.getObjectById(this.focusedSpawnConstruct) as ConstructionSite;
+        const spawnConstruction = ObjectPool.getObjectById(this.focusedSpawnConstruct) as ConstructionSite;
 
         if (spawnConstruction === null) {
             (this.creepRef.memory as any).focusedTask = 0;

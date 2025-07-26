@@ -18,6 +18,7 @@ import { Logger } from "../Logger";
 import { RoomLimits } from "../RoomLimits";
 import { Seats } from "../Seats";
 import { Settings } from "../Settings";
+import { ObjectPool } from '../ObjectPool';
 
 export enum RoomState {
     Controlled,
@@ -791,7 +792,7 @@ export class dokRoom {
 
 
                 const repairTargetOrder = repairOrders[this.towerLastBlast[tower.id]];
-                const repairTarget = Game.getObjectById(repairTargetOrder.item) as Structure;
+                const repairTarget = ObjectPool.getObjectById(repairTargetOrder.item) as Structure;
 
                 this.towerLastBlast[tower.id]++;
 
@@ -874,7 +875,7 @@ export class dokRoom {
         if (typeof mainLinkStub === 'undefined')
             return;
 
-        const mainLink = Game.getObjectById(mainLinkStub.id) as StructureLink;
+        const mainLink = ObjectPool.getObjectById(mainLinkStub.id) as StructureLink;
 
         if (mainLink === null)
             return;
@@ -885,7 +886,7 @@ export class dokRoom {
             if (mainLinkStub.id === linkStub.id)
                 continue;
 
-            const link = Game.getObjectById(linkStub.id) as StructureLink;
+            const link = ObjectPool.getObjectById(linkStub.id) as StructureLink;
 
             if (link === null)
                 continue;
@@ -985,7 +986,7 @@ export class dokRoom {
         let roomPosition = itemPos;
 
         if (roomPosition === null) {
-            const itemLookup = Game.getObjectById(item) as Resource | Creep | Structure | Ruin;
+            const itemLookup = ObjectPool.getObjectById(item) as Resource | Creep | Structure | Ruin;
 
             if (itemLookup === null)
                 throw new Error(`Failed to add item ${item} to haul queue, could not find by id?`);
@@ -1008,7 +1009,7 @@ export class dokRoom {
         let roomPosition = itemPos;
 
         if (roomPosition === null) {
-            const itemLookup = Game.getObjectById(item) as Resource | Creep | Structure | Ruin;
+            const itemLookup = ObjectPool.getObjectById(item) as Resource | Creep | Structure | Ruin;
 
             if (itemLookup === null)
                 throw new Error(`Failed to add item ${item} to haul queue, could not find by id?`);
@@ -1034,7 +1035,7 @@ export class dokRoom {
         let roomPosition = itemPos;
 
         if (roomPosition === null) {
-            const itemLookup = Game.getObjectById(item) as Resource | Creep | Structure | Ruin;
+            const itemLookup = ObjectPool.getObjectById(item) as Resource | Creep | Structure | Ruin;
 
             if (itemLookup === null)
                 throw new Error(`Failed to add item ${item} to haul queue, could not find by id?`);
@@ -1105,7 +1106,7 @@ export class dokRoom {
         let roomPosition = itemPos;
 
         if (roomPosition === null) {
-            const itemLookup = Game.getObjectById(item) as Resource | Creep | Structure | Ruin;
+            const itemLookup = ObjectPool.getObjectById(item) as Resource | Creep | Structure | Ruin;
 
             if (itemLookup === null)
                 throw new Error(`Failed to add item ${item} to haul queue, could not find by id?`);
@@ -1127,7 +1128,7 @@ export class dokRoom {
         let roomPosition = itemPos;
 
         if (roomPosition === null) {
-            const itemLookup = Game.getObjectById(item) as Resource | Creep | Structure | Ruin;
+            const itemLookup = ObjectPool.getObjectById(item) as Resource | Creep | Structure | Ruin;
 
             if (itemLookup === null)
                 throw new Error(`Failed to add item ${item} to haul queue, could not find by id?`);
@@ -1166,7 +1167,7 @@ export class dokRoom {
         if (typeof existingEntry !== 'undefined')
             return;
 
-        const itemLookup = Game.getObjectById(request.item) as Resource | Creep | Structure | Ruin;
+        const itemLookup = ObjectPool.getObjectById(request.item) as Resource | Creep | Structure | Ruin;
 
         if (itemLookup === null) {
             Logger.Error(`HaulQueue:${this.name}`, `Failed to add item ${request.item} to haul queue, could not find by id?`);

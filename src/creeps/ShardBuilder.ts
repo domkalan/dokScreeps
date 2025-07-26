@@ -4,6 +4,7 @@ import { Logger } from "../Logger";
 import { Seats } from "../Seats";
 import { Settings } from "../Settings";
 import { dokCreep } from "./Creep";
+import { ObjectPool } from '../ObjectPool';
 
 
 
@@ -68,7 +69,7 @@ export class dokShardBuilder extends dokCreep {
                 Locks.PlaceLock(energy[0], this);
             }
 
-            const energyNear = Game.getObjectById(this.focusedEnergy) as Source;
+            const energyNear = ObjectPool.getObjectById(this.focusedEnergy) as Source;
 
             if (energyNear === null) {
                 this.focusedEnergy = null;
@@ -102,7 +103,7 @@ export class dokShardBuilder extends dokCreep {
         }
 
         if (this.focusedConstruct !== null) {
-            const constructionObject = Game.getObjectById(this.focusedConstruct) as ConstructionSite;
+            const constructionObject = ObjectPool.getObjectById(this.focusedConstruct) as ConstructionSite;
 
             if (constructionObject === null) {
                 this.focusedConstruct = null;
