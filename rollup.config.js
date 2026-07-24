@@ -1,16 +1,32 @@
-const typescript = require('@rollup/plugin-typescript');
-const progress = require('rollup-plugin-progress');
+"use strict";
 
-module.exports = [
-    {
-        input: 'src/main.ts',
-        output: [
-            {
-                name: 'main',
-                file: 'dist/main.js',
-                format: 'iife',
-            }
-        ],
-        plugins: [typescript(), progress({clearLine: true})]
-    }
-]
+import clear from 'rollup-plugin-clear';
+import commonjs from '@rollup/plugin-commonjs';
+import resolve from '@rollup/plugin-node-resolve';
+import screeps from 'rollup-plugin-screeps';
+import typescript from 'rollup-plugin-typescript2';
+
+let cfg;
+const dest = process.env.DEST;
+if (!dest) {
+  console.log("No destination specified - code will be compiled but not uploaded");
+} else if ((cfg = require("./screeps.json")[dest]) == null) {
+  throw new Error("Invalid upload destination");
+}
+
+export default {
+  input: "src/main.ts",
+  output: {
+    file: "dist/main.js",
+    format: "cjs",
+    sourcemap: true
+  },
+
+  plugins: [
+    clear({ targets: ["dist"] }),
+    resolve({ rootDir: "src" }),
+    commonjs(),
+    typescript({ tsconfig: "./tsconfig.json", include: ["**/*.ts"], exclude: [] }),
+    screeps({config: cfg, dryRun: cfg == null})
+  ]
+}

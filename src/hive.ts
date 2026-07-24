@@ -1,0 +1,129 @@
+import { getOwnedRooms } from './rooms';
+
+import { getRoleNameCounter } from './utils/Counter';
+
+export function scanRoom(room: Room): void {
+    // scan the room for energy sources and update memory
+    const energySources = room.find(FIND_SOURCES);
+    const energySourceIds = energySources.map(source => source.id);
+
+    const roomMemory = Memory.hive.rooms[room.name];
+    if (roomMemory) {
+        roomMemory.lastScan = Game.time;
+        roomMemory.energySources = energySourceIds;
+
+        // check if the room is hostile
+        const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
+        roomMemory.hostile = hostileCreeps.length > 0;
+
+        // check if the room has an owner
+        const controller = room.controller;
+        if (controller && controller.owner) {
+            roomMemory.owner = controller.owner.username;
+        } else {
+            roomMemory.owner = null;
+        }
+    } else {
+        console.log(`Room ${room.name} not found in hive memory. Initializing...`);
+        Memory.hive.rooms[room.name] = {
+            hostile: false,
+            owner: null,
+            lastScan: Game.time,
+            energySources: energySourceIds,
+            energyProfitability: 0,
+            resourceType: null
+        };
+    }
+}
+
+/**
+ * Hive acts as a hive mind, cordinating work between colonies.
+ */
+export function runHive() {
+    if (!Memory.hive) {
+        Memory.hive = {
+            rooms: {},
+            scouts: {},
+            lastScan: 0
+        };
+    }
+
+    // only run the hive logic every 100 ticks
+    if (Game.time - Memory.hive.lastScan > 100) {
+        // update the hive last scan time
+        Memory.hive.lastScan = Game.time;
+
+        // scan all rooms in the game
+        for (const roomName in Game.rooms) {
+            const room = Game.rooms[roomName];
+
+            // skip rooms that could be invalid
+            if (!room) continue;
+
+            if (!Memory.hive.rooms[roomName]) {
+                Memory.hive.rooms[roomName] = {
+                    hostile: false,
+                    owner: null,
+                    lastScan: 0,
+                    energySources: [],
+                    energyProfitability: 0,
+                    resourceType: null
+                };
+
+                // get nearby rooms and add them to the hive memory
+                const nearbyRooms = Game.map.describeExits(roomName);
+                for (const direction in nearbyRooms) {
+                    const nearbyRoomName = nearbyRooms[direction as ExitKey];
+                    if (nearbyRoomName &&!Memory.hive.rooms[nearbyRoomName]) {
+                        Memory.hive.rooms[nearbyRoomName] = {
+                            hostile: false,
+                            owner: null,
+                            lastScan: 0,
+                            energySources: [],
+                            energyProfitability: 0,
+                            resourceType: null
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    // rooms should be scanned every 100,000 ticks, so check if any rooms need to be scanned
+    const roomsNeedingScan = Object.entries(Memory.hive.rooms).filter(([roomName, roomData]) => {
+        return Game.time - roomData.lastScan > 100000;
+    });
+
+    if (roomsNeedingScan.length > 0 && Object.keys(Memory.hive.scouts).length === 0) {
+        // No scouts available, create a new one by finding a free spawn in all of our owned rooms
+        const ownedRooms = getOwnedRooms();
+        let spawnFound = false;
+
+        for (const room of ownedRooms) {
+            const spawns = room.find(FIND_MY_SPAWNS).filter(spawn => !spawn.spawning && room.energyAvailable >= 100);
+
+            if (spawns.length > 0) {
+                const scoutCounter = getRoleNameCounter('scout');
+
+                const spawn = spawns[0];
+                const scoutName = `scout-${scoutCounter}`;
+                const spawnResult = spawn.spawnCreep([MOVE], scoutName, {
+                    memory: { role: 'scout', room: room.name },
+                });
+
+                if (spawnResult === OK) {
+                    console.log(`Spawned new scout: ${scoutName} in room ${room.name}`);
+                    Memory.hive.scouts[scoutName] = { assigned: roomsNeedingScan[0][0] }; // Assign the first room needing scan
+                    spawnFound = true;
+                    break;
+                } else {
+                    console.log(`Failed to spawn scout in room ${room.name}. Error code: ${spawnResult}`);
+                }
+            }
+        }
+
+        if (!spawnFound) {
+            console.log('No available spawns to create a new scout.');
+        }
+    }
+}

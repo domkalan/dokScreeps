@@ -1,21 +1,21 @@
-import { dokScreeps} from "./dokScreeps"
-import { ObjectPool } from "./ObjectPool";
+import * as rooms from './rooms';
+import * as hive from './hive';
 
-// import traveler
-require('traveler');
+// When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
+// This utility uses source maps to get the line numbers and file names of the original, TS source code
+export const loop = () => {
+  console.log(`Current game tick is ${Game.time}`);
 
-// import roomvisualizer
-require('visualizer')
+  // run logic loop for each owned room
+  rooms.runRooms();
 
-// import screeps-profiler
-const profiler = require('profiler');
+  // run the hive logic to coordinate work between colonies
+  hive.runHive();
 
-// Entry point
-profiler.enable();
-module.exports.loop = () => {
-    ObjectPool.resetPool();
-
-    profiler.wrap(function() {
-        dokScreeps.RunLoop();
-    });
-}
+  // Automatically delete memory of missing creeps
+  for (const name in Memory.creeps) {
+    if (!(name in Game.creeps)) {
+      delete Memory.creeps[name];
+    }
+  }
+};
