@@ -1,3 +1,4 @@
+import { RoomContext } from 'utils/Context';
 import { ConstructionPlanItem, ConstructionPlannerMemory } from './types/construction';
 // constructionPlanner.ts
 
@@ -13,7 +14,7 @@ type PlannedItemState =
     | "unavailable";
 
 export class ConstructionPlanner {
-    public static run(room: Room): void {
+    public static run(room: Room, context: RoomContext): void {
         if (!room.controller?.my) {
             return;
         }
@@ -25,9 +26,9 @@ export class ConstructionPlanner {
         }
 
         // Visuals should run every tick because RoomVisual only lasts one tick.
-        this.drawVisuals(room, memory.plan);
+        this.drawVisuals(room, memory.plan, context);
 
-        this.createBuildTasks(room);
+        this.createBuildTasks(room, context);
 
         if (Game.time - memory.lastRun < memory.interval) {
             return;
@@ -35,7 +36,7 @@ export class ConstructionPlanner {
 
         memory.lastRun = Game.time;
 
-        this.placeConstructionSites(room, memory);
+        this.placeConstructionSites(room, memory, context);
     }
 
     /**
@@ -96,9 +97,10 @@ export class ConstructionPlanner {
 
     private static placeConstructionSites(
         room: Room,
-        memory: ConstructionPlannerMemory
+        memory: ConstructionPlannerMemory,
+        context: RoomContext
     ): void {
-        const roomSites = room.find(FIND_MY_CONSTRUCTION_SITES);
+        const roomSites = context.constructionSites;
 
         let availableSlots = Math.max(
             0,
@@ -157,7 +159,7 @@ export class ConstructionPlanner {
             if (result === OK) {
                 placed++;
 
-                console.log(
+                debugLog(
                     `[ConstructionPlanner] ${room.name}: ` +
                     `placed ${item.structureType} at ` +
                     `${item.x},${item.y}`
@@ -178,8 +180,8 @@ export class ConstructionPlanner {
     /**
      * Creates build tasks for active construction sites.
      */
-    private static createBuildTasks(room: Room): void {
-        const sites = room.find(FIND_MY_CONSTRUCTION_SITES);
+    private static createBuildTasks(room: Room, context: RoomContext): void {
+        const sites = context.constructionSites;
 
         const existingTargets = new Set(
             Object.values(room.memory.tasks)
@@ -193,7 +195,7 @@ export class ConstructionPlanner {
             }
 
             const taskId =
-                `build:${room.name}:${site.id}`;
+                `build_${site.id}`;
 
             room.memory.tasks[taskId] = {
                 id: taskId,
@@ -201,6 +203,10 @@ export class ConstructionPlanner {
                 type: "build",
                 targetId: site.id,
                 priority: this.getBuildPriority(site),
+                completed: false,
+                roomId: room.name,
+                created: Game.time,
+                expires: Game.time + 1000, // Example expiration time, adjust as needed
             };
         }
 
@@ -353,7 +359,8 @@ export class ConstructionPlanner {
 
     private static drawVisuals(
         room: Room,
-        plan: ConstructionPlanItem[]
+        plan: ConstructionPlanItem[],
+        context: RoomContext
     ): void {
         const visual = room.visual;
 
@@ -467,9 +474,7 @@ export class ConstructionPlanner {
             }
         }
 
-        const activeSites = room.find(
-            FIND_MY_CONSTRUCTION_SITES
-        ).length;
+        const activeSites = context.constructionSites.length;
 
         visual.text(
             `Construction ${activeSites}/${this.getMemory(room).maxSites}`,

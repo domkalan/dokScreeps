@@ -1,8 +1,9 @@
+import { RoomContext } from 'utils/Context';
 import { scanRoom } from '../hive';
 
-export function runScout(creep: Creep): void {
+export function runScout(creep: Creep, context: RoomContext): void {
     if (!Memory.hive.scouts[creep.name].assigned) {
-        console.log(`Scout ${creep.name} has no assigned room. Assigning a new task.`);
+        debugLog(`Scout ${creep.name} has no assigned room. Assigning a new task.`);
 
         const pendingRooms = Object.values(Memory.hive.scouts).map(scout => scout.assigned);
 
@@ -13,11 +14,17 @@ export function runScout(creep: Creep): void {
         if (unscannedRooms.length > 0) {
             const [roomName] = unscannedRooms[0];
             Memory.hive.scouts[creep.name].assigned = roomName;
-            console.log(`Scout ${creep.name} assigned to scan room ${roomName}`);
+            debugLog(`Scout ${creep.name} assigned to scan room ${roomName}`);
         } else {
-            console.log(`No unscanned rooms available for scout ${creep.name}`);
+            debugLog(`No unscanned rooms available for scout ${creep.name}`);
             return;
         }
+    }
+
+    if (!creep.memory.inRoom || creep.memory.inRoom !== creep.room.name) {
+        scanRoom(creep.room, creep);
+
+        creep.memory.inRoom = creep.room.name;
     }
 
     // if screep is not in the scanned room, move to the assigned room
@@ -32,12 +39,12 @@ export function runScout(creep: Creep): void {
                 creep.moveTo(exit, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
             }
         } else {
-            console.log(`No path found for scout ${creep.name} to room ${assignedRoomName}`);
+            debugLog(`No path found for scout ${creep.name} to room ${assignedRoomName}`);
         }
-    } else {
-        scanRoom(creep.room);
+    } else if (creep.room.name === assignedRoomName) {
+        scanRoom(creep.room, creep);
 
-        console.log(`Scout ${creep.name} has scanned room ${assignedRoomName}`);
+        debugLog(`Scout ${creep.name} has scanned room ${assignedRoomName}`);
 
         // After scanning, clear the assigned room so the scout can be reassigned
         Memory.hive.scouts[creep.name].assigned = undefined;
