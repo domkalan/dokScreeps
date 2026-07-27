@@ -1,0 +1,18 @@
+{
+    "main": {
+        "token": "",
+        "protocol": "https",
+        "hostname": "screeps.com",
+        "port": 443,
+        "path": "/",
+        "branch": "main"
+    },
+    "sim": {
+        "token": "",
+        "protocol": "https",
+        "hostname": "screeps.com",
+        "port": 443,
+        "path": "/",
+        "branch": "sim"
+    }
+}
