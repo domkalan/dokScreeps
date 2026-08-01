@@ -22,7 +22,7 @@ export function findTaskForCreep(
     return best;
 }
 
-export function createTask(room: Room, type: string, targetId: string, priority: number, roomId?: string, action?: string, expires?: number): RoomTask {
+export function createTask(room: Room, type: string, targetId: string, priority: number, roomId?: string, action?: string, expires?: number, resourceType?: ResourceConstant): RoomTask {
     // make sure tasks object exists in room memory
     if (!room.memory.tasks) {
         room.memory.tasks = {};
@@ -34,6 +34,7 @@ export function createTask(room: Room, type: string, targetId: string, priority:
         debugLog(`Task ${taskId} already exists in room ${room.name}, resetting expires and priority.`);
         room.memory.tasks[taskId].expires = expires !== undefined ? expires : Game.time + 1000;
         room.memory.tasks[taskId].priority = priority;
+        room.memory.tasks[taskId].resourceType = resourceType;
 
         return room.memory.tasks[taskId];
     }
@@ -46,6 +47,7 @@ export function createTask(room: Room, type: string, targetId: string, priority:
         targetId,
         roomId: roomId || room.name,
         action,
+        resourceType,
         created: Game.time,
         expires: expires !== undefined ? expires : Game.time + 1000 // Example expiration time, adjust as needed
     };

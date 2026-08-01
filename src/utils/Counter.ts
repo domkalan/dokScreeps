@@ -11,7 +11,7 @@ export function getRoleNameCounter(roleName: string): number {
     const counterValue = Memory.counter[counterKey];
     Memory.counter[counterKey] += 1; // Increment the counter for the next call
 
-    if (roleName === 'queen' && counterValue > 10) {
+    if (roleName === 'queen' && counterValue >= 10) {
         Memory.counter[counterKey] = 0; // Reset the counter if it exceeds 10 for queens
     }
 

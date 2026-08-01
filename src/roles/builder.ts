@@ -1,50 +1,60 @@
 import { RoomContext } from "utils/Context";
 import { getTaskById, releaseTask, findTaskForCreep, completeTask, createTask } from "utils/TaskManager";
-
-import { runQueen } from "./queen";
+import { runQueen } from './queen';
 
 export function goForEnergy(creep: Creep, context: RoomContext): void {
     let target = null;
 
     if (creep.memory.focusedOn) {
-        target = Game.getObjectById(creep.memory.focusedOn) as StructureStorage | StructureContainer | Resource | null;
+        target = Game.getObjectById(creep.memory.focusedOn) as StructureStorage | StructureContainer | Resource | Ruin | Tombstone | null;
     }
 
     if (!target || (target instanceof Structure && target.store.getUsedCapacity(RESOURCE_ENERGY) === 0)) {
-        // Find the closest storage, container, or dropped resource with energy
-        const possibleTargets = [...context.resources, ...context.structures].filter(resource => {
-            return (
-                (resource instanceof Resource && resource.resourceType === RESOURCE_ENERGY) ||
-                (resource instanceof StructureStorage && resource.store.getUsedCapacity(RESOURCE_ENERGY) > 0) ||
-                (resource instanceof StructureContainer && resource.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
-            );
+        const droppedEnergy = context.resources.filter(
+            (resource): resource is Resource =>
+                resource instanceof Resource && resource.resourceType === RESOURCE_ENERGY
+        );
 
-            // sort, dropped resources first, then storage, then containers
-        }).sort((a, b) => {
-            if (a instanceof Resource && b instanceof Resource) {
-                return 0; // Both are dropped resources, no change in order
-            } else if (a instanceof Resource) {
-                return -1; // a is a dropped resource, it should come first
-            } else if (b instanceof Resource) {
-                return 1; // b is a dropped resource, it should come first
-            } else if (a instanceof StructureStorage && b instanceof StructureStorage) {
-                return 0; // Both are storage, no change in order
-            } else if (a instanceof StructureStorage) {
-                return -1; // a is storage, it should come before containers
-            } else if (b instanceof StructureStorage) {
-                return 1; // b is storage, it should come before containers
-            } else {
-                return 0; // Both are containers, no change in order
-            }
+        const withdrawableEnergy = [...context.structures, ...context.ruins].filter(resource => {
+            return (
+                (resource instanceof StructureStorage && resource.store.getUsedCapacity(RESOURCE_ENERGY) > 0) ||
+                (resource instanceof StructureContainer && resource.store.getUsedCapacity(RESOURCE_ENERGY) > 0) ||
+                (resource instanceof Ruin && resource.store.getUsedCapacity(RESOURCE_ENERGY) > 0) ||
+                (resource instanceof Tombstone && resource.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
+            );
         });
 
-        if (possibleTargets.length === 0) {
+        if (droppedEnergy.length > 0) {
+            target = creep.pos.findClosestByPath(droppedEnergy);
+        } else if (withdrawableEnergy.length > 0) {
+            target = creep.pos.findClosestByPath(withdrawableEnergy as Array<StructureStorage | StructureContainer | Ruin | Tombstone>);
+        }
+
+        if (!target) {
+            // if the creep is stuck not getting energy for more than 50 ticks, fallback to searching for haul tasks with energy resource
+            if (creep.memory.lastAction && Game.time - creep.memory.lastAction > 50 || !creep.memory.lastAction) {
+                const homeRoom = Game.rooms[creep.memory.room];
+
+                const haulTask = Object.values(homeRoom.memory.tasks).find(task => task.type === 'haul' && task.resourceType === RESOURCE_ENERGY && !task.assigned);
+
+                if (haulTask) {
+                    creep.memory.focusedOn = haulTask.targetId; // Store the target in memory
+                }
+
+                // reset the lastAction timer to avoid repeated attempts
+                creep.memory.lastAction = Game.time;
+
+                creep.say(`🧐`);
+
+                return;
+            }
+
             debugLog(`No available energy sources for creep ${creep.name}`);
-            creep.say('⚡ ❌');
+            creep.say(`⚡ ❌ ${Game.time - creep.memory.lastAction}`);
+
             return;
         }
 
-        target = creep.pos.findClosestByPath(possibleTargets) as StructureStorage | StructureContainer | Resource | null;
         creep.memory.focusedOn = target?.id; // Store the target in memory
     }
 
@@ -67,6 +77,18 @@ export function goForEnergy(creep: Creep, context: RoomContext): void {
             creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 50 });
         } else if (withdrawResult === OK) {
             debugLog(`Creep ${creep.name} withdrew energy from ${target.structureType} ${target.id}`);
+
+            delete creep.memory.focusedOn; // Clear the focused target after withdrawing
+        }
+
+        return;
+    } else if (target instanceof Ruin || target instanceof Tombstone) {
+        const withdrawResult = creep.withdraw(target, RESOURCE_ENERGY);
+
+        if (withdrawResult === ERR_NOT_IN_RANGE) {
+            creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 50 });
+        } else if (withdrawResult === OK) {
+            debugLog(`Creep ${creep.name} withdrew energy from Ruin ${target.id}`);
 
             delete creep.memory.focusedOn; // Clear the focused target after withdrawing
         }
@@ -125,27 +147,13 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
     }
 
     if (target instanceof ConstructionSite) {
-        // if the build target is a rampart, we want to have full energy
-        if (target.structureType === STRUCTURE_RAMPART && creep.store.getUsedCapacity(RESOURCE_ENERGY) < creep.store.getCapacity(RESOURCE_ENERGY)) {
-            debugLog(`Creep ${creep.name} is building a rampart but does not have full energy. Going to get more energy.`);
-            goForEnergy(creep, context);
-            return;
-        }
-
         // fire the build action
         const buildResult = creep.build(target);
 
         if (buildResult === ERR_NOT_IN_RANGE) {
             creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
         } else if (buildResult === OK) {
-            // if the build is successful and the structure is a rampart, instantly begin repairing it to full health
-            if (target.structureType === STRUCTURE_RAMPART) {
-                completeTask(creep);
-
-                const repairTask = createTask(creep.room, 'build', target.id, 0); // Create a repair task for the rampart
-
-                creep.memory.taskId = repairTask.id; // Assign the new repair task to the creep
-            }
+            //completeTask(creep);
         }
     } else if (target instanceof StructureController) {
         if (creep.upgradeController(target) === ERR_NOT_IN_RANGE) {
@@ -159,8 +167,7 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
         if (target.hits >= target.hitsMax) {
             debugLog(`Creep ${creep.name} has finished repairing structure ${target.id}.`);
 
-            delete creep.memory.taskId; // Clear the task ID after finishing the repair
-            delete creep.room.memory.tasks[task.id]; // Remove the task from room memory
+            completeTask(creep);
         }
     }
 }

@@ -4,6 +4,12 @@ import { goToRoom } from './harvester';
 
 // if no other work exists, haulers will go to the room controller and upgrade it
 export function upgradeRoomController(creep: Creep, context: RoomContext): void {
+    // if the queen is not in the room it is assigned to, it will go to that room
+    if (creep.room.name !== creep.memory.room) {
+        goToRoom(creep, creep.memory.room);
+        return;
+    }
+
     if (creep.store[RESOURCE_ENERGY] === 0) {
         goForEnergy(creep, context);
         return;
@@ -25,6 +31,14 @@ export function runQueen(creep: Creep, context: RoomContext): void {
     // if the queen is not in the room it is assigned to, it will go to that room
     if (creep.room.name !== creep.memory.room) {
         goToRoom(creep, creep.memory.room);
+        return;
+    }
+
+    if (context.room.controller && context.room.controller.my && (context.room.controller.ticksToDowngrade < 10000 || context.room.controller.id === creep.memory.focusedOn)) {
+        creep.memory.focusedOn = context.room.controller.id;
+
+        upgradeRoomController(creep, context);
+
         return;
     }
 

@@ -5,6 +5,7 @@ export interface RoomContext {
     structures: Structure[];
     constructionSites: ConstructionSite[];
     sources: Source[];
+    ruins: Array<Ruin | Tombstone>;
     spawns: StructureSpawn[];
     fillTargets: Array<
         StructureSpawn |
@@ -17,13 +18,14 @@ export interface RoomContext {
 export function buildRoomContext(room: Room): RoomContext {
     const structures = room.find(FIND_STRUCTURES);
 
-    return {
+    const context: RoomContext = {
         room,
         structures,
         constructionSites: room.find(FIND_CONSTRUCTION_SITES),
         sources: room.find(FIND_SOURCES),
         hostiles: room.find(FIND_HOSTILE_CREEPS),
         myCreeps: room.find(FIND_MY_CREEPS),
+        ruins: [...room.find(FIND_RUINS), ...room.find(FIND_TOMBSTONES)],
 
         spawns: structures.filter(
             (structure): structure is StructureSpawn =>
@@ -56,4 +58,6 @@ export function buildRoomContext(room: Room): RoomContext {
             }
         ),
     };
+
+    return context;
 }

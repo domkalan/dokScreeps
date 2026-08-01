@@ -6,7 +6,7 @@ import * as debug from './debug';
 // Attach the debugLog function to the global object for easy access in the console
 global.debugLog = function (message: string): void {
     if (Memory.debugMode) {
-        debugLog(`[DEBUG] ${message}`);
+        console.log(`[DEBUG] ${message}`);
     }
 }
 

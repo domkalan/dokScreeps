@@ -2,6 +2,19 @@ import { getTaskById, findTaskForCreep, createTask } from "utils/TaskManager";
 import { GetSlots } from '../utils/Slots';
 import { RoomContext } from "utils/Context";
 
+export function scanRoomForHostiles(creep: Creep, room: Room): void {
+    const hostiles = room.find(FIND_HOSTILE_CREEPS).filter(i => i.body.some(part => part.type === ATTACK || part.type === RANGED_ATTACK || part.type === HEAL));
+    if (hostiles.length > 0) {
+        debugLog(`Room ${room.name} has ${hostiles.length} hostiles.`);
+
+        creep.say(`🚓`);
+
+        for (const hostile of hostiles) {
+            createTask(creep.room, 'attack', hostile.id, 1, room.name);
+        }
+    }
+}
+
 export function goToRoom(creep: Creep, roomName: string): void {
     const exitDir = Game.map.findExit(creep.room.name, roomName) as any;
 
@@ -51,6 +64,13 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         return;
     }
 
+    // if the creep is outside of its home room, run an occasional scan for hostiles in the room
+    if (creep.room.name !== creep.memory.room && (creep.memory.lastAction || 0) < Game.time - 20) {
+        scanRoomForHostiles(creep, creep.room);
+
+        creep.memory.lastAction = Game.time; // Update the last action time
+    }
+
     // if creep is full, attempt to build a container near the source
     if (creep.store.getFreeCapacity() === 0 || creep.memory.focusedOn === 'building') {
         const container = source.pos.findInRange(FIND_STRUCTURES, 3, {
@@ -88,6 +108,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
             } else if (buildResult === ERR_NOT_ENOUGH_RESOURCES) {
                 delete creep.memory.focusedOn; // Clear the focusedOn memory if not enough resources
             }
+
             return;
         }
 
@@ -124,18 +145,15 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
             // or if the creep is in a room with larger storage
             if (homeRoom && creep.memory.room !== creep.room.name || creep.room.storage) {
                 // also add a task for the filled container
-                createTask(homeRoom, 'haul', container.id, 1, creep.room.name);
+                createTask(homeRoom, 'haul', container.id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
 
                 // do a one time scan to see if we have dropped resources for the id
-                const droppedResources = creep.room.find(FIND_DROPPED_RESOURCES, {
-                    filter: (r) => r.resourceType === RESOURCE_ENERGY && r.pos.isNearTo(container)
+                const droppedResources = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 3, {
+                    filter: (r) => r.resourceType === RESOURCE_ENERGY
                 });
 
-                if (droppedResources.length > 0 && droppedResources[0].amount > 50) {
-                    // Add a hauler task to the home room
-                    createTask(homeRoom, 'haul', droppedResources[0].id, 0, creep.room.name);
-
-                    creep.say(`🛻 ⚡ 🗑️`);
+                if (droppedResources.length > 0) {
+                    createTask(homeRoom, 'haul', droppedResources[0].id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
                 }
             }
 
@@ -152,7 +170,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
             if (homeRoom && creep.memory.room !== creep.room.name) {
                 // Add a hauler task to the home room
 
-                createTask(homeRoom, 'haul', container.id, 1, creep.room.name);
+                createTask(homeRoom, 'haul', container.id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
 
                 creep.say(`🛻 ⚡`);
             }

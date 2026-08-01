@@ -1,5 +1,5 @@
 import { RoomContext } from 'utils/Context';
-import { findTaskForCreep, getTaskById, assignTask } from '../utils/TaskManager';
+import { findTaskForCreep, getTaskById, assignTask, completeTask } from '../utils/TaskManager';
 
 export function retireCreep(creep: Creep, context: RoomContext): void {
     const spawn = context.spawns[0];
@@ -110,8 +110,14 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    if (creep.claimController(controller) === ERR_NOT_IN_RANGE) {
+    const claimResult = creep.claimController(controller);
+
+    if (claimResult === ERR_NOT_IN_RANGE) {
         creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
+    } else if (claimResult === OK) {
+        completeTask(creep); // Mark the task as complete after successful claim
+        debugLog(`Creep ${creep.name} has successfully claimed the controller in room ${task.roomId}`);
+        delete creep.memory.taskId; // Clear the task ID after successful claim
     } else {
         debugLog(`Creep ${creep.name} has claimed the controller in room ${task.roomId}`);
         delete creep.memory.taskId; // Clear the task ID after successful claim

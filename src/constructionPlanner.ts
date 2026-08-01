@@ -2,7 +2,7 @@ import { RoomContext } from 'utils/Context';
 import { ConstructionPlanItem, ConstructionPlannerMemory } from './types/construction';
 // constructionPlanner.ts
 
-const DEFAULT_MAX_SITES = 5;
+const DEFAULT_MAX_SITES = 2;
 const DEFAULT_PLACEMENTS_PER_RUN = 2;
 const DEFAULT_INTERVAL = 25;
 

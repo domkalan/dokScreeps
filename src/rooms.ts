@@ -5,6 +5,8 @@ import { runScout } from "roles/scout";
 import { runHauler } from "roles/hauler";
 import { runDefender } from "roles/defender";
 
+import { runTower } from "tower";
+
 import { ConstructionPlanner } from "constructionPlanner";
 import { createBasicRoomPlan } from "plans/basic";
 
@@ -16,52 +18,66 @@ import { createTask, monitorTasks } from "utils/TaskManager";
 // get owned rooms by controller ownership
 export function getOwnedRooms(): Room[] {
     return Object.values(Game.rooms).filter(
-        room => room.controller?.my === true,
+        room => room.controller?.my === true
     );
 }
 
 // append more body parts depending on available energy and role
-function getCreepBodyParts(room: Room, role: string): BodyPartConstant[] {
+function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], number] {
     let baseBody: BodyPartConstant[] = [WORK, CARRY, MOVE];
-    const energyAvailable = room.energyAvailable;
+    let energyUsed: number = 200;
+
+    // no clue why this isnt working, so subtract 100
+    const energyAvailable = room.energyAvailable - 100;
 
     // if defender, we need a different base body
-    if (role === 'defender') {
-        baseBody = [ATTACK, MOVE, MOVE];
+    if (role === 'defender' || role === 'attacker') {
+        baseBody = [ATTACK, MOVE];
+        energyUsed = 130; // ATTACK + MOVE costs 130 energy
     } else if (role === 'claimer') {
         baseBody = [CLAIM, MOVE];
+        energyUsed = 130; // CLAIM + MOVE costs 130 energy
+    } else if (role === 'hauler') {
+        baseBody = [CARRY, MOVE];
+        energyUsed = 100; // CARRY + MOVE costs 100 energy
     }
-
-    // Calculate how many additional parts can be added based on available energy
-    let additionalPartsCount = Math.floor((energyAvailable - 200) / 100); // Each additional part costs 100 energy
-
-    // Limit the number of additional parts to a maximum of 5 for now
-    additionalPartsCount = Math.min(additionalPartsCount, 5);
 
     // Create an array of additional body parts based on the role
     const additionalParts: BodyPartConstant[] = [];
-    for (let i = 0; i < additionalPartsCount; i++) {
+    while (energyUsed < energyAvailable) {
         if (role === 'harvester') {
             additionalParts.push(WORK);
+            energyUsed += 100; // WORK costs 100 energy
+
+            // limit harvesters to 4 WORK parts
+            if (additionalParts.length === 4) {
+                break;
+            }
         } else if (role === 'builder') {
-            additionalParts.push(CARRY);
+            additionalParts.push(WORK, CARRY, MOVE);
+            energyUsed += 200; // WORK + CARRY + MOVE costs 200 energy
         } else if (role === 'queen') {
             additionalParts.push(CARRY, MOVE);
-        } else if (role === 'defender') {
-            additionalParts.push(ATTACK);
+            energyUsed += 100; // CARRY + MOVE costs 100 energy
+        } else if (role === 'defender' || role === 'attacker') {
+            additionalParts.push(TOUGH, MOVE, ATTACK);
+            energyUsed += 190; // TOUGH + MOVE + ATTACK costs 190 energy
         } else if (role === 'hauler') {
-            additionalParts.push(CARRY);
+            additionalParts.push(CARRY, MOVE);
+            energyUsed += 100; // CARRY + MOVE costs 100 energy
         }
     }
 
-    return baseBody.concat(additionalParts);
+    return [baseBody.concat(additionalParts), energyUsed];
 }
 
 // get the ideal number of creeps that should exist
 function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [role: string]: number }): { [role: string]: { count: number, priority: number } } {
     const roomControlLevel = context.room.controller?.level || 0;
     const haulerJobs = Object.values(room.memory.tasks).filter(task => task.type === 'haul' && !task.assigned && !task.completed);
-    const builderJobs = Object.values(room.memory.tasks).filter(task => task.type === 'build' && !task.assigned && !task.completed);
+    const builderJobs = Object.values(room.memory.tasks).filter(task => task.type === 'build' && !task.completed);
+    const attackJobs = Object.values(room.memory.tasks).filter(task => task.type === 'attack' && !task.assigned && !task.completed);
+    const claimJobs = Object.values(room.memory.tasks).filter(task => (task.type === 'claim' || task.type === 'reserve') && !task.assigned && !task.completed);
 
     const idealCounts: { [role: string]: { count: number, priority: number } } = {
         harvester: { count: room.memory.energySources.length, priority: 0 },
@@ -69,14 +85,18 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         queen: { count: 1, priority: 2.5 }, // always have one queen, low priority since we don't need it until later,
         hauler: { count: 1, priority: 5 }, // always have one hauler, medium priority
         claimer: { count: 0, priority: 10 }, // only spawn a claimer if we have a claim task, medium priority
+        defender: { count: 0, priority: 10 }, // only spawn a defender if we have a hostile, medium priority
+        attacker: { count: 0, priority: 10 }, // only spawn an attacker if we have an attack task, medium priority,
+        scout: { count: 0, priority: 10 } // only spawn a scout if we have a remote room to scout, medium priority
     };
 
-    if ((builderJobs.length / 2) > roleCounts.builder) {
+    if (Math.ceil(builderJobs.length / 2) > idealCounts.builder.count) {
         idealCounts.builder.count = Math.ceil(builderJobs.length / 2) + 1;
         idealCounts.builder.priority = 2.5; // if we have build tasks, increase the priority of builders
 
-        // hard cap the number of builders to 4 for now
-        idealCounts.builder.count = Math.min(idealCounts.builder.count, roomControlLevel + 1);
+        if (builderJobs.length > roomControlLevel) {
+            idealCounts.builder.count = roomControlLevel + 1; // limit the number of builders to the room control level
+        }
     }
 
     // remote harvester spawning
@@ -86,17 +106,23 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // 2 tasks per hauler, if we have more than 2 tasks per hauler, increase the priority of haulers
-    if (haulerJobs.length / 2 > idealCounts.hauler.count) {
-        idealCounts.hauler.count = Math.ceil(haulerJobs.length / 2);
+    if (Math.ceil(haulerJobs.length / 1.5) > idealCounts.hauler.count) {
+        idealCounts.hauler.count = Math.ceil(haulerJobs.length / 1.5) + 1;
         idealCounts.hauler.priority = 5; // if we have enough hauler jobs, increase the priority
     }
 
-    if (room.energyAvailable >= 650) {
-        const roomsToClaim = Object.values(room.memory.tasks).filter(task => task.type === 'claim' || task.type === 'reserve');
+    if (claimJobs.length > 0) {
+        idealCounts.claimer.count = claimJobs.length;
+        idealCounts.claimer.priority = 7.5; // if we have claim tasks, increase the priority of claimers
+    }
 
-        if (roomsToClaim.length > 0) {
-            idealCounts.claimer.count = roomsToClaim.length;
-            idealCounts.claimer.priority = 5; // if we have rooms to claim, increase the priority of claimers
+    // if we have attack tasks, spawn attackers
+    if (attackJobs.length > 0) {
+        idealCounts.attacker.count = attackJobs.length;
+        idealCounts.attacker.priority = 5; // if we have attack tasks, increase the priority of attackers
+
+        if (idealCounts.attacker.count > roomControlLevel) {
+            idealCounts.attacker.count = roomControlLevel; // limit the number of attackers to the room control level
         }
     }
 
@@ -127,18 +153,27 @@ function monitorCreepRoles(room: Room, context: RoomContext): void {
 
     const idealCounts = getIdealCreepCount(room, context, roleCounts);
 
-    // reset the spawn queue for this room
-    room.memory.spawnQueue = [];
-
     for (const role in idealCounts) {
         const idealCount = idealCounts[role];
         const actualCount = roleCounts[role] || 0;
 
-        if (actualCount < idealCount.count) {
+        if (actualCount < idealCount.count && !room.memory.spawnQueue.some(entry => entry.role === role)) {
             debugLog(`Room ${room.name} has ${actualCount} ${role}s, but ideally should have ${idealCount.count}. Adding to spawn queue.`);
             room.memory.spawnQueue.push({ role, priority: idealCount.priority });
         }
     }
+
+    // clean up the spawn queue to remove any roles that are no longer needed
+    room.memory.spawnQueue = room.memory.spawnQueue.filter(entry => {
+        const ideal = idealCounts[entry.role];
+
+        if (!ideal) {
+            return false;
+        }
+
+        const actual = roleCounts[entry.role] || 0;
+        return actual < ideal.count;
+    });
 
     // if the spawn queue has roles, and the room has energy
     if (room.memory.spawnQueue.length > 0 && room.energyAvailable > 150) {
@@ -146,26 +181,31 @@ function monitorCreepRoles(room: Room, context: RoomContext): void {
         room.memory.spawnQueue.sort((a, b) => a.priority - b.priority);
 
         // Get the highest priority role to spawn
-        const nextRoleToSpawn = room.memory.spawnQueue[0].role;
+        const nextRoleToSpawn = room.memory.spawnQueue.shift();
 
-        spawnCreep(room, nextRoleToSpawn, context);
+        if (nextRoleToSpawn) {
+            {
+                const spawnResult = spawnCreep(room, nextRoleToSpawn.role, context);
+
+                if (!spawnResult) {
+                    debugLog(`Failed to spawn ${nextRoleToSpawn.role} in room ${room.name}. Re-adding to spawn queue.`);
+                    room.memory.spawnQueue.push(nextRoleToSpawn); // re-add to the queue if spawning failed
+                }
+            }
+        }
     }
 }
 
 // spawn a creep for a given role in a room
-function spawnCreep(room: Room, role: string, context: RoomContext): void {
+function spawnCreep(room: Room, role: string, context: RoomContext): boolean {
     // Log the spawning action
     debugLog(`Spawning new creep with role: ${role}`);
 
-    const spawns = context.structures.filter(structure => structure.structureType === STRUCTURE_SPAWN) as StructureSpawn[];
-
-    // select the next available spawn (for simplicity, just take the first one)
-    const spawn = spawns.length > 0 ? spawns[0] : null;
+    const spawn = context.structures.find(structure => structure.structureType === STRUCTURE_SPAWN && !(structure as StructureSpawn).spawning) as StructureSpawn;
 
     if (spawn) {
         // Define a basic body for the new creep
-        const body = getCreepBodyParts(room, role);
-
+        const [body, bodyEnergy] = getCreepBodyParts(room, role);
         const roleCounter = getRoleNameCounter(role);
         const creepName = `${role}-${roleCounter}`;
 
@@ -175,13 +215,22 @@ function spawnCreep(room: Room, role: string, context: RoomContext): void {
         });
 
         if (spawnResult === OK) {
-            debugLog(`Successfully spawned ${role} creep.`);
-        } else {
-            debugLog(`Failed to spawn ${role} creep. Error code: ${spawnResult}`);
+            debugLog(`Successfully spawned new creep: ${creepName} with role: ${role}`);
+
+            return true;
+        } else if (spawnResult === ERR_NOT_ENOUGH_ENERGY) {
+            debugLog(`Not enough energy to spawn ${creepName} with role: ${role}. Required: ${body.reduce((sum, part) => sum + BODYPART_COST[part], 0)}, Available: ${room.energyAvailable}`);
+            new RoomVisual(room.name).text(`X`, spawn.pos.x, spawn.pos.y + 0.36, { color: 'red', font: 1, align: 'center' }).text(`${role} ${bodyEnergy}/${room.energyAvailable}`, spawn.pos.x, spawn.pos.y + 1, { color: 'red', font: 0.25, align: 'center' });
+
+            return false;
         }
+
+        debugLog(`Failed to spawn ${creepName} with role: ${role}. Error code: ${spawnResult}`);
     } else {
         debugLog(`No available spawns in room ${room.name} to spawn new creeps.`);
     }
+
+    return false;
 }
 
 // scan a room for energy sources and update its memory
@@ -264,59 +313,97 @@ function scanRoom(room: Room, context: RoomContext): void {
         createTask(room, 'build', road.id, 10, undefined, undefined, 110); // medium priority for repairing roads
     }
 
+    // add an ultra-low priority task to maintain the rooms controller
+    createTask(room, 'build', room.controller?.id || '', 100, undefined, undefined, 120); // ultra-low priority for maintaining the controller
+
+    // if we are at rcl 4 or higher, we can start claiming our child rooms
+    if (room.controller && room.controller.level >= 4) {
+        for (const childRoomName of room.memory.childRooms || []) {
+            const childRoom = Game.rooms[childRoomName];
+
+            if (childRoom && childRoom.controller && !childRoom.controller.my) {
+                createTask(room, 'reserve', childRoom.controller.id, 5, childRoomName); // medium priority for claiming child rooms
+            }
+        }
+    }
+
+    // find the main storage or container in the room
+    const mainStorage = context.structures.find(structure => {
+        return (
+            (structure.structureType === STRUCTURE_STORAGE || structure.structureType === STRUCTURE_CONTAINER) &&
+            (structure as StructureStorage | StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+        );
+    }) as StructureStorage | StructureContainer | undefined;
+
+    if (mainStorage && mainStorage.store.getUsedCapacity(RESOURCE_ENERGY) < mainStorage.store.getCapacity(RESOURCE_ENERGY) * 0.5) {
+        createTask(room, 'fill', mainStorage.id, 2.5); // medium priority for filling storage
+    }
+
     debugLog(`Room ${room.name} scanned. Found ${context.sources.length} energy sources.`);
 }
 
 function runCreeps(room: Room, context: RoomContext): void {
     for (const creepName in Game.creeps) {
-        const creep = Game.creeps[creepName];
+        try {
+            const creep = Game.creeps[creepName];
 
-        if (creep.memory.room !== room.name) {
-            continue;
-        }
-
-        // check creep position
-        if (creep.pos.x != creep.memory.atLocation?.x || creep.pos.y !== creep.memory.atLocation?.y) {
-            creep.memory.atLocation = { x: creep.pos.x, y: creep.pos.y };
-            creep.memory.atLocationFor = Game.time;
-        } else if (creep.memory._move) {
-            const stallTime = Game.time - (creep.memory.atLocationFor || 0);
-
-            // if the creep has been at the same location for more than 10 ticks, move it randomly
-            if (stallTime >= 5 && stallTime < 10 && creep.fatigue === 0) {
-                // delete cached path to force recalculation
-                delete creep.memory._move;
-
-                if (stallTime > 5) {
-                    creep.say(`🐢 ${stallTime - 5}`);
-                }
-            } else if (stallTime >= 10 && creep.fatigue === 0) {
-                creep.say(`💀`);
+            if (creep.memory.room !== room.name) {
+                continue;
             }
-        }
 
-        // run the appropriate role logic for the creep
-        switch (creep.memory.role) {
-            case 'harvester':
-                runHarvester(creep, context);
-                break;
-            case 'builder':
-                runBuilder(creep, context);
-                break;
-            case 'queen':
-                runQueen(creep, context);
-                break;
-            case 'scout':
-                runScout(creep, context);
-                break;
-            case 'hauler':
-                runHauler(creep, context);
-                break;
-            case 'defender':
-                runDefender(creep, context);
-                break;
-            default:
-                debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
+            // check creep position
+            if (creep.pos.x != creep.memory.atLocation?.x || creep.pos.y !== creep.memory.atLocation?.y) {
+                creep.memory.atLocation = { x: creep.pos.x, y: creep.pos.y };
+                creep.memory.atLocationFor = Game.time;
+            } else if (creep.memory._move) {
+                const stallTime = Game.time - (creep.memory.atLocationFor || 0);
+
+                // if the creep has been at the same location for more than 10 ticks, move it randomly
+                if (stallTime >= 5 && stallTime < 10 && creep.fatigue === 0) {
+                    // delete cached path to force recalculation
+                    delete creep.memory._move;
+
+                    if (stallTime > 5) {
+                        creep.say(`🐢 ${stallTime - 5}`);
+                    }
+                } else if (stallTime >= 10 && creep.fatigue === 0) {
+                    creep.say(`💀`);
+
+                    const randomDirection = Math.floor(Math.random() * 8) + 1 as any; // Random direction between 1 and 8
+                    creep.move(randomDirection);
+
+                    continue;
+                } else if (creep.fatigue > 0) {
+                    creep.say(`💨 ${creep.fatigue}`);
+                    creep.memory.atLocationFor = Game.time; // reset the stall timer if the creep is fatigued
+                }
+            }
+
+            // run the appropriate role logic for the creep
+            switch (creep.memory.role) {
+                case 'harvester':
+                    runHarvester(creep, context);
+                    break;
+                case 'builder':
+                    runBuilder(creep, context);
+                    break;
+                case 'queen':
+                    runQueen(creep, context);
+                    break;
+                case 'scout':
+                    runScout(creep, context);
+                    break;
+                case 'hauler':
+                    runHauler(creep, context);
+                    break;
+                case 'defender':
+                    runDefender(creep, context);
+                    break;
+                default:
+                    debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
+            }
+        } catch (error) {
+            debugLog(`Error running creep ${creepName}: ${error}`);
         }
     }
 }
@@ -324,6 +411,8 @@ function runCreeps(room: Room, context: RoomContext): void {
 export function resetRoom(room: Room): void {
     if (!room.memory) {
         room.memory = {
+            type: 'home',
+            parentRoom: null,
             tasks: {},
             lastScan: 0,
             energySources: [],
@@ -334,6 +423,7 @@ export function resetRoom(room: Room): void {
     }
 
     room.memory.tasks = {};
+    room.memory.spawnQueue = [];
     room.memory.lastScan = 0;
     room.memory.defenseMode = false;
 
@@ -345,6 +435,14 @@ export function resetRoom(room: Room): void {
     }
 
     debugLog(`Room ${room.name} has been reset.`);
+}
+
+export function runTowers(room: Room, context: RoomContext): void {
+    const towers = context.structures.filter(structure => structure.structureType === STRUCTURE_TOWER) as StructureTower[];
+
+    for (const tower of towers) {
+        runTower(tower, context);
+    }
 }
 
 // defense mode override for a room if hostiles are detected
@@ -446,6 +544,9 @@ function runColony(room: Room): void {
 
     // run all creeps
     runCreeps(room, context);
+
+    // run all towers
+    runTowers(room, context);
 }
 
 // run logic for all owned rooms
@@ -453,6 +554,10 @@ export function runRooms() {
     const rooms = getOwnedRooms();
 
     for (const room of rooms) {
-        runColony(room);
+        if (room.memory.type === 'home') {
+            runColony(room);
+        } else if (room.memory.type === 'remote') {
+            console.log(`Room ${room.name} is a remote room`);
+        }
     }
 }

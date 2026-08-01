@@ -1,10 +1,19 @@
 import { RoomContext } from 'utils/Context';
 import { completeTask, findTaskForCreep, getTaskById } from '../utils/TaskManager';
-import { runQueen } from './queen';
 import { goForEnergy } from './builder';
+import { runQueen } from './queen';
 
 export function depositInventory(creep: Creep, context: RoomContext): void {
     let target: StructureStorage | StructureContainer | null = null;
+
+    // if creep has been idle for more than 100 ticks, clear its task
+    if (creep.memory.atLocationFor && Game.time - creep.memory.atLocationFor > 100 && creep.memory.role !== 'harvester') {
+        debugLog(`Creep ${creep.name} has been idle for more than 100 ticks. Clearing its task.`);
+        creep.memory.taskId = undefined;
+        creep.memory.focusedOn = undefined;
+
+        creep.say(`🔄🧠`);
+    }
 
     if (creep.memory.focusedOn) {
         debugLog(`Creep ${creep.name} is focused on ${creep.memory.focusedOn}`);
@@ -89,6 +98,11 @@ export function runFill(creep: Creep, context: RoomContext): void {
         debugLog(`Creep ${creep.name} successfully filled ${target.structureType} (${target.id}).`);
 
         completeTask(creep); // Mark the task as complete after successfully filling the target
+    } else if (transferResult === ERR_FULL) {
+        delete creep.memory.focusedOn; // Clear the focusedOn memory if the target is full
+        debugLog(`Creep ${creep.name} attempted to fill ${target.structureType} (${target.id}) but it is already full.`);
+
+        completeTask(creep); // Mark the task as complete since the target is full
     } else {
         debugLog(`Creep ${creep.name} failed to fill ${target.structureType} (${target.id}) with error code: ${transferResult}`);
     }
@@ -171,7 +185,9 @@ export function runHauler(creep: Creep, context: RoomContext): void {
             currentTask = task;
         } else {
             debugLog(`No available haul or fill tasks for creep ${creep.name}`);
+
             runQueen(creep, context); // Attempt to upgrade the controller if no haul or fill tasks are available
+
             return;
         }
     }

@@ -59,6 +59,10 @@ export function drawDebugInfo() {
         room.visual.text(`Spawn Queue: ${spawnQueue.length}`, 0, textOffset, { align: 'left', font: 0.5 });
         textOffset += 0.5;
 
+        // log room energy
+        room.visual.text(`Energy: ${room.energyAvailable}/${room.energyCapacityAvailable}`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
+        textOffset += 0.25;
+
         for (const spawn of spawnQueue) {
             room.visual.text(`Spawn: ${spawn.role} - pri:${spawn.priority}`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
             textOffset += 0.25;

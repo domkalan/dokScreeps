@@ -21,10 +21,37 @@ export function scanRoom(room: Room, creep: Creep): void {
     });
 
     if (nearbyOwnedRoom && nearbyOwnedRoom !== room.name) {
+        // create a local room object for this room
+        if (!Memory.rooms[room.name] || !Memory.rooms[room.name].type) {
+            Memory.rooms[room.name] = {
+                type: 'remote',
+                lastScan: 0,
+                energySources: energySourceIds,
+                remoteEnergySources: {},
+                childRooms: [],
+                parentRoom: nearbyOwnedRoom,
+                controllerLevel: undefined,
+                tasks: {},
+                spawnQueue: [],
+                constructionPlanner: undefined,
+                defenseMode: false,
+                defenseModeActivatedAt: undefined
+            };
+        }
+
+        // inform remote room that this room is nearby and has energy sources
         debugLog(`Room ${room.name} is near owned room ${nearbyOwnedRoom}. Adding energy sources to hive memory.`);
 
         if (!Memory.rooms[nearbyOwnedRoom].remoteEnergySources) {
             Memory.rooms[nearbyOwnedRoom].remoteEnergySources = {};
+        }
+
+        if (!Memory.rooms[nearbyOwnedRoom].childRooms) {
+            Memory.rooms[nearbyOwnedRoom].childRooms = [];
+        }
+
+        if (!Memory.rooms[nearbyOwnedRoom].childRooms!.includes(room.name)) {
+            Memory.rooms[nearbyOwnedRoom].childRooms!.push(room.name);
         }
 
         for (const sourceId of energySourceIds) {
@@ -71,7 +98,7 @@ export function scanRoom(room: Room, creep: Creep): void {
 
         const roomDistanceFromHome = Game.map.getRoomLinearDistance(room.name, creep.memory.room);
 
-        if (nearbyRoomName &&!Memory.hive.rooms[nearbyRoomName] && roomDistanceFromHome <= 4) {
+        if (nearbyRoomName && !Memory.hive.rooms[nearbyRoomName] && roomDistanceFromHome <= 4) {
             Memory.hive.rooms[nearbyRoomName] = {
                 hostile: false,
                 owner: null,
