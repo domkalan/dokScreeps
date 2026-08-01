@@ -66,114 +66,47 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
 
     // if the creep is outside of its home room, run an occasional scan for hostiles in the room
     if (creep.room.name !== creep.memory.room && (creep.memory.lastAction || 0) < Game.time - 20) {
+        creep.say(`🕵🏻‍♂️`);
+
         scanRoomForHostiles(creep, creep.room);
 
         creep.memory.lastAction = Game.time; // Update the last action time
     }
 
-    // if creep is full, attempt to build a container near the source
-    if (creep.store.getFreeCapacity() === 0 || creep.memory.focusedOn === 'building') {
-        const container = source.pos.findInRange(FIND_STRUCTURES, 3, {
-            filter: (s) => s.structureType === STRUCTURE_CONTAINER
-        })[0] as StructureContainer | undefined;
+    const homeRoom = Game.rooms[creep.memory.room];
 
-        if (!container) {
-            // Attempt to build a container if one doesn't exist
-            debugLog('No container found, attempting to build one.');
-            const constructionSite = source.pos.findInRange(FIND_CONSTRUCTION_SITES, 3, {
-                filter: (s) => s.structureType === STRUCTURE_CONTAINER
-            })[0] as ConstructionSite | undefined;
-
-            if (!constructionSite) {
-                const bestSlot = GetSlots(creep.room, source, 3, 0, ['wall', 'swamp']).find(slot => slot.code === 1);
-
-                if (!bestSlot) {
-                    debugLog(`No suitable slot found for container near source ${source.id}`);
-                    return;
-                }
-
-                creep.room.createConstructionSite(bestSlot.pos.x, bestSlot.pos.y, STRUCTURE_CONTAINER);
-                debugLog(`Creep ${creep.name} is building a container at source ${source.id}`);
-
-                return;
+    // if creep is full check for nearby container or link, otherwise drop
+    if (creep.store.getFreeCapacity() === 0) {
+        const nearbyStorage = context.structures.find(structure => (structure.structureType === STRUCTURE_CONTAINER || structure.structureType === STRUCTURE_LINK) && structure.pos.isNearTo(creep.pos));
+        if (nearbyStorage) {
+            if (creep.transfer(nearbyStorage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(nearbyStorage);
             }
 
-            const buildResult = creep.build(constructionSite);
+            // if not in home room, create a hauler task to pickup the energy from the container or link
+            if (creep.room.name !== creep.memory.room) {
+                createTask(homeRoom, 'haul', nearbyStorage.id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
 
-            // If a construction site exists, move to it and build
-            if (buildResult === ERR_NOT_IN_RANGE) {
-                creep.moveTo(constructionSite);
-            } else if (buildResult === OK) {
-                creep.memory.focusedOn = 'building'; // Mark that the creep is focused on building
-            } else if (buildResult === ERR_NOT_ENOUGH_RESOURCES) {
-                delete creep.memory.focusedOn; // Clear the focusedOn memory if not enough resources
+                creep.say(`📦`);
             }
 
             return;
-        }
+        } else {
+            // Drop energy on the ground if no nearby storage is found
+            creep.drop(RESOURCE_ENERGY);
 
-        // ensure the container remains at a healthy hit level
-        if (container.hits < container.hitsMax * 0.5) {
-            const repairResult = creep.repair(container);
+            // if not in home room, create a hauler task to pickup the dropped energy
+            if (creep.room.name !== creep.memory.room) {
+                const droppedResource = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 1, { filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50 })[0];
 
-            creep.memory.focusedOn = 'building'; // Mark that the creep is focused on repairing
+                if (droppedResource) {
+                    createTask(homeRoom, 'haul', droppedResource.id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
 
-            if (repairResult === ERR_NOT_IN_RANGE) {
-                creep.moveTo(container);
-
-                return;
-            } else if (repairResult === ERR_NOT_ENOUGH_RESOURCES) {
-                delete creep.memory.focusedOn; // Clear the focusedOn memory if not enough resources
-            }
-        }
-
-        // get the room room reference for the creep's home room
-        const homeRoom = Game.rooms[creep.memory.room];
-
-        // Attempt to transfer energy to the container
-        const transferResult = creep.transfer(container, RESOURCE_ENERGY);
-
-        // If a container exists, transfer energy to it
-        if (transferResult === ERR_NOT_IN_RANGE) {
-            creep.moveTo(container);
-
-            return;
-        } else if (transferResult === ERR_FULL) {
-            creep.drop(RESOURCE_ENERGY); // Drop energy if the container is full
-
-            // add a hauler task to the home room if the creep is not in the home room
-            // or if the creep is in a room with larger storage
-            if (homeRoom && creep.memory.room !== creep.room.name || creep.room.storage) {
-                // also add a task for the filled container
-                createTask(homeRoom, 'haul', container.id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
-
-                // do a one time scan to see if we have dropped resources for the id
-                const droppedResources = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 3, {
-                    filter: (r) => r.resourceType === RESOURCE_ENERGY
-                });
-
-                if (droppedResources.length > 0) {
-                    createTask(homeRoom, 'haul', droppedResources[0].id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
+                    creep.say(`📦`);
                 }
             }
 
             return;
-        }
-
-        // get the amount of energy stored in the container
-        const containerStored = container.store.getUsedCapacity(RESOURCE_ENERGY);
-
-        // If the container is 25% full, we can consider it full enough for now to add a hauler task
-        if (containerStored >= container.store.getCapacity(RESOURCE_ENERGY) * 0.25) {
-            debugLog(`Container at source ${source.id} is at or above 25% full.`);
-
-            if (homeRoom && creep.memory.room !== creep.room.name) {
-                // Add a hauler task to the home room
-
-                createTask(homeRoom, 'haul', container.id, 1, creep.room.name, undefined, undefined, RESOURCE_ENERGY);
-
-                creep.say(`🛻 ⚡`);
-            }
         }
     }
 

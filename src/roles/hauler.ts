@@ -1,19 +1,11 @@
 import { RoomContext } from 'utils/Context';
-import { completeTask, findTaskForCreep, getTaskById } from '../utils/TaskManager';
+import { completeTask, deleteTask, findTaskForCreep, getTaskById, releaseTask } from '../utils/TaskManager';
 import { goForEnergy } from './builder';
 import { runQueen } from './queen';
+import { getStoredEnergy } from '../rooms';
 
 export function depositInventory(creep: Creep, context: RoomContext): void {
-    let target: StructureStorage | StructureContainer | null = null;
-
-    // if creep has been idle for more than 100 ticks, clear its task
-    if (creep.memory.atLocationFor && Game.time - creep.memory.atLocationFor > 100 && creep.memory.role !== 'harvester') {
-        debugLog(`Creep ${creep.name} has been idle for more than 100 ticks. Clearing its task.`);
-        creep.memory.taskId = undefined;
-        creep.memory.focusedOn = undefined;
-
-        creep.say(`🔄🧠`);
-    }
+    let target: StructureStorage | StructureContainer | StructureSpawn | StructureLink | null = null;
 
     if (creep.memory.focusedOn) {
         debugLog(`Creep ${creep.name} is focused on ${creep.memory.focusedOn}`);
@@ -21,37 +13,61 @@ export function depositInventory(creep: Creep, context: RoomContext): void {
         target = Game.getObjectById(creep.memory.focusedOn) as StructureStorage | StructureContainer;
     }
 
-    if (!target || target.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-        // Find the closest storage or container with free capacity
+    if (!target) {
         const possibleTargets = context.structures.filter(structure => {
-            return (structure.structureType === STRUCTURE_STORAGE || structure.structureType === STRUCTURE_CONTAINER);
-        }) as Array<StructureStorage | StructureContainer>;
+            return ((structure.structureType === STRUCTURE_STORAGE || structure.structureType === STRUCTURE_CONTAINER || structure.structureType === STRUCTURE_LINK) &&
+                (structure as StructureStorage | StructureContainer | StructureSpawn).store.getFreeCapacity(RESOURCE_ENERGY) > 0) ||
+                (structure.structureType === STRUCTURE_SPAWN);
+        });
 
-        const targets = possibleTargets.filter(structure => {
-            return (structure as StructureStorage | StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-        }) as Array<StructureStorage | StructureContainer>;
+        if (possibleTargets.length > 0) {
+            target = creep.pos.findClosestByRange(possibleTargets) as StructureStorage | StructureContainer | StructureSpawn | StructureLink | null;
 
-        if (targets.length === 0) {
-            debugLog(`No available storage or container to deposit energy for creep ${creep.name}`);
-
-            // if no storage hauler will go near controller and drop energy
-            if (!creep.pos.isNearTo(possibleTargets[0])) {
-                creep.moveTo(possibleTargets[0], { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
-
-                return;
+            if (target) {
+                debugLog(`Creep ${creep.name} found a new target ${target.id} to deposit energy.`);
+                creep.memory.focusedOn = target.id; // Set the focusedOn memory to the new target
             }
+        }
+    }
 
-            creep.drop(RESOURCE_ENERGY);
+    if (!target) {
+        debugLog(`Creep ${creep.name} has no valid target to deposit energy.`);
+        delete creep.memory.focusedOn; // Clear the focusedOn memory if no valid target is found
+        return;
+    }
+
+    // if spawn is selected, we drop on the ground near the spawn
+    if (target.structureType === 'spawn') {
+        if (!creep.pos.isNearTo(target)) {
+            creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
 
             return;
         }
 
-        target = targets[0];
-        creep.memory.focusedOn = target?.id; // Store the target in memory
+        // drop energy on the ground near the spawn
+        creep.drop(RESOURCE_ENERGY);
+
+        debugLog(`Creep ${creep.name} dropped energy near spawn.`);
+
+        return;
     }
 
-    if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+    const transferResult = creep.transfer(target, RESOURCE_ENERGY);
+
+    if (transferResult === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
+    } else if (transferResult === OK) {
+        debugLog(`Creep ${creep.name} successfully deposited energy into ${target.structureType} (${target.id}).`);
+
+        delete creep.memory.focusedOn; // Clear the focusedOn memory after successful transfer
+    } else if (transferResult === ERR_FULL) {
+        creep.drop(RESOURCE_ENERGY);
+
+        debugLog(`Creep ${creep.name} attempted to deposit energy into ${target.structureType} (${target.id}) but it is already full.`);
+
+        delete creep.memory.focusedOn; // Clear the focusedOn memory since the target is full
+    } else {
+        debugLog(`Creep ${creep.name} failed to deposit energy into ${target.structureType} (${target.id}) with error code: ${transferResult}`);
     }
 }
 
@@ -94,12 +110,10 @@ export function runFill(creep: Creep, context: RoomContext): void {
     if (transferResult === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
     } else if (transferResult === OK) {
-        delete creep.memory.focusedOn; // Clear the focusedOn memory once energy is transferred
         debugLog(`Creep ${creep.name} successfully filled ${target.structureType} (${target.id}).`);
 
         completeTask(creep); // Mark the task as complete after successfully filling the target
     } else if (transferResult === ERR_FULL) {
-        delete creep.memory.focusedOn; // Clear the focusedOn memory if the target is full
         debugLog(`Creep ${creep.name} attempted to fill ${target.structureType} (${target.id}) but it is already full.`);
 
         completeTask(creep); // Mark the task as complete since the target is full
@@ -129,8 +143,10 @@ export function runHaul(creep: Creep, context: RoomContext): void {
 
     // if target is invalid or empty, clear the focusedOn memory and return
     if (!target || (target instanceof Resource && target.amount === 0)) {
-        delete creep.memory.focusedOn; // Clear the focusedOn memory if the target is invalid or empty
+        deleteTask(creep); // Clear the task since the target is invalid or empty
+
         debugLog(`Creep ${creep.name} has no valid haul target.`);
+
         return;
     }
 
@@ -148,7 +164,6 @@ export function runHaul(creep: Creep, context: RoomContext): void {
         if (withdrawResult === ERR_NOT_IN_RANGE) {
             creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
         } else if (withdrawResult === OK) {
-            delete creep.memory.focusedOn; // Clear the focusedOn memory once energy is withdrawn
             debugLog(`Creep ${creep.name} successfully hauled energy from ${target instanceof Resource ? 'Resource' : target instanceof Ruin ? 'Ruin' : 'Tombstone'} (${target.id}).`);
 
             completeTask(creep); // Mark the task as complete after successfully hauling energy
@@ -161,7 +176,6 @@ export function runHaul(creep: Creep, context: RoomContext): void {
         if (pickupResult === ERR_NOT_IN_RANGE) {
             creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
         } else if (pickupResult === OK) {
-            delete creep.memory.focusedOn; // Clear the focusedOn memory once energy is picked up
             debugLog(`Creep ${creep.name} successfully hauled energy from Resource (${target.id}).`);
 
             completeTask(creep); // Mark the task as complete after successfully hauling energy
@@ -178,11 +192,24 @@ export function runHauler(creep: Creep, context: RoomContext): void {
 
     // if no task attempt to assign a new task
     if (!currentTask) {
-        const task = findTaskForCreep(creep, 'haul') || findTaskForCreep(creep, 'fill');
+        const task = findTaskForCreep(creep, 'haul');
         if (task) {
             creep.memory.taskId = task.id;
             task.assigned = creep.name;
             currentTask = task;
+        } else if (getStoredEnergy(context) > creep.store.getFreeCapacity()) {
+            const fillTask = findTaskForCreep(creep, 'fill');
+            if (fillTask) {
+                creep.memory.taskId = fillTask.id;
+                fillTask.assigned = creep.name;
+                currentTask = fillTask;
+            } else {
+                debugLog(`No available haul or fill tasks for creep ${creep.name}`);
+
+                runQueen(creep, context); // Attempt to upgrade the controller if no haul or fill tasks are available
+
+                return;
+            }
         } else {
             debugLog(`No available haul or fill tasks for creep ${creep.name}`);
 

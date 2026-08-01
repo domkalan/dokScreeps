@@ -34,11 +34,8 @@ export function runQueen(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    if (context.room.controller && context.room.controller.my && (context.room.controller.ticksToDowngrade < 10000 || context.room.controller.id === creep.memory.focusedOn)) {
-        creep.memory.focusedOn = context.room.controller.id;
-
+    if (context.room.controller && context.room.controller.my && (context.room.controller.ticksToDowngrade < 10000)) {
         upgradeRoomController(creep, context);
-
         return;
     }
 
@@ -63,8 +60,9 @@ export function runQueen(creep: Creep, context: RoomContext): void {
             return;
         }
 
-        target = extensions[0];
-        creep.memory.focusedOn = target.id; // Store the target in memory
+        // set the target to the closet extension that needs energy
+        target = creep.pos.findClosestByPath(extensions);
+        creep.memory.focusedOn = target!.id; // Store the target in memory
     }
 
     if (target && (target.structureType === STRUCTURE_EXTENSION || target.structureType === STRUCTURE_SPAWN)) {
