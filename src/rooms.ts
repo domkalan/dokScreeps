@@ -14,6 +14,63 @@ import { buildRoomContext, RoomContext } from "utils/Context";
 import { getRoleNameCounter } from "utils/Counter";
 import { createTask, monitorTasks } from "utils/TaskManager";
 
+// get stored energy in the room from storage and containers
+export function getStoredEnergy(context: RoomContext): number {
+    return context.structures.reduce((total, structure) => {
+        if (
+            structure.structureType === STRUCTURE_STORAGE ||
+            structure.structureType === STRUCTURE_CONTAINER
+        ) {
+            return total + (structure as StructureStorage | StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY);
+        }
+
+        return total;
+    }, 0);
+}
+
+function getBuilderCount(
+    room: Room,
+    context: RoomContext,
+    buildTaskCount: number
+): number {
+    const rcl = room.controller?.level || 1;
+    const storedEnergy = getStoredEnergy(context);
+
+    const harvesters = context.myCreeps.filter(
+        creep => creep.memory.role === 'harvester'
+    ).length;
+
+    const haulers = context.myCreeps.filter(
+        creep => creep.memory.role === 'hauler'
+    ).length;
+
+    // Protect the colony's energy pipeline first.
+    const economyOperational =
+        harvesters >= room.memory.energySources.length &&
+        haulers >= 1;
+
+    if (!economyOperational) {
+        return 0;
+    }
+
+    // Emergency reserve: do not replace builders.
+    if (storedEnergy < 500 && room.energyAvailable < 200) {
+        return 0;
+    }
+
+    // Weak economy: retain at most one builder.
+    if (storedEnergy < 1500) {
+        return buildTaskCount > 0 ? 1 : 0;
+    }
+
+    // Healthy economy: roughly one builder per two tasks.
+    const taskDemand = Math.ceil(buildTaskCount / 2);
+
+    return Math.min(
+        Math.max(taskDemand, buildTaskCount > 0 ? 1 : 0),
+        rcl
+    );
+}
 
 // get owned rooms by controller ownership
 export function getOwnedRooms(): Room[] {
@@ -28,7 +85,7 @@ function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], numbe
     let energyUsed: number = 200;
 
     // no clue why this isnt working, so subtract 100
-    const energyAvailable = room.energyAvailable - 100;
+    const energyAvailable = room.energyAvailable;
 
     // if defender, we need a different base body
     if (role === 'defender' || role === 'attacker') {
@@ -36,7 +93,7 @@ function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], numbe
         energyUsed = 130; // ATTACK + MOVE costs 130 energy
     } else if (role === 'claimer') {
         baseBody = [CLAIM, MOVE];
-        energyUsed = 130; // CLAIM + MOVE costs 130 energy
+        energyUsed = 630; // CLAIM + MOVE costs 630 energy
     } else if (role === 'hauler') {
         baseBody = [CARRY, MOVE];
         energyUsed = 100; // CARRY + MOVE costs 100 energy
@@ -44,28 +101,39 @@ function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], numbe
 
     // Create an array of additional body parts based on the role
     const additionalParts: BodyPartConstant[] = [];
-    while (energyUsed < energyAvailable) {
-        if (role === 'harvester') {
-            additionalParts.push(WORK);
-            energyUsed += 100; // WORK costs 100 energy
+    while (true) {
+        let nextParts: BodyPartConstant[] = [];
 
-            // limit harvesters to 4 WORK parts
-            if (additionalParts.length === 4) {
-                break;
+        if (role === 'harvester') {
+            if (additionalParts.length >= 4) {
+                break; // Limit harvesters to 5 WORK parts
             }
+
+            nextParts = [WORK];
         } else if (role === 'builder') {
-            additionalParts.push(WORK, CARRY, MOVE);
-            energyUsed += 200; // WORK + CARRY + MOVE costs 200 energy
-        } else if (role === 'queen') {
-            additionalParts.push(CARRY, MOVE);
-            energyUsed += 100; // CARRY + MOVE costs 100 energy
+            nextParts = [WORK, CARRY, MOVE];
+        } else if (role === 'queen' || role === 'hauler') {
+            nextParts = [CARRY, MOVE];
         } else if (role === 'defender' || role === 'attacker') {
-            additionalParts.push(TOUGH, MOVE, ATTACK);
-            energyUsed += 190; // TOUGH + MOVE + ATTACK costs 190 energy
-        } else if (role === 'hauler') {
-            additionalParts.push(CARRY, MOVE);
-            energyUsed += 100; // CARRY + MOVE costs 100 energy
+            nextParts = [TOUGH, MOVE, ATTACK];
+        } else {
+            break;
         }
+
+        const nextCost = nextParts.reduce(
+            (total, part) => total + BODYPART_COST[part],
+            0
+        );
+
+        if (
+            energyUsed + nextCost > energyAvailable ||
+            baseBody.length + additionalParts.length + nextParts.length > 50
+        ) {
+            break;
+        }
+
+        additionalParts.push(...nextParts);
+        energyUsed += nextCost;
     }
 
     return [baseBody.concat(additionalParts), energyUsed];
@@ -81,7 +149,7 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
 
     const idealCounts: { [role: string]: { count: number, priority: number } } = {
         harvester: { count: room.memory.energySources.length, priority: 0 },
-        builder: { count: 1, priority: 5 }, // always match the number of build tasks plus 1,
+        builder: { count: getBuilderCount(room, context, builderJobs.length), priority: 5 }, // always match the number of build tasks plus 1,
         queen: { count: 1, priority: 2.5 }, // always have one queen, low priority since we don't need it until later,
         hauler: { count: 1, priority: 5 }, // always have one hauler, medium priority
         claimer: { count: 0, priority: 10 }, // only spawn a claimer if we have a claim task, medium priority
@@ -90,13 +158,8 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         scout: { count: 0, priority: 10 } // only spawn a scout if we have a remote room to scout, medium priority
     };
 
-    if (Math.ceil(builderJobs.length / 2) > idealCounts.builder.count) {
-        idealCounts.builder.count = Math.ceil(builderJobs.length / 2) + 1;
-        idealCounts.builder.priority = 2.5; // if we have build tasks, increase the priority of builders
-
-        if (builderJobs.length > roomControlLevel) {
-            idealCounts.builder.count = roomControlLevel + 1; // limit the number of builders to the room control level
-        }
+    if (idealCounts.builder.count > 1) {
+        idealCounts.builder.priority = 5; // if we have enough builders, lower the priority
     }
 
     // remote harvester spawning
@@ -106,12 +169,12 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // 2 tasks per hauler, if we have more than 2 tasks per hauler, increase the priority of haulers
-    if (Math.ceil(haulerJobs.length / 1.5) > idealCounts.hauler.count) {
-        idealCounts.hauler.count = Math.ceil(haulerJobs.length / 1.5) + 1;
+    if (haulerJobs.length > idealCounts.hauler.count) {
+        idealCounts.hauler.count = haulerJobs.length + 1;
         idealCounts.hauler.priority = 5; // if we have enough hauler jobs, increase the priority
     }
 
-    if (claimJobs.length > 0) {
+    if (claimJobs.length > 0 && getStoredEnergy(context) > 5635) {
         idealCounts.claimer.count = claimJobs.length;
         idealCounts.claimer.priority = 7.5; // if we have claim tasks, increase the priority of claimers
     }
@@ -282,7 +345,7 @@ function scanRoom(room: Room, context: RoomContext): void {
     const structuresToRepair = context.structures.filter(structure => {
         return (
             (structure.hits < structure.hitsMax * 0.5) && // less than 50% health
-            (structure.structureType !== STRUCTURE_WALL && structure.structureType !== STRUCTURE_RAMPART) // ignore walls and ramparts for now
+            (structure.structureType !== STRUCTURE_WALL && structure.structureType !== STRUCTURE_RAMPART && structure.structureType !== STRUCTURE_ROAD) // ignore walls, ramparts, and roads for now
         );
     });
 
@@ -293,8 +356,9 @@ function scanRoom(room: Room, context: RoomContext): void {
     // review walls and ramparts that are low on health and create a build task to repair
     const wallsToRepair = context.structures.filter(structure => {
         return (
-            (structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) &&
-            (structure.hits < (room.controller?.level || 0) * 10000) // less than RCL * 10k health
+            ((structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) &&
+                (structure.hits < (room.controller?.level || 0) * 10000)) || // less than RCL * 10k health
+            (structure.structureType === STRUCTURE_ROAD && structure.hits < structure.hitsMax * 0.25) // less than 25% health
         );
     }).sort((a, b) => a.hits - b.hits); // sort by lowest health first
 
@@ -335,7 +399,7 @@ function scanRoom(room: Room, context: RoomContext): void {
         );
     }) as StructureStorage | StructureContainer | undefined;
 
-    if (mainStorage && mainStorage.store.getUsedCapacity(RESOURCE_ENERGY) < mainStorage.store.getCapacity(RESOURCE_ENERGY) * 0.5) {
+    if (mainStorage && getStoredEnergy(context) < 10000) {
         createTask(room, 'fill', mainStorage.id, 2.5); // medium priority for filling storage
     }
 
@@ -547,6 +611,10 @@ function runColony(room: Room): void {
 
     // run all towers
     runTowers(room, context);
+
+    // draw a debug on the main storage how much energy we have
+    new RoomVisual(room.name).text(`Stored Energy: ${getStoredEnergy(context)}`, 0, 49, { color: 'white', font: 0.5, align: 'left' });
+
 }
 
 // run logic for all owned rooms

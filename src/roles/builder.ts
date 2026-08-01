@@ -1,6 +1,7 @@
 import { RoomContext } from "utils/Context";
 import { getTaskById, releaseTask, findTaskForCreep, completeTask, createTask } from "utils/TaskManager";
 import { runQueen } from './queen';
+import { runHaul } from "./hauler";
 
 export function goForEnergy(creep: Creep, context: RoomContext): void {
     let target = null;
@@ -31,26 +32,18 @@ export function goForEnergy(creep: Creep, context: RoomContext): void {
         }
 
         if (!target) {
-            // if the creep is stuck not getting energy for more than 50 ticks, fallback to searching for haul tasks with energy resource
-            if (creep.memory.lastAction && Game.time - creep.memory.lastAction > 50 || !creep.memory.lastAction) {
-                const homeRoom = Game.rooms[creep.memory.room];
+            debugLog(`No available energy sources for creep ${creep.name}`);
 
-                const haulTask = Object.values(homeRoom.memory.tasks).find(task => task.type === 'haul' && task.resourceType === RESOURCE_ENERGY && !task.assigned);
+            // haulers should never get stuck waiting for energy
+            if (creep.memory.role === 'hauler') {
+                releaseTask(creep); // Release the task if the creep has no energy and is a hauler
 
-                if (haulTask) {
-                    creep.memory.focusedOn = haulTask.targetId; // Store the target in memory
-                }
-
-                // reset the lastAction timer to avoid repeated attempts
-                creep.memory.lastAction = Game.time;
-
-                creep.say(`🧐`);
+                delete creep.memory.taskId; // Clear the task ID from memory`
 
                 return;
             }
 
-            debugLog(`No available energy sources for creep ${creep.name}`);
-            creep.say(`⚡ ❌ ${Game.time - creep.memory.lastAction}`);
+            creep.say(`⚡ ❌`);
 
             return;
         }
