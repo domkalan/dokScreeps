@@ -1,125 +1,120 @@
 import { RoomContext } from 'utils/Context';
-import { findTaskForCreep, getTaskById, assignTask, completeTask } from '../utils/TaskManager';
+import { findTaskForCreep, getTaskById, releaseTask, completeTask } from '../utils/TaskManager';
 
-export function retireCreep(creep: Creep, context: RoomContext): void {
-    const spawn = context.spawns[0];
-    if (!spawn) {
-        debugLog(`No spawn found in room ${creep.room.name} for creep ${creep.name} to retire.`);
+export function returnHome(creep: Creep, context: RoomContext): void {
+    const homeRoomName = creep.memory.room;
+
+    if (creep.room.name !== homeRoomName) {
+        creep.travelTo(new RoomPosition(25, 25, homeRoomName));
+
         return;
     }
 
-    const recycleResult = spawn.recycleCreep(creep);
-
-    if (recycleResult === ERR_NOT_IN_RANGE) {
-        creep.moveTo(spawn, { visualizePathStyle: { stroke: '#ff0000' }, reusePath: 50 });
+    // Once the creep is in its home room, we can clear its taskId to allow it to take on new tasks
+    if (creep.memory.taskId) {
+        const task = getTaskById(homeRoomName, creep.memory.taskId);
+        if (task) {
+            task.assigned = undefined; // Unassign the task
+        }
+        releaseTask(creep); // Clear the task ID from the creep's memory
     }
 }
 
 export function runReserver(creep: Creep, context: RoomContext): void {
     if (!creep.memory.taskId) {
-        // Assign a new task to the claimer if it doesn't have one
         const task = findTaskForCreep(creep, 'reserve');
         if (task) {
-            creep.memory.taskId = task.id;
-
             task.assigned = creep.name;
+            creep.memory.taskId = task.id;
         } else {
-            retireCreep(creep, context); // Fallback to retiring the creep if no reserve tasks are available
+            returnHome(creep, context); // If no reserve task is found, return home
 
             return;
         }
     }
 
     const task = getTaskById(creep.memory.room, creep.memory.taskId);
-    if (!task || (task.type !== 'reserve')) {
+    if (!task) {
         debugLog(`Task with ID ${creep.memory.taskId} not found for creep ${creep.name}`);
-        delete creep.memory.taskId; // Clear the invalid task ID
+
+        releaseTask(creep); // Clear the invalid task ID
+
         return;
     }
 
-    // make sure we are in the correct room for the task
     if (creep.room.name !== task.roomId) {
-        const exitDir = Game.map.findExit(creep.room.name, task.roomId || '') as any;
-        if (exitDir !== ERR_NO_PATH) {
-            const exit = creep.pos.findClosestByRange(exitDir);
-            if (exit) {
-                creep.moveTo(exit, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
-            }
-        } else {
-            debugLog(`No path found for creep ${creep.name} to room ${task.roomId}`);
-        }
+        // Travel to the target room
+        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+
         return;
     }
 
-    // now we are in the correct room, attempt to reserve the controller
-    const controller = Game.rooms[task.roomId!]?.controller;
-    if (!controller) {
-        debugLog(`Controller not found in room ${task.roomId} for creep ${creep.name}`);
-        delete creep.memory.taskId; // Clear the invalid task ID
+    const target = Game.getObjectById(task.targetId) as StructureController | null;
+    if (!target) {
+        debugLog(`Target with ID ${task.targetId} not found for creep ${creep.name}`);
+
+        completeTask(creep); // Mark the task as complete since the target is no longer valid
+
         return;
     }
 
-    if (creep.reserveController(controller) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
+    const reserveResult = creep.reserveController(target);
+    if (reserveResult === ERR_NOT_IN_RANGE) {
+        creep.travelTo(target);
+    } else if (reserveResult === OK) {
+        debugLog(`Creep ${creep.name} successfully reserved controller in room ${task.roomId}`);
+        completeTask(creep); // Mark the task as complete
     } else {
-        debugLog(`Creep ${creep.name} has reserved the controller in room ${task.roomId}`);
-        delete creep.memory.taskId; // Clear the task ID after successful reserve
+        debugLog(`Creep ${creep.name} failed to reserve controller in room ${task.roomId} with error: ${reserveResult}`);
     }
 }
 
 export function runClaimer(creep: Creep, context: RoomContext): void {
     if (!creep.memory.taskId) {
-        // Assign a new task to the claimer if it doesn't have one
         const task = findTaskForCreep(creep, 'claim');
         if (task) {
+            task.assigned = creep.name;
             creep.memory.taskId = task.id;
-            assignTask(creep.room, task.id, creep.name);
         } else {
-            runReserver(creep, context); // Fallback to reserver role if no claim tasks are available
+            runReserver(creep, context); // If no claim task is found, fallback to reserving the controller
 
             return;
         }
     }
 
     const task = getTaskById(creep.memory.room, creep.memory.taskId);
-    if (!task || (task.type !== 'claim')) {
+    if (!task) {
         debugLog(`Task with ID ${creep.memory.taskId} not found for creep ${creep.name}`);
-        delete creep.memory.taskId; // Clear the invalid task ID
+
+        releaseTask(creep); // Clear the invalid task ID
+
         return;
     }
 
-    // make sure we are in the correct room for the task
-    if (task.roomId && creep.room.name !== task.roomId) {
-        const exitDir = Game.map.findExit(creep.room.name, task.roomId || '') as any;
-        if (exitDir !== ERR_NO_PATH) {
-            const exit = creep.pos.findClosestByRange(exitDir);
-            if (exit) {
-                creep.moveTo(exit, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
-            }
-        } else {
-            debugLog(`No path found for creep ${creep.name} to room ${task.roomId}`);
-        }
+    if (creep.room.name !== task.roomId) {
+        // Travel to the target room
+        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+
         return;
     }
 
-    // now we are in the correct room, attempt to claim the controller
-    const controller = Game.rooms[task.roomId!]?.controller;
-    if (!controller) {
+    const target = Game.rooms[task.roomId]?.controller;
+
+    if (!target) {
         debugLog(`Controller not found in room ${task.roomId} for creep ${creep.name}`);
-        delete creep.memory.taskId; // Clear the invalid task ID
+
+        completeTask(creep); // Mark the task as complete since the target is no longer valid
+
         return;
     }
 
-    const claimResult = creep.claimController(controller);
-
+    const claimResult = creep.claimController(target);
     if (claimResult === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
+        creep.travelTo(target);
     } else if (claimResult === OK) {
-        completeTask(creep); // Mark the task as complete after successful claim
-        debugLog(`Creep ${creep.name} has successfully claimed the controller in room ${task.roomId}`);
-        delete creep.memory.taskId; // Clear the task ID after successful claim
+        debugLog(`Creep ${creep.name} successfully claimed controller in room ${task.roomId}`);
+        completeTask(creep); // Mark the task as complete
     } else {
-        debugLog(`Creep ${creep.name} has claimed the controller in room ${task.roomId}`);
-        delete creep.memory.taskId; // Clear the task ID after successful claim
+        debugLog(`Creep ${creep.name} failed to claim controller in room ${task.roomId} with error: ${claimResult}`);
     }
 }

@@ -3,6 +3,9 @@ import * as hive from './hive';
 import * as cli from './cli';
 import * as debug from './debug';
 
+// require legacy libraries
+require('Traveler');
+
 // Attach the debugLog function to the global object for easy access in the console
 global.debugLog = function (message: string): void {
     if (Memory.debugMode) {
@@ -37,7 +40,7 @@ export const loop = () => {
     }
 
     // Generate a pixel for when the bucket is at 10000 and the pixel generation cooldown is 0
-    if (Game.cpu.bucket >= 10000 && Game.cpu.generatePixel() === OK) {
+    /*if (Game.cpu.bucket >= 10000 && Game.cpu.generatePixel() === OK) {
         console.log('Generated a pixel!');
-    }
+    }*/
 };

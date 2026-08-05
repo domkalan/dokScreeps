@@ -10,12 +10,21 @@ export function runDefender(creep: Creep, context: RoomContext): void {
     // find hostile creeps in the room
     const hostiles = context.hostiles;
 
+    // make sure defenders only operate in their assigned room
+    if (creep.room.name !== context.room.name) {
+        // if the creep is not in the room, move to the center of the room
+        creep.travelTo(new RoomPosition(25, 25, context.room.name));
+
+        return;
+    }
+
+    // if there are hostiles, attack the closest one
     if (hostiles.length > 0) {
         // prioritize attacking the closest hostile creep
         const target = creep.pos.findClosestByRange(hostiles);
         if (target) {
             if (creep.attack(target) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(target, { visualizePathStyle: { stroke: '#ff0000' }, reusePath: 50 });
+                creep.travelTo(target);
             }
         }
     } else {
@@ -23,7 +32,7 @@ export function runDefender(creep: Creep, context: RoomContext): void {
         const defensivePosition = creep.room.controller || context.structures.find(structure => structure.structureType === STRUCTURE_SPAWN)?.pos;
 
         if (defensivePosition) {
-            creep.moveTo(defensivePosition, { visualizePathStyle: { stroke: '#00ff00' }, reusePath: 50 });
+            creep.travelTo(defensivePosition);
         }
     }
 }

@@ -7,19 +7,18 @@ export function findTaskForCreep(
     taskType: string
 ): RoomTask | undefined {
     const tasks = Memory.rooms[creep.memory.room].tasks;
-    let best: RoomTask | undefined;
 
-    for (const taskId in tasks) {
-        const task = tasks[taskId];
-
-        if (task.type !== taskType || task.assigned || task.completed) continue;
-
-        if (!best || task.priority < best.priority) {
-            best = task;
-        }
+    if (creep.memory.taskId && tasks[creep.memory.taskId] && !tasks[creep.memory.taskId].completed && tasks[creep.memory.taskId].type === taskType) {
+        return tasks[creep.memory.taskId];
     }
 
-    return best;
+    // Find an unassigned task of the specified type
+    const tasksFilter = Object.values(tasks).filter(task => task.type === taskType && !task.assigned && !task.completed);
+
+    // Sort tasks by priority (lower number means higher priority)
+    tasksFilter.sort((a, b) => a.priority - b.priority);
+
+    return tasksFilter[0]; // Return the highest priority unassigned task
 }
 
 export function createTask(room: Room, type: string, targetId: string, priority: number, roomId?: string, action?: string, expires?: number, resourceType?: ResourceConstant): RoomTask {
@@ -32,7 +31,7 @@ export function createTask(room: Room, type: string, targetId: string, priority:
 
     if (room.memory.tasks[taskId]) {
         debugLog(`Task ${taskId} already exists in room ${room.name}, resetting expires and priority.`);
-        room.memory.tasks[taskId].expires = expires !== undefined ? expires : Game.time + 1000;
+        room.memory.tasks[taskId].expires = expires ? Game.time + expires : Game.time + 1000;
         room.memory.tasks[taskId].priority = priority;
         room.memory.tasks[taskId].resourceType = resourceType;
 
@@ -49,7 +48,7 @@ export function createTask(room: Room, type: string, targetId: string, priority:
         action,
         resourceType,
         created: Game.time,
-        expires: expires !== undefined ? expires : Game.time + 1000 // Example expiration time, adjust as needed
+        expires: expires ? expires + Game.time : Game.time + 1000 // Example expiration time, adjust as needed
     };
 
     if (!room.memory.tasks) {
@@ -61,18 +60,21 @@ export function createTask(room: Room, type: string, targetId: string, priority:
 }
 
 
-export function assignTask(room: Room, taskId: string, creepName: string): void {
-    const task = room.memory.tasks[taskId];
+export function assignTask(creep: Creep, taskId: string): void {
+    const task = getTaskById(creep.memory.room, taskId);
     if (task) {
-        task.assigned = creepName;
+        task.assigned = creep.name;
+        creep.memory.taskId = taskId;
     } else {
-        debugLog(`Task with ID ${taskId} not found in room ${room.name}`);
+        debugLog(`Task with ID ${taskId} not found for assignment to creep ${creep.name}`);
     }
 }
 
 export function completeTask(creep: Creep): void {
     try {
         const taskId = creep.memory.taskId;
+        creep.memory.taskId = undefined; // Clear the task ID from the creep's memory
+
         if (!taskId) return;
 
         const task = Memory.rooms[creep.memory.room]?.tasks?.[taskId];
@@ -80,8 +82,6 @@ export function completeTask(creep: Creep): void {
         if (task) {
             delete Memory.rooms[creep.memory.room].tasks[taskId];
         }
-
-        delete creep.memory.taskId;
     } catch (error) {
         debugLog(`Error setting a task completed for creep ${creep.name}: ${error}`);
     }
@@ -97,6 +97,8 @@ export function releaseTask(creep: Creep): void {
     } else {
         debugLog(`Task with ID ${creep.memory.taskId} not found in room ${creep.room.name}`);
     }
+
+    creep.memory.taskId = undefined; // Clear the task ID from the creep's memory
 }
 
 export function deleteTask(creep: Creep): void {

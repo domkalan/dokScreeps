@@ -1,0 +1,3 @@
+[submodule "vendor/Traveler"]
+	path = vendor/Traveler
+	url = https://github.com/bonzaiferroni/Traveler

@@ -15,7 +15,15 @@ export function drawDebugInfo() {
         const hiveScan = (Game.time - Memory.hive.lastScan) - 100;
 
         // draw the next time the hive will scan
-        room.visual.text(`Hive (next hive scan t${hiveScan})`, 0, textOffset, { align: 'left', font: 0.5 });
+        room.visual.text(`Hive (next scan t${hiveScan})`, 0, textOffset, { align: 'left', font: 0.5 });
+        textOffset += 0.5;
+
+        // display all active rooms and their last scan time
+        for (const activeRoom in Game.rooms) {
+            const scanAge = (Game.time - Game.rooms[activeRoom].memory.lastScan) - 100;
+            room.visual.text(`${activeRoom} (next scan t${scanAge})`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
+            textOffset += 0.25;
+        }
         textOffset += 0.5;
 
         const roomScan = (Game.time - room.memory.lastScan) - 100;

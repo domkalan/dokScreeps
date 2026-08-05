@@ -16,15 +16,32 @@ declare global {
     // Definition for the require function
     function require(id: string): any;
 
+    interface Creep {
+        travelTo(target: RoomPosition | { pos: RoomPosition } | { x: number; y: number; roomName: string }, options?: TravelToOptions): TravelToReturnData;
+    }
+
     interface CreepMemory {
         role: string;
         room: string;
+
+        // track the task that this creep is currently assigned to, if any
         taskId?: string;
-        focusedOn?: string; // the id of the energy source the creep is currently going for, if any
-        lastAction?: number; // the game time when the creep last performed a custom action   
-        atLocation?: { x: number; y: number };
-        atLocationFor?: number; // the game time when the creep arrived at the location
-        inRoom?: string; // the name of the room the creep is currently in, if any
+
+        // allow the creep to focus on a specific item
+        focusedOn?: string;
+
+        // allow the creep to note what room it is currently in, if any
+        inRoom?: string;
+
+        // last known health of the creep
+        lastHealth?: number;
+        // allow the creep to know if its in danger
+        lastDamageTime?: number;
+        // allow the creep to know when it was last in danger
+        inDanger?: boolean;
+
+        // allow the creep to store arbitrary key-value pairs
+        kv?: { [key: string]: any };
 
         _move?: any;
     }

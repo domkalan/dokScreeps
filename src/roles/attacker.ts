@@ -1,9 +1,9 @@
 import { RoomContext } from "utils/Context";
 import { completeTask, findTaskForCreep, getTaskById } from '../utils/TaskManager';
 import { runDefender } from './defender';
-import { goToRoom } from './harvester';
 
 export function runAttacker(creep: Creep, context: RoomContext): void {
+    // does this creep have a task? if not, find one
     if (!creep.memory.taskId) {
         const attackTask = findTaskForCreep(creep, 'attack');
 
@@ -16,22 +16,24 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
         creep.memory.taskId = attackTask.id;
     }
 
+    // validate the task still exists and is valid
     const attackTask = getTaskById(creep.memory.room, creep.memory.taskId);
-
     if (!attackTask) {
-        creep.memory.focusedOn = undefined; // Clear the focusedOn memory if no attack task is found
+
+        creep.memory.taskId = undefined; // Clear the invalid task ID
 
         return;
     }
 
-    if (attackTask.roomId !== creep.room.name) {
-        goToRoom(creep, attackTask.roomId); // Move to the room of the attack task if not already there
+    // if the creep is outside of the task room, go there
+    if (creep.room.name !== attackTask.roomId) {
+        creep.travelTo(new RoomPosition(25, 25, attackTask.roomId));
 
         return;
     }
 
+    // validate the target is still valid
     const target = Game.getObjectById(attackTask.targetId) as Creep | Structure;
-
     if (!target) {
         debugLog(`Creep ${creep.name} has no valid target to attack.`);
 
@@ -40,7 +42,8 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
         return;
     }
 
+    // attempt to attack the target, if not in range, move towards it
     if (creep.attack(target) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#ff0000' }, reusePath: 50 });
+        creep.travelTo(target);
     }
 }

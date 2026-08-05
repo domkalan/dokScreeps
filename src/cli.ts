@@ -1,3 +1,4 @@
+import { createTask } from 'utils/TaskManager';
 import { resetRoom } from './rooms';
 
 export function addCliFunctions() {
@@ -19,9 +20,9 @@ export function addCliFunctions() {
                 Memory.rooms[roomName].remoteEnergySources = {};
             }
 
-            debugLog('All scout data has been reset.');
+            return `All scout data for hive has been reset.`;
         } else {
-            debugLog('No scout data found to reset.');
+            return `Hive not found.`;
         }
     }
 
@@ -29,23 +30,28 @@ export function addCliFunctions() {
         if (Memory.hive && Memory.hive.rooms[roomName]) {
             Memory.hive.rooms[roomName].lastScan = 0;
 
-            debugLog(`Scout data for room ${roomName} has been reset.`);
+            return `Scout timer for room ${roomName} has been reset.`;
         } else {
-            debugLog(`No scout data found for room ${roomName} to reset.`);
+            return `No room found with name ${roomName}.`;
         }
     }
 
     global.resetRoom = function (roomName: string) {
         const room = Game.rooms[roomName];
-        if (room) {
-            resetRoom(room);
-        } else {
-            debugLog(`No room found with name ${roomName}.`);
+
+        if (!room) {
+            return `No room found with name ${roomName}.`;
         }
+
+        resetRoom(room);
+
+        return `Room ${roomName} has been reset.`;
     }
 
     global.setDebug = function (value: boolean) {
         Memory.debugMode = value;
+
+        return `Debug mode has been set to ${value}.`;
     }
 
     global.snapshotStructures = function (roomName: string) {
@@ -106,5 +112,127 @@ export function addCliFunctions() {
         };
 
         return `Claim task for room ${roomName} has been added to home room ${existingRoom}.`;
+    }
+
+    global.attackStructures = function (roomName: string, structureTypes: BuildableStructureConstant[]) {
+        const room = Game.rooms[roomName];
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        const parentRoomName = room.memory.parentRoom;
+        if (!parentRoomName) {
+            return `No parent room found for room ${roomName}.`;
+        }
+
+        const parentRoom = Game.rooms[parentRoomName];
+        if (!parentRoom) {
+            return `No parent room found with name ${parentRoomName}.`;
+        }
+
+        let totalStructures = 0;
+
+        for (const structureType of structureTypes) {
+            const structures = room.find(FIND_STRUCTURES, {
+                filter: (structure) => structure.structureType === structureType
+            });
+
+            for (const structure of structures) {
+                totalStructures++;
+
+                createTask(parentRoom, 'attack', structure.id, 5, room.name); // high priority for attacking structures
+            }
+        }
+
+        return `Attack tasks for ${totalStructures} structures in room ${roomName} have been added to home room ${parentRoomName}.`;
+    }
+
+    global.attackStructureById = function (roomName: string, structureId: string) {
+        const room = Game.rooms[roomName];
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        const parentRoomName = room.memory.parentRoom;
+        if (!parentRoomName) {
+            return `No parent room found for room ${roomName}.`;
+        }
+
+        const parentRoom = Game.rooms[parentRoomName];
+        if (!parentRoom) {
+            return `No parent room found with name ${parentRoomName}.`;
+        }
+
+        createTask(parentRoom, 'attack', structureId, 5, room.name); // high priority for attacking structures
+
+        return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${parentRoomName}.`;
+    }
+
+    global.claimRoom = function (roomName: string, existingRoom: string) {
+        // make sure the room has a memory object
+        if (!Memory.rooms[roomName]) {
+            Memory.rooms[roomName] = {
+                type: 'remote',
+                parentRoom: existingRoom,
+                remoteEnergySources: {},
+                lastScan: 0,
+                energySources: [],
+                tasks: {},
+                spawnQueue: [],
+                defenseMode: false
+            };
+        }
+
+        const existingRoomMemory = Memory.rooms[existingRoom];
+        if (!existingRoomMemory || existingRoomMemory.type !== 'home') {
+            return `No existing home room found with name ${existingRoom}.`;
+        }
+
+        existingRoomMemory.tasks[`claim-${roomName}`] = {
+            id: `claim-${roomName}`,
+            type: 'claim',
+            completed: false,
+            priority: 1,
+            targetId: roomName,
+            roomId: roomName,
+            created: Game.time,
+            expires: Game.time + 1000
+        };
+
+        return `Claim task for room ${roomName} has been added to home room ${existingRoom}.`;
+    }
+
+    global.addRemoteRoom = function (roomName: string, existingRoom: string) {
+        // make sure the room has a memory object
+        if (!Memory.rooms[roomName] || Memory.rooms[roomName].type !== 'remote') {
+            Memory.rooms[roomName] = {
+                type: 'remote',
+                parentRoom: existingRoom,
+                remoteEnergySources: {},
+                lastScan: 0,
+                energySources: [],
+                tasks: {},
+                spawnQueue: [],
+                defenseMode: false
+            };
+        }
+
+        const existingRoomMemory = Memory.rooms[existingRoom];
+        if (!existingRoomMemory || existingRoomMemory.type !== 'home') {
+            return `No existing home room found with name ${existingRoom}.`;
+        }
+
+        return `Add remote task for room ${roomName} has been added to home room ${existingRoom}.`;
+    }
+
+    global.resetCreepTask = function (creepName: string) {
+        const creep = Game.creeps[creepName];
+        if (!creep) {
+            return `No creep found with name ${creepName}.`;
+        }
+
+        creep.memory.taskId = undefined;
+
+        return `Tasks for creep ${creepName} have been reset.`;
     }
 }

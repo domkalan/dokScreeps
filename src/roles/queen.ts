@@ -1,22 +1,15 @@
 import { RoomContext } from 'utils/Context';
 import { goForEnergy } from './builder';
-import { goToRoom } from './harvester';
 
 // if no other work exists, haulers will go to the room controller and upgrade it
 export function upgradeRoomController(creep: Creep, context: RoomContext): void {
-    // if the queen is not in the room it is assigned to, it will go to that room
-    if (creep.room.name !== creep.memory.room) {
-        goToRoom(creep, creep.memory.room);
-        return;
-    }
-
     if (creep.store[RESOURCE_ENERGY] === 0) {
         goForEnergy(creep, context);
         return;
     }
 
     if (creep.upgradeController(context.room.controller!) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(context.room.controller!, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
+        creep.travelTo(context.room.controller!);
     }
 }
 
@@ -28,13 +21,10 @@ export function runQueen(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    // if the queen is not in the room it is assigned to, it will go to that room
-    if (creep.room.name !== creep.memory.room) {
-        goToRoom(creep, creep.memory.room);
-        return;
-    }
-
-    if (context.room.controller && context.room.controller.my && (context.room.controller.ticksToDowngrade < 10000)) {
+    if (context.room.controller && context.room.controller.my && (
+        (context.room.controller.level <= 2 && context.room.controller.ticksToDowngrade < 5000) ||
+        (context.room.controller.level > 2 && context.room.controller.ticksToDowngrade < 10000)
+    )) {
         upgradeRoomController(creep, context);
         return;
     }
@@ -54,9 +44,13 @@ export function runQueen(creep: Creep, context: RoomContext): void {
         }) as Array<StructureExtension | StructureSpawn>;
 
         // if there are no extensions that need energy, the queen will go to the controller and upgrade it
-        if (extensions.length === 0) {
+        if (extensions.length === 0 && creep.body.some(part => part.type === WORK)) {
             upgradeRoomController(creep, context);
 
+            return;
+        } else if (extensions.length === 0) {
+            // if there are no extensions that need energy and the queen has no WORK parts, it will idle
+            creep.say('🛑 Idle');
             return;
         }
 
@@ -67,7 +61,7 @@ export function runQueen(creep: Creep, context: RoomContext): void {
 
     if (target && (target.structureType === STRUCTURE_EXTENSION || target.structureType === STRUCTURE_SPAWN)) {
         if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 50 });
+            creep.travelTo(target);
         }
     } else {
         delete creep.memory.focusedOn; // Clear the invalid target from memory

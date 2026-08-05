@@ -1,5 +1,3 @@
-import { getOwnedRooms } from './rooms';
-
 import { getRoleNameCounter } from './utils/Counter';
 
 export function scanRoom(room: Room, creep: Creep): void {
@@ -14,7 +12,7 @@ export function scanRoom(room: Room, creep: Creep): void {
     // if the room if not far away from an existing room, lets add it as additional energy
     // source to be mined by a remote miner
     const nearbyRooms = Game.map.describeExits(room.name);
-    const ownedRooms = getOwnedRooms();
+    const ownedRooms = Object.values(Game.rooms).filter(room => room.controller?.my);
 
     const nearbyOwnedRoom = Object.values(nearbyRooms || {}).find(nearbyRoomName => {
         return ownedRooms.some(ownedRoom => ownedRoom.name === nearbyRoomName);
@@ -154,7 +152,7 @@ export function runHive() {
 
         if (roomsNeedingScan.length > 0 && Object.keys(Memory.hive.scouts).length === 0) {
             // No scouts available, create a new one by finding a free spawn in all of our owned rooms
-            const ownedRooms = getOwnedRooms();
+            const ownedRooms = Object.values(Game.rooms).filter(room => room.controller?.my);
             let spawnFound = false;
 
             for (const room of ownedRooms) {
