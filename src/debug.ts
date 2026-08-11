@@ -3,14 +3,32 @@
  */
 
 export function drawDebugInfo() {
+    if (!Memory.debugMode) {
+        return;
+    }
+
+    // show hive world overlay
+    const scoutedRooms = Object.entries(Memory.hive.rooms);
+
+    for (const [roomName, roomData] of scoutedRooms) {
+        const scanAge = Game.time - roomData.lastScan;
+
+        if (roomData.lastScan > 0 && scanAge < 10000 && !roomData.hostile) {
+            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#00ff00', stroke: '#00ff00', opacity: 0.5, lineStyle: 'dashed' });
+        } else if (roomData.lastScan > 0 && scanAge < 10000 && roomData.hostile) {
+            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ffff00', stroke: '#ffff00', opacity: 0.5, lineStyle: 'dashed' });
+        } else if (roomData.lastScan > 0 && scanAge > 10000) {
+            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ff7300', stroke: '#ff7300', opacity: 0.5, lineStyle: 'dashed' });
+        } else {
+            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ff0000', stroke: '#ff0000', opacity: 0.5, lineStyle: 'dashed' });
+        }
+    }
+
+    // show per room debug overlay
     for (const roomName in Game.rooms) {
         let textOffset = 0;
 
         const room = Game.rooms[roomName];
-
-        // display the cpu bucket and cpu usage
-        room.visual.text(`CPU: ${Game.cpu.getUsed().toFixed(2)}/${Game.cpu.limit}/${Game.cpu.bucket}`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
 
         const hiveScan = (Game.time - Memory.hive.lastScan) - 100;
 
@@ -36,12 +54,14 @@ export function drawDebugInfo() {
             const defenseModeActivatedAt = room.memory.defenseModeActivatedAt || 0;
             const defenseModeDuration = Game.time - defenseModeActivatedAt;
 
-            room.visual.text(`Defense Mode - (t+${defenseModeDuration})`, 25, 5.5, { align: 'center', font: 2.5, color: '#ff0000' });
+            room.visual.text(`Defense Mode - (t+${defenseModeDuration})`, 0, textOffset, { align: 'center', font: 0.5, color: '#ff0000' });
+            textOffset += 0.5;
         }
 
         // draw the number of creeps in the room
-        const creepsInRoom = Object.values(Game.creeps).filter(creep => creep.memory.room === room.name);
-        room.visual.text(`Creeps: ${creepsInRoom.length}`, 0, textOffset, { align: 'left', font: 0.5 });
+        const creepsTotal = Object.values(Game.creeps)
+        const creepsInRoom = creepsTotal.filter(creep => creep.memory.room === room.name);
+        room.visual.text(`Creeps: ${creepsInRoom.length}/${creepsTotal.length}`, 0, textOffset, { align: 'left', font: 0.5 });
         textOffset += 0.5;
 
         for (const creep of creepsInRoom) {
@@ -76,23 +96,9 @@ export function drawDebugInfo() {
             textOffset += 0.25;
         }
         textOffset += 0.5;
-    }
 
-    const scoutedRooms = Object.entries(Memory.hive.rooms);
-
-    debugLog(`Scouted Rooms: ${scoutedRooms.length}`);
-
-    for (const [roomName, roomData] of scoutedRooms) {
-        const scanAge = Game.time - roomData.lastScan;
-
-        if (roomData.lastScan > 0 && scanAge < 10000 && !roomData.hostile) {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#00ff00', stroke: '#00ff00', opacity: 0.5, lineStyle: 'dashed' });
-        } else if (roomData.lastScan > 0 && scanAge < 10000 && roomData.hostile) {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ffff00', stroke: '#ffff00', opacity: 0.5, lineStyle: 'dashed' });
-        } else if (roomData.lastScan > 0 && scanAge > 10000) {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ff7300', stroke: '#ff7300', opacity: 0.5, lineStyle: 'dashed' });
-        } else {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ff0000', stroke: '#ff0000', opacity: 0.5, lineStyle: 'dashed' });
-        }
+        // display the cpu bucket and cpu usage
+        room.visual.text(`CPU: ${Game.cpu.getUsed().toFixed(2)}/${Game.cpu.limit}/${Game.cpu.bucket}`, 0, textOffset, { align: 'left', font: 0.5 });
+        textOffset += 0.5;
     }
 }

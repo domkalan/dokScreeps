@@ -55,7 +55,7 @@ export function runQueen(creep: Creep, context: RoomContext): void {
         }
 
         // set the target to the closet extension that needs energy
-        target = creep.pos.findClosestByPath(extensions);
+        target = creep.pos.findClosestByRange(extensions);
         creep.memory.focusedOn = target!.id; // Store the target in memory
     }
 

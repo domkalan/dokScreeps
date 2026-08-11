@@ -1,20 +1,18 @@
 import { RoomContext } from "./utils/Context";
 import { createTask } from "./utils/TaskManager";
 
-export function runTower(tower: StructureTower, context: RoomContext) {
-    const visual = new RoomVisual(tower.room.name).text(`${(tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY) * 100).toFixed(1)}%`, tower.pos.x, tower.pos.y + 1, { color: 'white', font: 0.5 });
-
+export function runTower(tower: StructureTower, context: RoomContext, room: Room) {
     // if the tower is empty, create a fill task for it
     if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-        createTask(tower.room, 'fill', tower.id, 2.5);
+        createTask(room, 'fill', tower.id, 2.5, tower.room.name);
 
         return;
     } else if (tower.store.getUsedCapacity(RESOURCE_ENERGY) <= tower.store.getCapacity(RESOURCE_ENERGY) * 0.5) {
         // if the tower is not full, create a fill task for it
-        createTask(tower.room, 'fill', tower.id, 5);
+        createTask(room, 'fill', tower.id, 5, tower.room.name);
     } else {
         // create an ultra low priority fill task for the tower to ensure it is filled if no other tasks exist
-        createTask(tower.room, 'fill', tower.id, 100);
+        //createTask(room, 'fill', tower.id, 100, tower.room.name);
     }
 
     // first check for hostiles in the room, and attack the closest one if any are found
@@ -71,8 +69,6 @@ export function runTower(tower: StructureTower, context: RoomContext) {
 
         if (damagedStructures.length > 0) {
             tower.repair(damagedStructures[0]);
-
-            visual.text(`🛠️`, tower.pos.x, tower.pos.y + 0.25, { color: 'yellow', font: 0.5 });
 
             return;
         }

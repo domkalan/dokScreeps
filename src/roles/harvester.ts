@@ -1,6 +1,5 @@
 import { getTaskById, findTaskForCreep, releaseTask } from "utils/TaskManager";
-import { RoomContext } from "utils/Context";
-import { globalContext } from "rooms";
+import { RoomContext, GLOBAL_CONTEXT } from "utils/Context";
 
 export function runHarvester(creep: Creep, context: RoomContext): void {
     if (!creep.memory.taskId) {
@@ -44,7 +43,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
     // if creep is full check for nearby container or link, otherwise drop
     if (creep.store.getFreeCapacity() === 0) {
         const nearbyStorage = [
-            ...globalContext[creep.room.name] ? globalContext[creep.room.name].structures : []
+            ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].structures : []
         ].find(structure => (structure.structureType === STRUCTURE_CONTAINER || structure.structureType === STRUCTURE_LINK) && structure.pos.inRangeTo(creep.pos, 4)) as StructureContainer | StructureLink | undefined;
         if (nearbyStorage) {
             const transferResult = creep.transfer(nearbyStorage, RESOURCE_ENERGY);

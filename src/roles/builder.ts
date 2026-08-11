@@ -1,12 +1,11 @@
-import { RoomContext } from "utils/Context";
+import { RoomContext, GLOBAL_CONTEXT } from "utils/Context";
 import { getTaskById, releaseTask, findTaskForCreep, completeTask } from "utils/TaskManager";
 import { runQueen } from './queen';
-import { globalContext } from "rooms";
 
 export function bootstrapEnergy(creep: Creep): void {
     const sources = [
-        ...globalContext[creep.room.name] ? globalContext[creep.room.name].sources : [],
-        ...globalContext[creep.room.name] ? globalContext[creep.room.name].resources : []
+        ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].sources : [],
+        ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].resources : []
     ] as Array<Source | Resource | Ruin | Tombstone>;
 
     if (sources.length === 0) {
@@ -17,7 +16,7 @@ export function bootstrapEnergy(creep: Creep): void {
         return;
     }
 
-    const closestSource = creep.pos.findClosestByPath(sources);
+    const closestSource = creep.pos.findClosestByRange(sources);
 
     if (!closestSource) {
         debugLog(`No reachable energy sources for creep ${creep.name} in room ${creep.room.name}`);
@@ -67,8 +66,8 @@ export function goForEnergy(creep: Creep, context: RoomContext): void {
         const energySources = [
             context.structures,
             context.resources,
-            ...globalContext[creep.room.name] ? globalContext[creep.room.name].structures : [],
-            ...globalContext[creep.room.name] ? globalContext[creep.room.name].resources : []
+            ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].structures : [],
+            ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].resources : []
         ].filter(resource => {
             return (
                 // Check if the resource is a structure with energy
@@ -88,7 +87,7 @@ export function goForEnergy(creep: Creep, context: RoomContext): void {
         });
 
         if (energySources.length > 0) {
-            target = creep.pos.findClosestByPath(energySources as Array<StructureStorage | StructureContainer | Ruin | Tombstone | Resource>);
+            target = creep.pos.findClosestByRange(energySources as Array<StructureStorage | StructureContainer | Ruin | Tombstone | Resource>);
         }
 
         if (!target) {

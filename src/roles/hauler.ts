@@ -100,7 +100,7 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
         });
 
         if (targets.length > 0) {
-            const target = creep.pos.findClosestByPath(targets);
+            const target = creep.pos.findClosestByRange(targets);
 
             if (target) {
                 if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {

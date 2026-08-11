@@ -103,6 +103,7 @@ declare global {
         hive: HiveMemory;
 
         debugMode: boolean;
+        cacheMode: boolean;
     }
 }
 

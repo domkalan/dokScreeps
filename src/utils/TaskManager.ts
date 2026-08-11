@@ -6,19 +6,43 @@ export function findTaskForCreep(
     creep: Creep,
     taskType: string
 ): RoomTask | undefined {
-    const tasks = Memory.rooms[creep.memory.room].tasks;
+    const tasks = Memory.rooms[creep.memory.room]?.tasks;
 
-    if (creep.memory.taskId && tasks[creep.memory.taskId] && !tasks[creep.memory.taskId].completed && tasks[creep.memory.taskId].type === taskType) {
-        return tasks[creep.memory.taskId];
+    if (!tasks) {
+        return undefined;
     }
 
-    // Find an unassigned task of the specified type
-    const tasksFilter = Object.values(tasks).filter(task => task.type === taskType && !task.assigned && !task.completed);
+    if (creep.memory.taskId) {
+        const current = tasks[creep.memory.taskId];
 
-    // Sort tasks by priority (lower number means higher priority)
-    tasksFilter.sort((a, b) => a.priority - b.priority);
+        if (
+            current &&
+            !current.completed &&
+            current.type === taskType
+        ) {
+            return current;
+        }
+    }
 
-    return tasksFilter[0]; // Return the highest priority unassigned task
+    let bestTask: RoomTask | undefined;
+
+    for (const taskId in tasks) {
+        const task = tasks[taskId];
+
+        if (
+            task.type !== taskType ||
+            task.assigned ||
+            task.completed
+        ) {
+            continue;
+        }
+
+        if (!bestTask || task.priority < bestTask.priority) {
+            bestTask = task;
+        }
+    }
+
+    return bestTask;
 }
 
 export function createTask(room: Room, type: string, targetId: string, priority: number, roomId?: string, action?: string, expires?: number, resourceType?: ResourceConstant): RoomTask {
@@ -116,22 +140,61 @@ export function deleteTask(creep: Creep): void {
 }
 
 export function monitorTasks(room: Room): void {
+    const tasks = room.memory.tasks;
     const now = Game.time;
-    for (const taskId in room.memory.tasks) {
-        const task = room.memory.tasks[taskId];
+
+    for (const taskId in tasks) {
+        const task = tasks[taskId];
+
         if (task.expires <= now) {
-            debugLog(`Task ${taskId} has expired and will be deleted.`);
-            delete room.memory.tasks[taskId];
+            delete tasks[taskId];
+            continue;
         }
-    }
 
-    // Remove invalid tasks from the room's memory and check if assigned creep still exists
-    for (const taskId in room.memory.tasks) {
-        const task = room.memory.tasks[taskId];
-
-        if (task.assigned && Game.creeps[task.assigned] === undefined) {
-            debugLog(`Task ${taskId} was assigned to a non-existent creep ${task.assigned}. Unassigning.`);
+        if (task.assigned && !Game.creeps[task.assigned]) {
             delete task.assigned;
         }
     }
+}
+
+export function getTaskCounts(room: Room): { [role: string]: number } {
+    const roleCounts: { [role: string]: number } = {};
+
+    for (const taskId in room.memory.tasks) {
+        const task = room.memory.tasks[taskId];
+
+        if (task.completed) {
+            continue;
+        }
+
+        switch (task.type) {
+            case 'haul':
+                roleCounts.hauler = (roleCounts.hauler || 0) + 1;
+                break;
+
+            case 'fill':
+                roleCounts.filler = (roleCounts.filler || 0) + 1;
+                break;
+
+            case 'build':
+                roleCounts.builder = (roleCounts.builder || 0) + 1;
+                break;
+
+            case 'attack':
+                roleCounts.attacker = (roleCounts.attacker || 0) + 1;
+                break;
+
+            case 'claim':
+            case 'reserve':
+                roleCounts.claimer = (roleCounts.claimer || 0) + 1;
+
+                if (task.priority === 1) {
+                    roleCounts.claimer = (roleCounts.claimer || 0) + 1; // if we have claim tasks with priority 1, spawn one claimer
+                }
+
+                break;
+        }
+    }
+
+    return roleCounts;
 }

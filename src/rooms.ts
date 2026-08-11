@@ -1,23 +1,12 @@
-import { runHarvester } from "roles/harvester";
-import { runBuilder } from "roles/builder";
-import { runQueen } from "roles/queen";
-import { runScout } from "roles/scout";
-import { runHauler } from "roles/hauler";
-import { runDefender } from "roles/defender";
-
 import { runTower } from "tower";
+import { CREEP_COUNTS } from "creeps";
 
 import { ConstructionPlanner } from "constructionPlanner";
 import { createBasicRoomPlan } from "plans/basic";
 
-import { buildRoomContext, RoomContext } from "utils/Context";
+import { buildRoomContext, RoomContext, GLOBAL_CONTEXT } from "utils/Context";
 import { getRoleNameCounter } from "utils/Counter";
-import { createTask, monitorTasks } from "utils/TaskManager";
-import { runAttacker } from "roles/attacker";
-import { runClaimer } from "roles/claimer";
-
-export const globalContext: { [roomName: string]: RoomContext } = {};
-
+import { createTask, getTaskCounts, monitorTasks } from "utils/TaskManager";
 
 // get stored energy in the room from storage and containers
 export function getStoredEnergy(context: RoomContext): number {
@@ -49,8 +38,8 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
         baseBody = [CLAIM, MOVE];
         energyUsed = 630; // CLAIM + MOVE costs 630 energy
     } else if (role === 'hauler' || role === 'filler') {
-        baseBody = [CARRY, MOVE];
-        energyUsed = 100; // CARRY + MOVE costs 100 energy
+        baseBody = [WORK, CARRY, MOVE];
+        energyUsed = 200; // WORK + CARRY + MOVE costs 200 energy
     }
 
     // Create an array of additional body parts based on the role
@@ -96,11 +85,7 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
 // get the ideal number of creeps that should exist
 function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [role: string]: number }): { [role: string]: { count: number, priority: number } } {
     const roomControlLevel = context.room.controller?.level || 0;
-    const haulerJobs = Object.values(room.memory.tasks).filter(task => task.type === 'haul' && !task.completed);
-    const fillerJobs = Object.values(room.memory.tasks).filter(task => task.type === 'fill' && !task.completed);
-    const builderJobs = Object.values(room.memory.tasks).filter(task => task.type === 'build' && !task.completed);
-    const attackJobs = Object.values(room.memory.tasks).filter(task => task.type === 'attack' && !task.completed);
-    const claimJobs = Object.values(room.memory.tasks).filter(task => (task.type === 'claim' || task.type === 'reserve') && !task.completed);
+    const taskCounts = getTaskCounts(room);
 
     const idealCounts: { [role: string]: { count: number, priority: number } } = {
         harvester: { count: room.memory.energySources.length, priority: 0 },
@@ -114,8 +99,8 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         filler: { count: 0, priority: 15 } // filler creeps are only spawned if we have a fill task and sufficient energy, medium priority
     };
 
-    if (builderJobs.length > 0) {
-        idealCounts.builder.count = Math.min(Math.max(Math.ceil(builderJobs.length / 2), 1), roomControlLevel); // at least one builder if we have build jobs
+    if (taskCounts.builder > 0) {
+        idealCounts.builder.count = Math.min(Math.max(Math.ceil(taskCounts.builder / 2), 1), roomControlLevel); // at least one builder if we have build jobs
         idealCounts.builder.priority = 5; // if we have enough builders, lower the priority
     }
 
@@ -126,31 +111,26 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // 2 tasks per hauler, if we have more than 2 tasks per hauler, increase the priority of haulers
-    if (Math.min(Math.floor(haulerJobs.length / 2), roomControlLevel) > idealCounts.hauler.count) {
+    if (Math.min(Math.floor(taskCounts.hauler / 2), roomControlLevel) > idealCounts.hauler.count) {
         // increase the number of haulers to match the number of tasks, but not more than the room control level
-        idealCounts.hauler.count = Math.min(Math.floor(haulerJobs.length / 2), roomControlLevel);
+        idealCounts.hauler.count = Math.min(Math.floor(taskCounts.hauler / 2), roomControlLevel);
         // increase the priority of haulers to 5 if we have more than 2 tasks per hauler
         idealCounts.hauler.priority = 5;
     }
 
     // if we have any filler jobs, spawn a filler creep if we have enough energy
-    if (Math.max(fillerJobs.length, 1) > idealCounts.filler.count && getStoredEnergy(context) > 10000) {
-        idealCounts.filler.count = Math.max(fillerJobs.length, 1);
+    if (Math.max(taskCounts.filler, 1) > idealCounts.filler.count && getStoredEnergy(context) > 10000) {
+        idealCounts.filler.count = Math.max(taskCounts.filler, 1);
     }
 
-    if (claimJobs.length > 0 && getStoredEnergy(context) > 10000) {
-        idealCounts.claimer.count = claimJobs.length;
+    if (taskCounts.claimer > 0 && getStoredEnergy(context) > 10000) {
+        idealCounts.claimer.count = taskCounts.claimer;
         idealCounts.claimer.priority = 7.5; // if we have claim tasks, increase the priority of claimers
     }
 
-    if (claimJobs.length > 0 && claimJobs.some(task => task.priority === 1)) {
-        idealCounts.claimer.count = 1; // if we have claim tasks with priority 1, spawn one claimer
-        idealCounts.claimer.priority = 5; // if we have claim tasks with priority 1, increase the priority of claimers
-    }
-
     // if we have attack tasks, spawn attackers
-    if (attackJobs.length > 0) {
-        idealCounts.attacker.count = attackJobs.length;
+    if (taskCounts.attacker > 0) {
+        idealCounts.attacker.count = taskCounts.attacker;
         idealCounts.attacker.priority = 1; // if we have attack tasks, increase the priority of attackers
 
         if (idealCounts.attacker.count > roomControlLevel) {
@@ -163,31 +143,15 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
 
 // monitor creeps count and log if any role is underrepresented
 function monitorCreepRoles(room: Room, context: RoomContext): void {
-    const roleCounts: { [role: string]: number } = {};
-
-    for (const name in Game.creeps) {
-        const creep = Game.creeps[name];
-
-        if (creep.memory.room !== room.name) {
-            continue;
-        }
-
-        if (creep.ticksToLive && creep.ticksToLive < 50) {
-            debugLog(`Creep ${creep.name} is about to die.`);
-
-            continue; // skip counting this creep if it's about to die
-        }
-
-        if (creep.memory.role) {
-            roleCounts[creep.memory.role] = (roleCounts[creep.memory.role] || 0) + 1;
-        }
+    if (!CREEP_COUNTS[room.name]) {
+        return; // no creeps in this room, nothing to monitor
     }
 
-    const idealCounts = getIdealCreepCount(room, context, roleCounts);
+    const idealCounts = getIdealCreepCount(room, context, CREEP_COUNTS[room.name]!);
 
     for (const role in idealCounts) {
         const idealCount = idealCounts[role];
-        const actualCount = roleCounts[role] || 0;
+        const actualCount = CREEP_COUNTS[room.name]?.[role] || 0;
 
         if (actualCount < idealCount.count && !room.memory.spawnQueue.some(entry => entry.role === role)) {
             debugLog(`Room ${room.name} has ${actualCount} ${role}s, but ideally should have ${idealCount.count}. Adding to spawn queue.`);
@@ -203,7 +167,7 @@ function monitorCreepRoles(room: Room, context: RoomContext): void {
             return false;
         }
 
-        const actual = roleCounts[entry.role] || 0;
+        const actual = CREEP_COUNTS[room.name]?.[entry.role] || 0;
         return actual < ideal.count;
     });
 
@@ -252,7 +216,6 @@ function spawnCreep(room: Room, role: string, context: RoomContext): boolean {
             return true;
         } else if (spawnResult === ERR_NOT_ENOUGH_ENERGY) {
             debugLog(`Not enough energy to spawn ${creepName} with role: ${role}. Required: ${body.reduce((sum, part) => sum + BODYPART_COST[part], 0)}, Available: ${room.energyAvailable}`);
-            new RoomVisual(room.name).text(`X`, spawn.pos.x, spawn.pos.y + 0.36, { color: 'red', font: 1, align: 'center' }).text(`${role} ${bodyEnergy}/${room.energyAvailable}`, spawn.pos.x, spawn.pos.y + 1, { color: 'red', font: 0.25, align: 'center' });
 
             return false;
         }
@@ -390,72 +353,19 @@ function scanRoom(room: Room, context: RoomContext): void {
         createTask(room, 'haul', container.id, 10, room.name, undefined, 105, RESOURCE_ENERGY); // medium priority for hauling from remote containers
     }
 
-    debugLog(`Room ${room.name} scanned. Found ${context.sources.length} energy sources.`);
-}
+    // get all spawns and extensions that are not full and create a fill task for them
+    const structuresToFill = context.structures.filter(structure => {
+        return (
+            (structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) &&
+            (structure as StructureSpawn | StructureExtension).store.getUsedCapacity(RESOURCE_ENERGY) < (structure as StructureSpawn | StructureExtension).store.getCapacity(RESOURCE_ENERGY)
+        );
+    });
 
-function runCreeps(room: Room, context: RoomContext): void {
-    for (const creep of Object.values(Game.creeps).filter(i => i.memory.room === room.name)) {
-        try {
-            // attempt to protect the creep by adding a in danger mode
-            if (!creep.memory.lastHealth) {
-                creep.memory.lastHealth = creep.hits;
-            } else if (creep.hits < creep.memory.lastHealth) {
-                debugLog(`Creep ${creep.name} took damage. Health: ${creep.hits}/${creep.hitsMax}`);
-                creep.memory.lastHealth = creep.hits;
-                creep.memory.lastDamageTime = Game.time;
-                creep.memory.inDanger = true;
-            } else if (creep.memory.inDanger && Game.time - (creep.memory.lastDamageTime || 0) > 100) {
-                debugLog(`Creep ${creep.name} is no longer in danger.`);
-                creep.memory.inDanger = false;
-            }
-
-            // if the creep is in danger and not an attacker or defender, move it back to the home room
-            if (creep.memory.inDanger && creep.memory.role !== 'attacker' && creep.memory.role !== 'defender') {
-                creep.say(`😱`);
-
-                // if the creep is not in the home room, move it back to the home room
-                if (creep.room.name !== room.name) {
-                    creep.travelTo(new RoomPosition(25, 25, room.name));
-                }
-
-                continue; // skip the rest of the logic for this creep
-            }
-
-            // run the appropriate role logic for the creep
-            switch (creep.memory.role) {
-                case 'harvester':
-                    runHarvester(creep, context);
-                    break;
-                case 'builder':
-                    runBuilder(creep, context);
-                    break;
-                case 'queen':
-                    runQueen(creep, context);
-                    break;
-                case 'scout':
-                    runScout(creep, context);
-                    break;
-                case 'filler':
-                case 'hauler':
-                    runHauler(creep, context);
-                    break;
-                case 'defender':
-                    runDefender(creep, context);
-                    break;
-                case 'attacker':
-                    runAttacker(creep, context);
-                    break;
-                case 'claimer':
-                    runClaimer(creep, context);
-                    break;
-                default:
-                    creep.say(`❓`);
-                    debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
-            }
-        } catch (error) {
-            debugLog(`Error running creep ${creep.name}: ${error}`);
-        }
+    for (const structure of structuresToFill) {
+        createTask(room, 'fill', structure.id, 5, room.name); // medium priority for filling spawns and extensions
     }
+
+    debugLog(`Room ${room.name} scanned. Found ${context.sources.length} energy sources.`);
 }
 
 export function resetRoom(room: Room): void {
@@ -487,11 +397,11 @@ export function resetRoom(room: Room): void {
     debugLog(`Room ${room.name} has been reset.`);
 }
 
-export function runTowers(room: Room, context: RoomContext): void {
+export function runTowers(room: Room, context: RoomContext, managingRoom?: Room): void {
     const towers = context.structures.filter(structure => structure.structureType === STRUCTURE_TOWER) as StructureTower[];
 
     for (const tower of towers) {
-        runTower(tower, context);
+        runTower(tower, context, managingRoom || room);
     }
 }
 
@@ -539,38 +449,18 @@ function runColonyDefense(room: Room, context: RoomContext): void {
         createTask(room, 'harvest', source.id, 1); // high priority for harvesting
     }
 
-    // switch roles in defense mode, all creeps that are not defenders will act as haulers to fill structures with energy
-    for (const creepName in Game.creeps) {
-        const creep = Game.creeps[creepName];
-
-        if (creep.memory.room !== room.name) {
-            continue;
-        }
-
-        switch (creep.memory.role) {
-            case 'harvester':
-                runHarvester(creep, context);
-                break;
-            case 'defender':
-                runDefender(creep, context);
-                break;
-            default:
-                runHauler(creep, context); // all other creeps will act as haulers to fill structures with energy
-        }
-    }
-
     runTowers(room, context);
 }
 
 // run colony logic for a given room
-function runColony(room: Room, globalContext: { [roomName: string]: RoomContext }): void {
+function runColony(room: Room): void {
     debugLog(`Running colony logic for room ${room.name}`);
 
     // monitor tasks for the room
     monitorTasks(room);
 
     // get room context
-    const context = globalContext[room.name];
+    const context = GLOBAL_CONTEXT[room.name];
 
     // if we have hostiles, the room goes into defensive mode and we need to spawn defenders if we don't have enough
     if (context.hostiles.length > 0 || room.memory.defenseMode === true && room.memory.defenseModeActivatedAt && Game.time - room.memory.defenseModeActivatedAt < 100) {
@@ -594,14 +484,8 @@ function runColony(room: Room, globalContext: { [roomName: string]: RoomContext 
     // monitor the roles of creeps in the room
     monitorCreepRoles(room, context);
 
-    // run all creeps
-    runCreeps(room, context);
-
     // run all towers
     runTowers(room, context);
-
-    // draw a debug on the main storage how much energy we have
-    new RoomVisual(room.name).text(`Stored Energy: ${getStoredEnergy(context)}`, 0, 49, { color: 'white', font: 0.5, align: 'left' });
 }
 
 function scanRemoteRoom(room: Room, context: RoomContext, parentRoom: Room): void {
@@ -655,21 +539,7 @@ function scanRemoteRoom(room: Room, context: RoomContext, parentRoom: Room): voi
         } else {
             createTask(parentRoom, 'build', context.room.controller.id, 10, room.name); // high priority for upgrading the controller
         }
-    } else {
-        // if this room is not owned by us, we should create a task to reserve it if we have a controller
-        if (context.room.controller) {
-            createTask(parentRoom, 'reserve', context.room.controller.id, 5, room.name); // medium priority for reserving remote rooms
-        }
-    }
 
-    // get construction sites in the room and create build tasks for them
-    if (context.constructionSites.length > 0) {
-        for (const site of context.constructionSites) {
-            createTask(parentRoom, 'build', site.id, 5, room.name); // high priority for building construction sites
-        }
-    }
-
-    if (context.room.controller && context.room.controller.my) {
         // repair damaged structures that are at 50% health or lower, but ignore walls and ramparts for now
         const structuresToRepair = context.structures.filter(structure => {
             return (
@@ -685,14 +555,42 @@ function scanRemoteRoom(room: Room, context: RoomContext, parentRoom: Room): voi
         // repair defensive structures that are at 10k health * rc, but ignore walls and ramparts for now
         const defenseRepair = context.structures.filter(structure => {
             return (
-                ((structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) &&
-                    (structure.hits < (room.controller?.level || 0) * 10000)) || // less than RCL * 10k health
+                (
+                    (structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) &&
+                    (structure.hits < (room.controller?.level || 0) * 10000)
+                ) || // less than RCL * 10k health
                 (structure.structureType === STRUCTURE_ROAD && structure.hits < structure.hitsMax * 0.25) // less than 25% health
             );
         }).sort((a, b) => a.hits - b.hits); // sort by lowest health first
 
         for (const defense of defenseRepair) {
-            createTask(parentRoom, 'build', defense.id, defense.hits < 1000 ? 0 : 5, undefined, undefined, 110); // high priority for repairing walls and ramparts
+            createTask(parentRoom, 'build', defense.id, defense.hits < 1000 ? 0 : 5, room.name, undefined, 110); // high priority for repairing walls and ramparts
+        }
+
+        // fill extensions and spawns if they are empty
+        const structuresToFill = context.structures.filter(structure => {
+            return (
+                (structure.structureType === STRUCTURE_EXTENSION ||
+                    structure.structureType === STRUCTURE_SPAWN ||
+                    structure.structureType === STRUCTURE_TOWER) &&
+                (structure as any).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+            );
+        });
+
+        for (const structure of structuresToFill) {
+            createTask(parentRoom, 'fill', structure.id, 110, room.name); // medium priority for filling structures
+        }
+    } else {
+        // if this room is not owned by us, we should create a task to reserve it if we have a controller
+        if (context.room.controller) {
+            createTask(parentRoom, 'reserve', context.room.controller.id, 5, room.name); // medium priority for reserving remote rooms
+        }
+    }
+
+    // get construction sites in the room and create build tasks for them
+    if (context.constructionSites.length > 0) {
+        for (const site of context.constructionSites) {
+            createTask(parentRoom, 'build', site.id, 5, room.name); // high priority for building construction sites
         }
     }
 
@@ -709,10 +607,10 @@ function scanRemoteRoom(room: Room, context: RoomContext, parentRoom: Room): voi
     }
 }
 
-function runRemote(room: Room, globalContext: { [roomName: string]: RoomContext }): void {
+function runRemote(room: Room): void {
     debugLog(`Running remote logic for room ${room.name}`);
 
-    const context = globalContext[room.name];
+    const context = GLOBAL_CONTEXT[room.name];
 
     // get a reference to the parent room
     const parentRoom = Game.rooms[room.memory.parentRoom || ''];
@@ -737,14 +635,15 @@ function runRemote(room: Room, globalContext: { [roomName: string]: RoomContext 
         // scan the room
         scanRemoteRoom(room, context, parentRoom);
     }
+
+    runTowers(room, context, parentRoom);
 }
 
 // run logic for all owned rooms
 export function runRooms() {
     // build context on our rooms globally
     for (const roomName in Game.rooms) {
-        const context = buildRoomContext(Game.rooms[roomName]);
-        globalContext[roomName] = context;
+        buildRoomContext(Game.rooms[roomName]);
     }
 
     // run logic for each room
@@ -752,14 +651,9 @@ export function runRooms() {
         const room = Game.rooms[roomName];
 
         if (room.controller && room.controller.my && room.memory.type === 'home') {
-            runColony(room, globalContext);
+            runColony(room);
         } else if (room.memory.type === 'remote') {
-            runRemote(room, globalContext);
+            runRemote(room);
         }
-    }
-
-    // release the global context to free up memory
-    for (const roomName in globalContext) {
-        delete globalContext[roomName];
     }
 }
