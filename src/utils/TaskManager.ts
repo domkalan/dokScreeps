@@ -99,6 +99,14 @@ export function completeTask(creep: Creep): void {
         const taskId = creep.memory.taskId;
         creep.memory.taskId = undefined; // Clear the task ID from the creep's memory
 
+        // log the completed task in the creep's memory (for tracking purposes)
+        if (!creep.memory.completedTasks) {
+            creep.memory.completedTasks = 0;
+        }
+        if (taskId) {
+            creep.memory.completedTasks++;
+        }
+
         if (!taskId) return;
 
         const task = Memory.rooms[creep.memory.room]?.tasks?.[taskId];

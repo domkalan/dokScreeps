@@ -58,6 +58,16 @@ export function addCliFunctions() {
         return `Debug display set to room ${room}.`;
     }
 
+    global.setPerfMode = function (enabled: boolean) {
+        Memory.perfMode = enabled;
+
+        if (enabled) {
+            return `Performance tracking mode has been enabled.`;
+        } else {
+            return `Performance tracking mode has been disabled.`;
+        }
+    }
+
     global.snapshotStructures = function (roomName: string) {
         const room = Game.rooms[roomName];
         if (room) {

@@ -3,6 +3,7 @@ import * as hive from './hive';
 import * as cli from './cli';
 import * as debug from './debug';
 import * as creeps from './creeps';
+import * as perfTracking from './utils/PerformanceTracking';
 
 // require legacy libraries
 require('Traveler');
@@ -40,11 +41,17 @@ export const loop = () => {
         // Automatically delete memory of missing creeps
         for (const name in Memory.creeps) {
             if (!(name in Game.creeps)) {
+                // track the number of tasks this creep completed in its lifetime
+                perfTracking.onCreepDeath(name);
+
                 delete Memory.creeps[name];
             }
         }
 
         // draw debug information on the screen for each room
         debug.drawDebugInfo();
+
+        // capture the performance data for this tick
+        perfTracking.captureTickData();
     });
 };

@@ -1,4 +1,5 @@
 import { GLOBAL_CONTEXT } from "utils/Context";
+import * as perfTracking from "utils/PerformanceTracking";
 
 import { runHarvester } from "roles/harvester";
 import { runBuilder } from "roles/builder";
@@ -12,7 +13,9 @@ import { runClaimer } from "roles/claimer";
 export let CREEP_COUNTS: {
     [room: string]: { [role: string]: number } | undefined
 } = {};
-
+export let CREEP_COUNTS_GENERIC: {
+    [role: string]: number
+} = {};
 export let CREEP_CPU_TOTAL: number = 0;
 export let CREEP_CPU: { [creepName: string]: number } = {};
 
@@ -90,14 +93,21 @@ export function runCreeps(): void {
         }
 
         CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
+
+        // signal to perfTracking that this creep has finished its tick
+        perfTracking.onCreepTick(creepName, CREEP_CPU[creepName]);
     }
 
     CREEP_CPU_TOTAL = Game.cpu.getUsed() - cpuStart;
+
+    // signal to perfTracking that all creeps have finished their ticks
+    perfTracking.onCreepsTicked(CREEP_CPU_TOTAL);
 }
 
 export function indexCreeps() {
     // reset the creep counts for this tick
     CREEP_COUNTS = {};
+    CREEP_COUNTS_GENERIC = {};
 
     // index all creeps by room and role
     for (const creepName in Game.creeps) {
@@ -105,6 +115,7 @@ export function indexCreeps() {
 
         // build a count of creeps by role for the room
         try {
+            // update count for the room and role
             if (!CREEP_COUNTS[creep.memory.room]) {
                 CREEP_COUNTS[creep.memory.room] = {};
             }
@@ -114,8 +125,18 @@ export function indexCreeps() {
             }
 
             CREEP_COUNTS[creep.memory.room]![creep.memory.role]!++;
+
+            // update count for the role across all rooms
+            if (!CREEP_COUNTS_GENERIC[creep.memory.role]) {
+                CREEP_COUNTS_GENERIC[creep.memory.role] = 0;
+            }
+
+            CREEP_COUNTS_GENERIC[creep.memory.role]!++;
         } catch (error) {
             debugLog(`Error counting creep ${creep.name}: ${error}`);
         }
     }
+
+    // signal to perfTracking that all creeps have been counted
+    perfTracking.onCreepsCounted(CREEP_COUNTS_GENERIC);
 }

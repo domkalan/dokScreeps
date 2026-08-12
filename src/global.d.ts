@@ -26,6 +26,8 @@ declare global {
 
         // track the task that this creep is currently assigned to, if any
         taskId?: string;
+        // previous tasks that this creep has completed, if any
+        completedTasks?: number;
 
         // allow the creep to focus on a specific item
         focusedOn?: string;
@@ -105,6 +107,7 @@ declare global {
         // allow the user to enable or disable debug mode for the bot
         debugDisplay: string | undefined; // what room the debug display will show in
         cacheMode: boolean; // whether cache mode is enabled or not
+        perfMode: boolean; // whether performance tracking mode is enabled or not
     }
 }
 

@@ -7,6 +7,7 @@ import { createBasicRoomPlan } from "plans/basic";
 import { buildRoomContext, RoomContext, GLOBAL_CONTEXT } from "utils/Context";
 import { getRoleNameCounter } from "utils/Counter";
 import { createTask, getTaskCounts, monitorTasks } from "utils/TaskManager";
+import * as perfTracking from "utils/PerformanceTracking";
 
 export let ROOM_TOTAL_CPU: number = 0;
 export let ROOM_CPU: { [roomName: string]: number } = {};
@@ -113,17 +114,18 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         idealCounts.harvester.priority = 5; // if we have enough haulers, lower the priority
     }
 
-    // 2 tasks per hauler, if we have more than 2 tasks per hauler, increase the priority of haulers
-    if (Math.min(Math.floor(taskCounts.hauler / 2), roomControlLevel) > idealCounts.hauler.count) {
+    // 2 tasks per hauler, if we have more than 100 tasks per hauler, increase the priority of haulers
+    if (Math.min(Math.floor(taskCounts.hauler / 10), roomControlLevel) > idealCounts.hauler.count) {
         // increase the number of haulers to match the number of tasks, but not more than the room control level
-        idealCounts.hauler.count = Math.min(Math.floor(taskCounts.hauler / 2), roomControlLevel);
+        idealCounts.hauler.count = Math.min(Math.floor(taskCounts.hauler / 100), roomControlLevel);
         // increase the priority of haulers to 5 if we have more than 2 tasks per hauler
         idealCounts.hauler.priority = 5;
     }
 
     // if we have any filler jobs, spawn a filler creep if we have enough energy
-    if (Math.max(taskCounts.filler, 1) > idealCounts.filler.count && getStoredEnergy(context) > 10000) {
-        idealCounts.filler.count = Math.max(taskCounts.filler, 1);
+    if (Math.max(taskCounts.filler, 1) > idealCounts.filler.count && getStoredEnergy(context) > 50000) {
+        // increase the number of fillers to match the number of tasks, but not more than the room control level
+        idealCounts.filler.count = Math.min(Math.max(taskCounts.filler, 1), roomControlLevel);
     }
 
     if (taskCounts.claimer > 0 && getStoredEnergy(context) > 10000) {
@@ -653,22 +655,36 @@ export function runRooms() {
 
     // build context on our rooms globally
     for (const roomName in Game.rooms) {
-        buildRoomContext(Game.rooms[roomName]);
+        try {
+            buildRoomContext(Game.rooms[roomName]);
+        } catch (error) {
+            debugLog(`Error building context for room ${roomName}: ${error}`);
+        }
     }
 
     // run logic for each room
     for (const roomName in Game.rooms) {
-        const room = Game.rooms[roomName];
-        const roomCpuStart = Game.cpu.getUsed();
+        try {
+            const room = Game.rooms[roomName];
+            const roomCpuStart = Game.cpu.getUsed();
 
-        if (room.controller && room.controller.my && room.memory.type === 'home') {
-            runColony(room);
-        } else if (room.memory.type === 'remote') {
-            runRemote(room);
+            if (room.controller && room.controller.my && room.memory.type === 'home') {
+                runColony(room);
+            } else if (room.memory.type === 'remote') {
+                runRemote(room);
+            }
+
+            ROOM_CPU[roomName] = Game.cpu.getUsed() - roomCpuStart;
+
+            // signal to perfTracking room tick finished
+            perfTracking.onRoomTick(room, ROOM_CPU[roomName], GLOBAL_CONTEXT[roomName], CREEP_COUNTS[roomName] || {});
+        } catch (error) {
+            debugLog(`Error running room ${roomName}: ${error}`);
         }
-
-        ROOM_CPU[roomName] = Game.cpu.getUsed() - roomCpuStart;
     }
 
     ROOM_TOTAL_CPU = Game.cpu.getUsed() - cpuStart;
+
+    // signal to perfTracking room tick finished
+    perfTracking.onRoomsTicked(ROOM_TOTAL_CPU);
 }
