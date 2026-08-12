@@ -48,10 +48,14 @@ export function addCliFunctions() {
         return `Room ${roomName} has been reset.`;
     }
 
-    global.setDebug = function (value: boolean) {
-        Memory.debugMode = value;
+    global.setDebug = function (room: string) {
+        Memory.debugDisplay = room;
 
-        return `Debug mode has been set to ${value}.`;
+        if (!room) {
+            return `Debug display has been disabled.`;
+        }
+
+        return `Debug display set to room ${room}.`;
     }
 
     global.snapshotStructures = function (roomName: string) {

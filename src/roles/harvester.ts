@@ -42,25 +42,51 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
 
     // if creep is full check for nearby container or link, otherwise drop
     if (creep.store.getFreeCapacity() === 0) {
-        const nearbyStorage = [
-            ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].structures : []
-        ].find(structure => (structure.structureType === STRUCTURE_CONTAINER || structure.structureType === STRUCTURE_LINK) && structure.pos.inRangeTo(creep.pos, 4)) as StructureContainer | StructureLink | undefined;
-        if (nearbyStorage) {
-            const transferResult = creep.transfer(nearbyStorage, RESOURCE_ENERGY);
+        // if no nearby container, find a nearby link
+        const nearbyLink = creep.pos.findClosestByRange(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (
+                    structure.structureType === STRUCTURE_LINK && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                );
+            }
+        });
+
+        if (nearbyLink) {
+            const transferResult = creep.transfer(nearbyLink, RESOURCE_ENERGY);
 
             if (transferResult === ERR_NOT_IN_RANGE) {
-                creep.travelTo(nearbyStorage);
+                creep.travelTo(nearbyLink);
+            } else if (transferResult === ERR_FULL) {
+                creep.drop(RESOURCE_ENERGY); // Drop energy if the link is full
+            }
+
+            return;
+        }
+
+        // find a nearby container
+        const nearbyContainer = creep.pos.findClosestByRange(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (
+                    structure.structureType === STRUCTURE_CONTAINER && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                );
+            }
+        });
+
+        if (nearbyContainer) {
+            const transferResult = creep.transfer(nearbyContainer, RESOURCE_ENERGY);
+
+            if (transferResult === ERR_NOT_IN_RANGE) {
+                creep.travelTo(nearbyContainer);
             } else if (transferResult === ERR_FULL) {
                 creep.drop(RESOURCE_ENERGY); // Drop energy if the storage is full
             }
 
             return;
-        } else {
-            // Drop energy on the ground if no nearby storage is found
-            creep.drop(RESOURCE_ENERGY);
-
-            return;
         }
+
+        // if no nearby container or link, drop the energy on the ground
+        creep.drop(RESOURCE_ENERGY);
+        return;
     }
 
     // If the creep is not in range to harvest, move towards the source

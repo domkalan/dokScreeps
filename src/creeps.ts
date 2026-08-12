@@ -13,12 +13,20 @@ export let CREEP_COUNTS: {
     [room: string]: { [role: string]: number } | undefined
 } = {};
 
+export let CREEP_CPU_TOTAL: number = 0;
+export let CREEP_CPU: { [creepName: string]: number } = {};
+
 export function runCreeps(): void {
-    CREEP_COUNTS = {}; // reset the creep counts at the start of each tick
+    // get cpu usage at the start of the tick
+    const cpuStart = Game.cpu.getUsed();
+    // reset the creep cpu usage for this tick
+    CREEP_CPU = {};
 
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
         const context = GLOBAL_CONTEXT[creep.memory.room];
+
+        const creepCpuStart = Game.cpu.getUsed();
 
         try {
             // attempt to protect the creep by adding a in danger mode
@@ -80,10 +88,18 @@ export function runCreeps(): void {
         } catch (error) {
             debugLog(`Error running creep ${creep.name}: ${error}`);
         }
+
+        CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
     }
+
+    CREEP_CPU_TOTAL = Game.cpu.getUsed() - cpuStart;
 }
 
 export function indexCreeps() {
+    // reset the creep counts for this tick
+    CREEP_COUNTS = {};
+
+    // index all creeps by room and role
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
 

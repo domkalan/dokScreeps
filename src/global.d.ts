@@ -102,8 +102,9 @@ declare global {
         counter: { [key: string]: number };
         hive: HiveMemory;
 
-        debugMode: boolean;
-        cacheMode: boolean;
+        // allow the user to enable or disable debug mode for the bot
+        debugDisplay: string | undefined; // what room the debug display will show in
+        cacheMode: boolean; // whether cache mode is enabled or not
     }
 }
 

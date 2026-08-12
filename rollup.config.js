@@ -30,7 +30,8 @@ export default {
     typescript({ tsconfig: "./tsconfig.json", include: ["**/*.ts"], exclude: [] }),
     copy({
       targets: [
-        { src: 'vendor/Traveler/**/*.js', dest: 'dist' }
+        { src: 'vendor/Traveler/Traveler.js', dest: 'dist' },
+        { src: 'vendor/screeps-profiler/screeps-profiler.js', dest: 'dist' }
       ]
     }),
     screeps({ config: cfg, dryRun: cfg == null })

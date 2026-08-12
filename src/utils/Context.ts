@@ -76,7 +76,7 @@ export interface GlobalContext {
 
 
 // create a cache for room contexts to avoid recalculating them every tick
-const CONTEXT_CACHE: ContextCacheMap = {};
+export const CONTEXT_CACHE: ContextCacheMap = {};
 
 // allow easy access to the global context for each room
 export const GLOBAL_CONTEXT: GlobalContext = {};

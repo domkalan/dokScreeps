@@ -8,6 +8,9 @@ import { buildRoomContext, RoomContext, GLOBAL_CONTEXT } from "utils/Context";
 import { getRoleNameCounter } from "utils/Counter";
 import { createTask, getTaskCounts, monitorTasks } from "utils/TaskManager";
 
+export let ROOM_TOTAL_CPU: number = 0;
+export let ROOM_CPU: { [roomName: string]: number } = {};
+
 // get stored energy in the room from storage and containers
 export function getStoredEnergy(context: RoomContext): number {
     return context.structures.reduce((total, structure) => {
@@ -400,8 +403,10 @@ export function resetRoom(room: Room): void {
 export function runTowers(room: Room, context: RoomContext, managingRoom?: Room): void {
     const towers = context.structures.filter(structure => structure.structureType === STRUCTURE_TOWER) as StructureTower[];
 
+    let towerCount = 0;
     for (const tower of towers) {
-        runTower(tower, context, managingRoom || room);
+        runTower(tower, context, managingRoom || room, towerCount);
+        towerCount++;
     }
 }
 
@@ -641,6 +646,11 @@ function runRemote(room: Room): void {
 
 // run logic for all owned rooms
 export function runRooms() {
+    // reset the room cpu usage for this tick
+    ROOM_CPU = {};
+
+    const cpuStart = Game.cpu.getUsed();
+
     // build context on our rooms globally
     for (const roomName in Game.rooms) {
         buildRoomContext(Game.rooms[roomName]);
@@ -649,11 +659,16 @@ export function runRooms() {
     // run logic for each room
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
+        const roomCpuStart = Game.cpu.getUsed();
 
         if (room.controller && room.controller.my && room.memory.type === 'home') {
             runColony(room);
         } else if (room.memory.type === 'remote') {
             runRemote(room);
         }
+
+        ROOM_CPU[roomName] = Game.cpu.getUsed() - roomCpuStart;
     }
+
+    ROOM_TOTAL_CPU = Game.cpu.getUsed() - cpuStart;
 }

@@ -1,3 +1,6 @@
 [submodule "vendor/Traveler"]
 	path = vendor/Traveler
 	url = https://github.com/bonzaiferroni/Traveler
+[submodule "vendor/screeps-profiler"]
+	path = vendor/screeps-profiler
+	url = https://github.com/screepers/screeps-profiler

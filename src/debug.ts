@@ -1,104 +1,159 @@
+import { ROOM_CPU, ROOM_TOTAL_CPU, getStoredEnergy } from './rooms';
+import { CREEP_CPU, CREEP_CPU_TOTAL, CREEP_COUNTS } from './creeps';
+import { GLOBAL_CONTEXT } from './utils/Context';
+
 /**
  * Draws on screen debug information for the colony.
  */
 
 export function drawDebugInfo() {
-    if (!Memory.debugMode) {
+    // branch to the cpu debug if that mode is enabled
+    drawCpuDebugInfo();
+
+    drawRoomDebugInfo();
+}
+
+export function drawRoomDebugInfo() {
+    const roomDisplay = Memory.debugDisplay || Object.keys(Game.rooms)[0];
+    const roomMemory = Memory.rooms[roomDisplay];
+
+    if (!roomMemory) {
         return;
     }
 
-    // show hive world overlay
-    const scoutedRooms = Object.entries(Memory.hive.rooms);
+    // draw the room's tasks on the screen
+    let textOffset = 0;
+    for (const taskId in roomMemory.tasks) {
+        const task = roomMemory.tasks[taskId];
+        Game.rooms[roomDisplay].visual.text(`Task: ${task.type} ${task.completed ? '✅' : '❌'} - pri=${task.priority}, ttl=${Game.time - task.expires}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+        textOffset += 0.5;
+    }
 
-    for (const [roomName, roomData] of scoutedRooms) {
-        const scanAge = Game.time - roomData.lastScan;
-
-        if (roomData.lastScan > 0 && scanAge < 10000 && !roomData.hostile) {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#00ff00', stroke: '#00ff00', opacity: 0.5, lineStyle: 'dashed' });
-        } else if (roomData.lastScan > 0 && scanAge < 10000 && roomData.hostile) {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ffff00', stroke: '#ffff00', opacity: 0.5, lineStyle: 'dashed' });
-        } else if (roomData.lastScan > 0 && scanAge > 10000) {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ff7300', stroke: '#ff7300', opacity: 0.5, lineStyle: 'dashed' });
-        } else {
-            Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: '#ff0000', stroke: '#ff0000', opacity: 0.5, lineStyle: 'dashed' });
+    // display counts for each task type across all rooms
+    const taskCounts: { [taskType: string]: number } = {};
+    for (const roomName in Memory.rooms) {
+        const roomMemory = Memory.rooms[roomName];
+        for (const taskId in roomMemory.tasks) {
+            const task = roomMemory.tasks[taskId];
+            if (!taskCounts[task.type]) {
+                taskCounts[task.type] = 0;
+            }
+            taskCounts[task.type]++;
         }
     }
 
-    // show per room debug overlay
-    for (const roomName in Game.rooms) {
-        let textOffset = 0;
+    let taskCountText = `Task Counts: `;
+    for (const taskType in taskCounts) {
+        taskCountText += `${taskType}: ${taskCounts[taskType]} | `;
+    }
+    Game.rooms[roomDisplay].visual.text(taskCountText.slice(0, -3), 0.5, textOffset, { align: 'left', font: 0.5 });
+    textOffset += 1;
 
-        const room = Game.rooms[roomName];
-
-        const hiveScan = (Game.time - Memory.hive.lastScan) - 100;
-
-        // draw the next time the hive will scan
-        room.visual.text(`Hive (next scan t${hiveScan})`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
-
-        // display all active rooms and their last scan time
-        for (const activeRoom in Game.rooms) {
-            const scanAge = (Game.time - Game.rooms[activeRoom].memory.lastScan) - 100;
-            room.visual.text(`${activeRoom} (next scan t${scanAge})`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
-            textOffset += 0.25;
-        }
-        textOffset += 0.5;
-
-        const roomScan = (Game.time - room.memory.lastScan) - 100;
-
-        // draw the room name at the top of the room
-        room.visual.text(`Colony ${room.name} (next scan t${roomScan})`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
-
-        if (room.memory.defenseMode) {
-            const defenseModeActivatedAt = room.memory.defenseModeActivatedAt || 0;
-            const defenseModeDuration = Game.time - defenseModeActivatedAt;
-
-            room.visual.text(`Defense Mode - (t+${defenseModeDuration})`, 0, textOffset, { align: 'center', font: 0.5, color: '#ff0000' });
+    // draw all creeps that belong to this room and their roles
+    let creepsInRoom = 0;
+    for (const creepName in Game.creeps) {
+        const creep = Game.creeps[creepName];
+        if (creep.memory.room === roomDisplay) {
+            Game.rooms[roomDisplay].visual.text(`Creep: ${creep.name} (${creep.memory.role}), ttl=${creep.ticksToLive}, room=${creep.room.name}`, 0.5, textOffset, { align: 'left', font: 0.5 });
             textOffset += 0.5;
+            creepsInRoom++;
         }
+    }
 
-        // draw the number of creeps in the room
-        const creepsTotal = Object.values(Game.creeps)
-        const creepsInRoom = creepsTotal.filter(creep => creep.memory.room === room.name);
-        room.visual.text(`Creeps: ${creepsInRoom.length}/${creepsTotal.length}`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
+    Game.rooms[roomDisplay].visual.text(`Creep Counts: ${creepsInRoom}/${Object.keys(Game.creeps).length}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+    textOffset += 0.5;
 
-        for (const creep of creepsInRoom) {
-            room.visual.text(`Creep: ${creep.name} - role:${creep.memory.role} - task:${creep.memory.taskId || 'none'} - ttl:${creep.ticksToLive || 'none'} - loc:${creep.room.name || 'none'},x:${creep.pos.x},y:${creep.pos.y}`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
-            textOffset += 0.25;
+    // display counts for each role of creep across all rooms
+    const roleCounts: { [role: string]: number } = {};
+    for (const roomName in CREEP_COUNTS) {
+        const roomCounts = CREEP_COUNTS[roomName];
+        for (const role in roomCounts) {
+            if (!roleCounts[role]) {
+                roleCounts[role] = 0;
+            }
+            roleCounts[role] += roomCounts[role] || 0;
         }
-        textOffset += 0.5;
+    }
 
-        // get task queue for the room
-        const tasksForRoom = room.memory.tasks ? Object.values(room.memory.tasks) : [];
-        room.visual.text(`Tasks: ${tasksForRoom.length}`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
+    let roleCountText = `Creep Counts: `;
+    for (const role in roleCounts) {
+        roleCountText += `${role}: ${roleCounts[role]} | `;
+    }
+    Game.rooms[roomDisplay].visual.text(roleCountText.slice(0, -3), 0.5, textOffset, { align: 'left', font: 0.5 });
+    textOffset += 0.5;
 
-        // display each task in the room
-        for (const task of tasksForRoom) {
-            room.visual.text(`Task: ${task.type} - ${task.id} - pri:${task.priority} - assi:${task.assigned || 'none'} - exp:${Game.time - task.expires} - c:${task.completed ? 'true' : 'false'}`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
-            textOffset += 0.25;
+    // draw the spawn queue for this room
+    for (const spawnTask of roomMemory.spawnQueue) {
+        Game.rooms[roomDisplay].visual.text(`Spawn: ${spawnTask.role} - ${spawnTask.priority}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+        textOffset += 0.5;
+    }
+    textOffset += 0.5;
+
+    // draw how much energy is stored in the room
+    const storedEnergy = getStoredEnergy(GLOBAL_CONTEXT[roomDisplay]);
+    Game.rooms[roomDisplay].visual.text(`Stored Energy: ${storedEnergy}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+    textOffset += 0.5;
+
+    // draw how much energy is on standby in the room for spawning
+    const standbyEnergy = Game.rooms[roomDisplay].energyAvailable;
+    Game.rooms[roomDisplay].visual.text(`Spawn Energy: ${standbyEnergy}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+    textOffset += 0.5;
+
+    // display if the room is in defense mode
+    Game.rooms[roomDisplay].visual.text(`Defense Mode: ${roomMemory.defenseMode ? 'ON' : 'OFF'}`, 0.5, textOffset, { align: 'left', font: 0.5, color: roomMemory.defenseMode ? 'red' : undefined });
+    textOffset += 0.5;
+}
+
+// cpu debug draws to the right side of the room screen
+export function drawCpuDebugInfo() {
+    const roomDisplay = Memory.debugDisplay || Object.keys(Game.rooms)[0];
+
+    let textOffset = 0;
+
+    for (const roomName in ROOM_CPU) {
+        Game.rooms[roomDisplay].visual.text(`Room CPU: ${roomName} - ${ROOM_CPU[roomName].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.5 });
+        textOffset += 0.5;
+    }
+
+    // display total cpu usage for all rooms
+    Game.rooms[roomDisplay].visual.text(`Total Room CPU: ${ROOM_TOTAL_CPU.toFixed(2)}`, 49, textOffset, { align: 'right', font: 0.5 });
+    textOffset += 1.0;
+
+    // display cpu usage for each creep
+    for (const creepName in CREEP_CPU) {
+        Game.rooms[roomDisplay].visual.text(`Creep CPU: ${creepName} - ${CREEP_CPU[creepName].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.5 });
+        textOffset += 0.5;
+    }
+
+    // display total cpu usage for all creeps
+    Game.rooms[roomDisplay].visual.text(`Total Creep CPU: ${CREEP_CPU_TOTAL.toFixed(2)}`, 49, textOffset, { align: 'right', font: 0.5 });
+    textOffset += 1.0;
+
+    // total CPU usage for the tick
+    Game.rooms[roomDisplay].visual.text(`Total CPU: ${Game.cpu.getUsed().toFixed(2)}/${Game.cpu.limit}/${Game.cpu.bucket}`, 49, textOffset, { align: 'right', font: 0.5 });
+    textOffset += 0.5;
+
+    // tally up cpu usage by role for all creeps and display it
+    const roleCpuUsage: { [role: string]: number } = {};
+    for (const creepName in Game.creeps) {
+        const creep = Game.creeps[creepName];
+        if (!roleCpuUsage[creep.memory.role]) {
+            roleCpuUsage[creep.memory.role] = 0;
         }
+        roleCpuUsage[creep.memory.role] += CREEP_CPU[creepName] || 0;
+    }
+
+    for (const role in roleCpuUsage) {
+        Game.rooms[roomDisplay].visual.text(`Role CPU: ${role} - ${roleCpuUsage[role].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.5 });
         textOffset += 0.5;
+    }
+}
 
-        // get spawn queue for the room
-        const spawnQueue = room.memory.spawnQueue || [];
-        room.visual.text(`Spawn Queue: ${spawnQueue.length}`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
-
-        // log room energy
-        room.visual.text(`Energy: ${room.energyAvailable}/${room.energyCapacityAvailable}`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
-        textOffset += 0.25;
-
-        for (const spawn of spawnQueue) {
-            room.visual.text(`Spawn: ${spawn.role} - pri:${spawn.priority}`, 0.25, textOffset, { align: 'left', font: 0.25, color: '#dbdbdb' });
-            textOffset += 0.25;
+export function attachDebug() {
+    // Attach the debugLog function to the global object for easy access in the console
+    global.debugLog = function (message: string): void {
+        if (typeof Memory.debugDisplay !== 'undefined') {
+            console.log(`[DEBUG] ${message}`);
         }
-        textOffset += 0.5;
-
-        // display the cpu bucket and cpu usage
-        room.visual.text(`CPU: ${Game.cpu.getUsed().toFixed(2)}/${Game.cpu.limit}/${Game.cpu.bucket}`, 0, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
     }
 }
