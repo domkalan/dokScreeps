@@ -8,12 +8,14 @@ import { GLOBAL_CONTEXT } from './utils/Context';
 
 export function drawDebugInfo() {
     try {
-        // branch to the cpu debug if that mode is enabled
-        drawCpuDebugInfo();
-
+        // draw room debug info for the room we are displaying
         drawRoomDebugInfo();
 
+        // draw hive debug info for all rooms we know about
         drawHiveDebugInfo();
+
+        // branch to the cpu debug if that mode is enabled
+        drawCpuDebugInfo();
     } catch (error) {
         console.log(`Error drawing debug info: ${error}`);
     }
@@ -107,7 +109,26 @@ export function drawRoomDebugInfo() {
 
     // display if the room is in defense mode
     Game.rooms[roomDisplay].visual.text(`Defense Mode: ${roomMemory.defenseMode ? 'ON' : 'OFF'}`, 0.5, textOffset, { align: 'left', font: 0.5, color: roomMemory.defenseMode ? 'red' : undefined });
+    textOffset += 1;
+
+    // draw when the next hive scan is
+    Game.rooms[roomDisplay].visual.text(`Hive: ${Memory.hive.lastScan + 100 - Game.time}`, 0.5, textOffset, { align: 'left', font: 0.5 });
     textOffset += 0.5;
+    // draw how many hive tasks are queued
+    Game.rooms[roomDisplay].visual.text(`Hive Tasks: ${Object.keys(Memory.hive.tasks).length}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+    textOffset += 0.5;
+
+    // draw what room the scout is in if we have a scout
+    for (const creepName in Game.creeps) {
+        const creep = Game.creeps[creepName];
+        if (creep.memory.role === 'scout') {
+            Game.rooms[roomDisplay].visual.text(`Scout: ${creep.name} - (${creep.room.name}, ${creep.pos.x}, ${creep.pos.y})`, 0.5, textOffset, { align: 'left', font: 0.5 });
+            textOffset += 0.5;
+        } else if (creep.memory.role === 'transporter') {
+            Game.rooms[roomDisplay].visual.text(`Transporter: ${creep.name} - (${creep.room.name}, ${creep.pos.x}, ${creep.pos.y}) - pocket=${creep.store.getUsedCapacity() || 0}/${creep.store.getCapacity() || 0}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+            textOffset += 0.5;
+        }
+    }
 }
 
 // cpu debug draws to the right side of the room screen
@@ -171,7 +192,7 @@ export function drawHiveDebugInfo() {
             continue;
         }
 
-        Game.map.visual.rect(RoomPosition(0, 0, roomName), 50, 50, { fill: roomMemory.hostile ? 'rgba(255, 0, 0, 0.5)' : 'rgba(0, 255, 0, 0.5)' });
-        Game.map.visual.text(`Last scan: ${Game.time - roomMemory.lastScan} ticks ago`, RoomPosition(25, 25, roomName), { align: 'center' });
+        Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: roomMemory.hostile ? 'rgba(255, 0, 0, 0.5)' : 'rgba(0, 255, 0, 0.5)' });
+        Game.map.visual.text(`Age: ${roomMemory.lastScan === 0 ? 'N/A' : Game.time - roomMemory.lastScan}`, new RoomPosition(25, 25, roomName), { align: 'center', fontSize: 4, color: '#ffffff' });
     }
 }

@@ -2,40 +2,6 @@ import { createTask, releaseTask } from 'utils/TaskManager';
 import { resetRoom } from './rooms';
 
 export function addCliFunctions() {
-    global.resetScout = function () {
-        if (Memory.hive) {
-            Memory.hive.rooms = {};
-            Memory.hive.scouts = {};
-            Memory.hive.lastScan = 0;
-
-            // kill all current scout creeps
-            for (const creepName in Game.creeps) {
-                const creep = Game.creeps[creepName];
-                if (creep.memory.role === 'scout') {
-                    creep.suicide();
-                }
-            }
-
-            for (const roomName in Memory.rooms) {
-                Memory.rooms[roomName].remoteEnergySources = {};
-            }
-
-            return `All scout data for hive has been reset.`;
-        } else {
-            return `Hive not found.`;
-        }
-    }
-
-    global.resetScoutTimer = function (roomName: string) {
-        if (Memory.hive && Memory.hive.rooms[roomName]) {
-            Memory.hive.rooms[roomName].lastScan = 0;
-
-            return `Scout timer for room ${roomName} has been reset.`;
-        } else {
-            return `No room found with name ${roomName}.`;
-        }
-    }
-
     global.resetRoom = function (roomName: string) {
         const room = Game.rooms[roomName];
 
@@ -357,5 +323,83 @@ export function addCliFunctions() {
         }
 
         return `Bootstrap task for room ${roomName} has been added.`;
+    }
+
+    global.resetHive = function () {
+        if (Memory.hive) {
+            Memory.hive.rooms = {};
+            Memory.hive.tasks = {};
+            Memory.hive.lastScan = 0;
+
+            // kill all current scout creeps
+            for (const creepName in Game.creeps) {
+                const creep = Game.creeps[creepName];
+                if (creep.memory.role === 'scout') {
+                    creep.suicide();
+                }
+            }
+
+            return `All scout data for hive has been reset.`;
+        } else {
+            return `Hive not found.`;
+        }
+    }
+
+    global.resetHiveTick = function () {
+        if (Memory.hive) {
+            Memory.hive.lastScan = 0;
+            return `Hive tick has been reset.`;
+        } else {
+            return `Hive not found.`;
+        }
+    }
+
+    global.resetHiveRoomScan = function (roomName: string) {
+        if (Memory.hive && Memory.hive.rooms[roomName]) {
+            Memory.hive.rooms[roomName].lastScan = 0;
+
+            return `Scout timer for room ${roomName} has been reset.`;
+        } else {
+            return `No room found with name ${roomName}.`;
+        }
+    }
+
+    global.jumpPortal = function (roomName: string, portalId: string) {
+        Memory.hive.tasks[`jump-${portalId}`] = {
+            type: 'jump',
+            completed: false,
+            priority: 1,
+            targetId: portalId,
+            roomId: roomName,
+            shardId: Game.shard.name,
+            assigned: null,
+            expires: Game.time + 10000
+        };
+
+        return `Jump task for portal ${portalId} in room ${roomName} has been added.`;
+    }
+
+    // add a global function to create a transport task
+    // hiveTransport('W3S23', '6a777a379ba7274776316799', 'energy', 'E2S22', 10000, 4)
+    global.hiveTransport = function (roomName: string, targetId: string, resourceType: ResourceConstant, destRoom: string, amount: number = 0, transporterCount: number = 1) {
+        Memory.hive.tasks[`transport-${targetId}`] = {
+            type: 'transport',
+            completed: false,
+            priority: 1,
+            targetId: targetId,
+            roomId: roomName,
+            shardId: Game.shard.name,
+            assigned: null,
+            expires: Game.time + (4000 * Math.floor(amount / 5000)), // expire based on amount to transport, 4k ticks per 5k amount
+            kv: {
+                destRoom,
+                transportAmount: amount,
+                transportTotal: 0,
+                transporterCount
+            },
+            resourceType
+        };
+
+        return `Transport task for ${resourceType} from ${targetId} in room ${roomName} to room ${destRoom} has been added.`;
     }
 }

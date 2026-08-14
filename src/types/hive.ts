@@ -1,20 +1,30 @@
 export interface HiveMemory {
     rooms: {
         [roomName: string]: {
-            hostile: boolean;
+            name: string;
+            shard: string;
             owner: string | null;
-
+            hostile: boolean;
             lastScan: number;
-            energySources: string[];
+            highway: boolean;
 
-            energyProfitability: number,
-            resourceType: string | null;
+            inaccessible?: boolean;
         }
     },
-    scouts: {
-        [creepName: string]: {
-            assigned?: string;
+    tasks: {
+        [taskId: string]: {
+            type: string;
+            roomId: string;
+            shardId: string;
+            targetId: string;
+            resourceType?: ResourceConstant;
+            priority: number;
+            expires: number;
+            assigned: string | null;
+            completed: boolean;
+            kv?: any;
         }
     },
     lastScan: number;
+    scoutingRoom?: string;
 }

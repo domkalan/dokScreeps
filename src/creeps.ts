@@ -9,6 +9,8 @@ import { runHauler } from "roles/hauler";
 import { runDefender } from "roles/defender";
 import { runAttacker } from "roles/attacker";
 import { runClaimer } from "roles/claimer";
+import { completeTask } from "utils/TaskManager";
+import { runTransporter } from "roles/transporter";
 
 export let CREEP_COUNTS: {
     [room: string]: { [role: string]: number } | undefined
@@ -80,6 +82,9 @@ export function runCreeps(): void {
                 case 'scout':
                     runScout(creep, context);
                     break;
+                case 'transporter':
+                    runTransporter(creep, context);
+                    break;
                 case 'filler':
                 case 'hauler':
                     runHauler(creep, context);
@@ -99,6 +104,14 @@ export function runCreeps(): void {
             }
         } catch (error) {
             debugLog(`Error running creep ${creep.name}: ${error}`);
+
+            completeTask(creep); // Clear the task if there's an error
+
+            delete creep.memory.taskId; // Clear the task from memory
+            delete creep.memory.taskStarted; // Clear the taskStarted from memory
+            delete creep.memory.focusedOn; // Clear the focusedOn from memory
+
+            creep.say(`ERR`);
         }
 
         CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
