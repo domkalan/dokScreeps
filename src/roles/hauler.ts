@@ -1,5 +1,5 @@
 import { RoomContext } from "../utils/Context";
-import { completeTask, findTaskForCreep, getTaskById, releaseTask } from "../utils/TaskManager";
+import { completeTask, findTaskForCreep, getTaskById, releaseTask, watchForStuckTask } from "../utils/TaskManager";
 import { goForEnergy } from "./builder";
 import { runQueen } from "./queen";
 
@@ -16,6 +16,8 @@ export function runFillTask(creep: Creep, context: RoomContext) {
         const task = findTaskForCreep(creep, 'fill');
         if (task) {
             creep.memory.taskId = task.id;
+            creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
             task.assigned = creep.name;
         } else {
             runQueen(creep, context);
@@ -56,6 +58,9 @@ export function runFillTask(creep: Creep, context: RoomContext) {
         return;
     }
 
+    // watch for stuck tasks, haulers sometimes get stuck
+    watchForStuckTask(creep);
+
     // run a fill action based on the type of target
     if (target instanceof Structure) {
         const transferResult = creep.transfer(target, RESOURCE_ENERGY);
@@ -71,6 +76,8 @@ export function runFillTask(creep: Creep, context: RoomContext) {
 
             // mark the task as completed since the creep does not have enough resources
             releaseTask(creep);
+        } else if (transferResult === OK) {
+            completeTask(creep);
         }
     }
 }
@@ -128,6 +135,8 @@ export function runHauler(creep: Creep, context: RoomContext) {
         const task = findTaskForCreep(creep, 'haul');
         if (task) {
             creep.memory.taskId = task.id;
+            creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
             task.assigned = creep.name;
         } else {
             // no task was assigned, so the creep should idle
@@ -176,6 +185,9 @@ export function runHauler(creep: Creep, context: RoomContext) {
 
         return;
     }
+
+    // haulers sometimes get stuck, watch for stuck tasks
+    watchForStuckTask(creep);
 
     // run a pickup or withdraw action based on the type of target
     if (target instanceof Resource) {

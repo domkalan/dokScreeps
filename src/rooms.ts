@@ -103,9 +103,10 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         filler: { count: 0, priority: 15 } // filler creeps are only spawned if we have a fill task and sufficient energy, medium priority
     };
 
-    if (taskCounts.builder > 0) {
-        idealCounts.builder.count = Math.min(Math.max(Math.ceil(taskCounts.builder / 2), 1), roomControlLevel); // at least one builder if we have build jobs
-        idealCounts.builder.priority = 5; // if we have enough builders, lower the priority
+    // if we have more than 10 builder tasks, spawn more builders, but not more than the room control level
+    if (Math.min(Math.floor(taskCounts.builder / 2), roomControlLevel) > idealCounts.builder.count) {
+        idealCounts.builder.count = Math.min(Math.floor(taskCounts.builder / 2), roomControlLevel);
+        idealCounts.builder.priority = 5;
     }
 
     // remote harvester spawning
@@ -115,17 +116,17 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // 2 tasks per hauler, if we have more than 100 tasks per hauler, increase the priority of haulers
-    if (Math.min(Math.floor(taskCounts.hauler / 10), roomControlLevel) > idealCounts.hauler.count) {
+    if (Math.min(Math.floor(taskCounts.hauler / 4), roomControlLevel) > idealCounts.hauler.count) {
         // increase the number of haulers to match the number of tasks, but not more than the room control level
-        idealCounts.hauler.count = Math.min(Math.floor(taskCounts.hauler / 100), roomControlLevel);
+        idealCounts.hauler.count = Math.min(Math.floor(taskCounts.hauler / 4), roomControlLevel);
         // increase the priority of haulers to 5 if we have more than 2 tasks per hauler
         idealCounts.hauler.priority = 5;
     }
 
     // if we have any filler jobs, spawn a filler creep if we have enough energy
-    if (Math.max(taskCounts.filler, 1) > idealCounts.filler.count && getStoredEnergy(context) > 50000) {
+    if (Math.max(taskCounts.filler + taskCounts.filler, 1) > idealCounts.filler.count && getStoredEnergy(context) > 50000) {
         // increase the number of fillers to match the number of tasks, but not more than the room control level
-        idealCounts.filler.count = Math.min(Math.max(taskCounts.filler, 1), roomControlLevel);
+        idealCounts.filler.count = 1;
     }
 
     if (taskCounts.claimer > 0 && getStoredEnergy(context) > 10000) {
@@ -149,6 +150,8 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
 // monitor creeps count and log if any role is underrepresented
 function monitorCreepRoles(room: Room, context: RoomContext): void {
     if (!CREEP_COUNTS[room.name]) {
+        debugLog(`No creeps found in room ${room.name}. Skipping role monitoring.`);
+
         return; // no creeps in this room, nothing to monitor
     }
 
@@ -488,6 +491,34 @@ function runColony(room: Room): void {
         scanRoom(room, context);
     }
 
+    // every 10 ticks, we should transfer energy from links to the link closet to storage
+    if (Game.time % 10 === 0 && room.memory.storageLink) {
+        // get structures needed
+        const links = context.structures.filter(structure => structure.structureType === STRUCTURE_LINK) as StructureLink[];
+
+        for (const link of links) {
+            // if the link is the storage link, request haul if full
+            if (link.id === room.memory.storageLink && link.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+                createTask(room, 'haul', link.id, 0, room.name, undefined, 105, RESOURCE_ENERGY);
+
+                continue; // skip the storage link
+            }
+
+            if (link.store.getUsedCapacity(RESOURCE_ENERGY) < 400) {
+                continue;
+            }
+
+            // all child links should transfer energy to the storage link
+            const transferResult = link.transferEnergy(Game.getObjectById(room.memory.storageLink) as StructureLink);
+
+            if (transferResult === OK) {
+                debugLog(`Transferred energy from link ${link.id} to storage link ${room.memory.storageLink} in room ${room.name}.`);
+            } else {
+                debugLog(`Failed to transfer energy from link ${link.id} to storage link ${room.memory.storageLink} in room ${room.name}. Error code: ${transferResult}`);
+            }
+        }
+    }
+
     // monitor the roles of creeps in the room
     monitorCreepRoles(room, context);
 
@@ -619,8 +650,14 @@ function runRemote(room: Room): void {
 
     const context = GLOBAL_CONTEXT[room.name];
 
+    if (!room.memory.parentRoom) {
+        debugLog(`Remote room ${room.name} does not have a parent room assigned. Skipping remote logic.`);
+
+        return;
+    }
+
     // get a reference to the parent room
-    const parentRoom = Game.rooms[room.memory.parentRoom || ''];
+    const parentRoom = Game.rooms[room.memory.parentRoom];
 
     if (!parentRoom) {
         debugLog(`Parent room ${room.memory.parentRoom} not found for remote room ${room.name}.`);

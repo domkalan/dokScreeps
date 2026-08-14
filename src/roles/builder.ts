@@ -1,5 +1,5 @@
 import { RoomContext, GLOBAL_CONTEXT } from "utils/Context";
-import { getTaskById, releaseTask, findTaskForCreep, completeTask } from "utils/TaskManager";
+import { getTaskById, releaseTask, findTaskForCreep, completeTask, watchForStuckTask } from "utils/TaskManager";
 import { runQueen } from './queen';
 
 export function bootstrapEnergy(creep: Creep): void {
@@ -175,7 +175,13 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
             return;
         }
 
+        // if the creep has a task, but no energy, release the task so it can go get more energy
+        if (creep.memory.taskId) {
+            releaseTask(creep); // Release the task if the creep has no energy and is a builder
+        }
+
         goForEnergy(creep, context); // Attempt to get energy from nearby storage or dropped energy
+
         return;
     }
 
@@ -184,6 +190,8 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
         const task = findTaskForCreep(creep, 'build');
         if (task) {
             creep.memory.taskId = task.id;
+            creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
             task.assigned = creep.name;
         } else {
             debugLog(`No available build tasks for creep ${creep.name}`);
@@ -197,7 +205,9 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
     const task = getTaskById(creep.memory.room, creep.memory.taskId);
     if (!task) {
         debugLog(`Task with ID ${creep.memory.taskId} not found for creep ${creep.name}`);
+
         releaseTask(creep); // Release the task if it no longer exists
+
         return;
     }
 
@@ -208,12 +218,17 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    const target = Game.getObjectById(task.targetId);
+    const target = Game.getObjectById(task.targetId) as ConstructionSite | Structure | null;
     if (!target) {
         debugLog(`Construction site with ID ${task.targetId} not found for creep ${creep.name}`);
+
         releaseTask(creep); // Release the task if the target is no longer valid
+
         return;
     }
+
+    // builders sometimes get stuck, watch for stuck tasks
+    watchForStuckTask(creep);
 
     if (target instanceof ConstructionSite) {
         // fire the build action
@@ -223,22 +238,25 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
             creep.travelTo(target);
         }
     } else if (target instanceof StructureController) {
-        if (creep.upgradeController(target) === ERR_NOT_IN_RANGE) {
-            creep.travelTo(target);
-        }
+        const upgradeResult = creep.upgradeController(target);
 
-        // if the creep has no energy, release the task so it can go get more energy
-        if (creep.store[RESOURCE_ENERGY] === 0) {
-            releaseTask(creep); // Release the task if the creep has no energy and is a builder
+        if (upgradeResult === ERR_NOT_IN_RANGE) {
+            creep.travelTo(target);
+        } else if (upgradeResult === OK) {
+            // If the controller is upgraded successfully, sign it if necessary
+            if (Memory.controllerSign && target.sign?.text !== Memory.controllerSign) {
+                const signResult = creep.signController(target, Memory.controllerSign);
+
+                if (signResult === ERR_NOT_IN_RANGE) {
+                    creep.travelTo(target);
+                }
+            }
         }
     } else if (target instanceof Structure) {
-        if (creep.repair(target) === ERR_NOT_IN_RANGE) {
-            creep.travelTo(target);
-        }
+        const repairResult = creep.repair(target);
 
-        // if the creep has no energy, release the task so it can go get more energy
-        if (creep.store[RESOURCE_ENERGY] === 0) {
-            releaseTask(creep); // Release the task if the creep has no energy and is a builder
+        if (repairResult === ERR_NOT_IN_RANGE) {
+            creep.travelTo(target);
         }
     }
 }

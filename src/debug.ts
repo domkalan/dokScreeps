@@ -7,10 +7,16 @@ import { GLOBAL_CONTEXT } from './utils/Context';
  */
 
 export function drawDebugInfo() {
-    // branch to the cpu debug if that mode is enabled
-    drawCpuDebugInfo();
+    try {
+        // branch to the cpu debug if that mode is enabled
+        drawCpuDebugInfo();
 
-    drawRoomDebugInfo();
+        drawRoomDebugInfo();
+
+        drawHiveDebugInfo();
+    } catch (error) {
+        console.log(`Error drawing debug info: ${error}`);
+    }
 }
 
 export function drawRoomDebugInfo() {
@@ -83,7 +89,7 @@ export function drawRoomDebugInfo() {
     textOffset += 0.5;
 
     // draw the spawn queue for this room
-    for (const spawnTask of roomMemory.spawnQueue) {
+    for (const spawnTask of roomMemory.spawnQueue || []) {
         Game.rooms[roomDisplay].visual.text(`Spawn: ${spawnTask.role} - ${spawnTask.priority}`, 0.5, textOffset, { align: 'left', font: 0.5 });
         textOffset += 0.5;
     }
@@ -155,5 +161,17 @@ export function attachDebug() {
         if (typeof Memory.debugDisplay !== 'undefined') {
             console.log(`[DEBUG] ${message}`);
         }
+    }
+}
+
+export function drawHiveDebugInfo() {
+    for (const roomName in Memory.hive.rooms) {
+        const roomMemory = Memory.hive.rooms[roomName];
+        if (!roomMemory) {
+            continue;
+        }
+
+        Game.map.visual.rect(RoomPosition(0, 0, roomName), 50, 50, { fill: roomMemory.hostile ? 'rgba(255, 0, 0, 0.5)' : 'rgba(0, 255, 0, 0.5)' });
+        Game.map.visual.text(`Last scan: ${Game.time - roomMemory.lastScan} ticks ago`, RoomPosition(25, 25, roomName), { align: 'center' });
     }
 }

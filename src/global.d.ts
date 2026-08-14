@@ -26,6 +26,8 @@ declare global {
 
         // track the task that this creep is currently assigned to, if any
         taskId?: string;
+        // track when the task was started, if any
+        taskStarted?: number;
         // previous tasks that this creep has completed, if any
         completedTasks?: number;
 
@@ -45,7 +47,9 @@ declare global {
         // allow the creep to store arbitrary key-value pairs
         kv?: { [key: string]: any };
 
+        _trav?: any;
         _move?: any;
+        _cFlag?: number;
     }
 
     interface RoomMemory {
@@ -80,6 +84,9 @@ declare global {
         // whether the room is in defense mode, and if so, when it was activated
         defenseMode: boolean;
         defenseModeActivatedAt?: number;
+
+        // storage link
+        storageLink?: string;
     }
 
     interface RoomTask {
@@ -103,6 +110,8 @@ declare global {
         rooms: { [roomName: string]: RoomMemory };
         counter: { [key: string]: number };
         hive: HiveMemory;
+
+        controllerSign?: string;
 
         // allow the user to enable or disable debug mode for the bot
         debugDisplay: string | undefined; // what room the debug display will show in

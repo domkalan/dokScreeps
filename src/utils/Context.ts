@@ -14,11 +14,6 @@ export interface RoomContext {
     sources: Source[];
     ruins: Array<Ruin | Tombstone>;
     spawns: StructureSpawn[];
-    fillTargets: Array<
-        StructureSpawn |
-        StructureExtension |
-        StructureTower
-    >;
     resources: Array<Resource | Ruin | Tombstone>;
 }
 
@@ -39,7 +34,6 @@ export interface ContextCache {
     sources: string[];
     ruins: string[];
     spawns: string[];
-    fillTargets: string[];
     resources: string[];
 }
 
@@ -97,12 +91,12 @@ export function buildRoomContext(room: Room): RoomContext {
             // always find hostiles in the room to ensure we have the most up-to-date information
             hostiles: room.find(FIND_HOSTILE_CREEPS),
 
-            structures: CONTEXT_CACHE[room.name].cache.structures.map(id => Game.getObjectById(id)).filter(structure => structure !== undefined) as Structure[],
-            constructionSites: CONTEXT_CACHE[room.name].cache.constructionSites.map(id => Game.getObjectById(id)).filter(site => site !== undefined) as ConstructionSite[],
+            structures: CONTEXT_CACHE[room.name].cache.structures.map(id => Game.structures[id]).filter(structure => structure !== undefined) as Structure[],
+            constructionSites: CONTEXT_CACHE[room.name].cache.constructionSites.map(id => Game.constructionSites[id]).filter(site => site !== undefined) as ConstructionSite[],
+            spawns: CONTEXT_CACHE[room.name].cache.spawns.map(id => Game.spawns[id]).filter(spawn => spawn !== undefined) as StructureSpawn[],
+
             sources: CONTEXT_CACHE[room.name].cache.sources.map(id => Game.getObjectById(id)).filter(source => source !== undefined) as Source[],
             ruins: CONTEXT_CACHE[room.name].cache.ruins.map(id => Game.getObjectById(id)).filter(ruin => ruin !== undefined) as Array<Ruin | Tombstone>,
-            spawns: CONTEXT_CACHE[room.name].cache.spawns.map(id => Game.getObjectById(id)).filter(spawn => spawn !== undefined) as StructureSpawn[],
-            fillTargets: CONTEXT_CACHE[room.name].cache.fillTargets.map(id => Game.getObjectById(id)).filter(target => target !== undefined) as Array<StructureSpawn | StructureExtension | StructureTower>,
             resources: CONTEXT_CACHE[room.name].cache.resources.map(id => Game.getObjectById(id)).filter(resource => resource !== undefined) as Array<Resource | Ruin | Tombstone>,
         };
     }
@@ -115,41 +109,20 @@ export function buildRoomContext(room: Room): RoomContext {
         room,
         structures,
         constructionSites: room.find(FIND_CONSTRUCTION_SITES),
-        sources: room.find(FIND_SOURCES),
-        hostiles: room.find(FIND_HOSTILE_CREEPS),
-        myCreeps: room.find(FIND_MY_CREEPS),
-        ruins: [...room.find(FIND_RUINS), ...room.find(FIND_TOMBSTONES)],
-
         spawns: structures.filter(
             (structure): structure is StructureSpawn =>
                 structure.structureType === STRUCTURE_SPAWN
         ),
 
+        hostiles: room.find(FIND_HOSTILE_CREEPS),
+        myCreeps: room.find(FIND_MY_CREEPS),
+
+        sources: room.find(FIND_SOURCES),
+        ruins: [...room.find(FIND_RUINS), ...room.find(FIND_TOMBSTONES)],
         resources: [
             ...room.find(FIND_DROPPED_RESOURCES)
             // TODO: Consider adding ruins and tombstones if needed
         ],
-
-        fillTargets: structures.filter(
-            (
-                structure
-            ): structure is
-                | StructureSpawn
-                | StructureExtension
-                | StructureTower => {
-                if (
-                    structure.structureType !== STRUCTURE_SPAWN &&
-                    structure.structureType !== STRUCTURE_EXTENSION &&
-                    structure.structureType !== STRUCTURE_TOWER
-                ) {
-                    return false;
-                }
-
-                return (
-                    structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-                );
-            }
-        ),
     };
 
     // store the context in the cache with an expiration time of 10 ticks
@@ -164,7 +137,6 @@ export function buildRoomContext(room: Room): RoomContext {
             sources: context.sources.map(source => source.id),
             ruins: context.ruins.map(ruin => ruin.id),
             spawns: context.spawns.map(spawn => spawn.id),
-            fillTargets: context.fillTargets.map(target => target.id),
             resources: context.resources.map(resource => resource.id),
         }
     }

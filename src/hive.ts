@@ -121,6 +121,8 @@ export function runHive() {
         };
     }
 
+    console.log(`Hive running. Last scan was at tick ${Memory.hive.lastScan}. Current tick is ${Game.time}. (${Game.time - Memory.hive.lastScan} ticks since last scan)`);
+
     // only run the hive logic every 100 ticks
     if (Game.time - Memory.hive.lastScan > 100) {
         // update the hive last scan time
@@ -147,6 +149,8 @@ export function runHive() {
 
         // rooms should be scanned every 100,000 ticks, so check if any rooms need to be scanned
         const roomsNeedingScan = Object.entries(Memory.hive.rooms).filter(([roomName, roomData]) => {
+            console.log(`Checking if room ${roomName} needs to be scanned. Last scan was at tick ${roomData.lastScan}. Current tick is ${Game.time}.`);
+
             return Game.time - roomData.lastScan > 100000;
         });
 

@@ -52,6 +52,15 @@ export function runCreeps(): void {
                 // if the creep is not in the home room, move it back to the home room
                 if (creep.room.name !== creep.memory.room) {
                     creep.travelTo(new RoomPosition(25, 25, creep.memory.room)); // Move to the center of the home room
+                } else {
+                    // if the creep is in the home room, move it to a safe position (e.g., near the spawn)
+                    const homeRoom = Game.rooms[creep.memory.room];
+                    if (homeRoom) {
+                        const spawn = homeRoom.find(FIND_MY_SPAWNS)[0];
+                        if (spawn) {
+                            creep.travelTo(spawn.pos);
+                        }
+                    }
                 }
 
                 continue; // skip the rest of the logic for this creep
@@ -108,6 +117,11 @@ export function indexCreeps() {
     // reset the creep counts for this tick
     CREEP_COUNTS = {};
     CREEP_COUNTS_GENERIC = {};
+
+    // create room entries for all rooms
+    for (const roomName in Game.rooms) {
+        CREEP_COUNTS[roomName] = {};
+    }
 
     // index all creeps by room and role
     for (const creepName in Game.creeps) {

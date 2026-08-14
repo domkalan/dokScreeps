@@ -24,8 +24,10 @@ export function runReserver(creep: Creep, context: RoomContext): void {
     if (!creep.memory.taskId) {
         const task = findTaskForCreep(creep, 'reserve');
         if (task) {
-            task.assigned = creep.name;
             creep.memory.taskId = task.id;
+            creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
+            task.assigned = creep.name;
         } else {
             returnHome(creep, context); // If no reserve task is found, return home
 
@@ -73,8 +75,10 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
     if (!creep.memory.taskId) {
         const task = findTaskForCreep(creep, 'claim');
         if (task) {
-            task.assigned = creep.name;
             creep.memory.taskId = task.id;
+            creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
+            task.assigned = creep.name;
         } else {
             runReserver(creep, context); // If no claim task is found, fallback to reserving the controller
 

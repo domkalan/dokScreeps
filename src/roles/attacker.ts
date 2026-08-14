@@ -14,6 +14,7 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
         }
 
         creep.memory.taskId = attackTask.id;
+        creep.memory.taskStarted = Game.time; // Record the time when the task was started
     }
 
     // validate the task still exists and is valid

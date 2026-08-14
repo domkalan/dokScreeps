@@ -31,7 +31,7 @@ export function runDefender(creep: Creep, context: RoomContext): void {
         // if there are no hostiles, move to a defensive position near the room controller or spawn
         const defensivePosition = creep.room.controller || context.structures.find(structure => structure.structureType === STRUCTURE_SPAWN)?.pos;
 
-        if (defensivePosition) {
+        if (defensivePosition && creep.pos.getRangeTo(defensivePosition) > 5) {
             creep.travelTo(defensivePosition);
         }
     }

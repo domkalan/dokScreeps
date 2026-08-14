@@ -83,7 +83,6 @@ export function createTask(room: Room, type: string, targetId: string, priority:
     return task;
 }
 
-
 export function assignTask(creep: Creep, taskId: string): void {
     const task = getTaskById(creep.memory.room, taskId);
     if (task) {
@@ -205,4 +204,46 @@ export function getTaskCounts(room: Room): { [role: string]: number } {
     }
 
     return roleCounts;
+}
+
+export function purgeTaskById(taskId: string, roomName: string): void {
+    const room = Game.rooms[roomName];
+
+    if (!room) {
+        debugLog(`Room ${roomName} not found while trying to purge task ${taskId}`);
+        return;
+    }
+
+    const task = room.memory.tasks?.[taskId];
+
+    if (task) {
+        delete room.memory.tasks[taskId];
+        debugLog(`Purged task ${taskId} from room ${roomName}`);
+    } else {
+        debugLog(`Task ${taskId} not found in room ${roomName} while trying to purge`);
+    }
+}
+
+export function watchForStuckTask(creep: Creep): void {
+    if (!creep.memory.taskId) return;
+
+    const task = getTaskById(creep.memory.room, creep.memory.taskId);
+
+    if (!task) {
+        debugLog(`Task with ID ${creep.memory.taskId} not found for creep ${creep.name}`);
+        releaseTask(creep); // Clear the invalid task ID
+
+        return;
+    }
+
+    // check if the task has expired or if the creep has been working on it for too long
+    if (task.expires <= Game.time || (creep.memory.taskStarted && Game.time - creep.memory.taskStarted > 200)) {
+        debugLog(`Task with ID ${creep.memory.taskId} has expired for creep ${creep.name}`);
+
+        releaseTask(creep); // Clear the expired task ID
+
+        creep.say(`🛑 T_EXP`);
+
+        return;
+    }
 }

@@ -1,5 +1,6 @@
 import { RoomContext } from 'utils/Context';
 import { goForEnergy } from './builder';
+import { purgeTaskById, assignTask } from 'utils/TaskManager';
 
 // if no other work exists, haulers will go to the room controller and upgrade it
 export function upgradeRoomController(creep: Creep, context: RoomContext): void {
@@ -8,6 +9,7 @@ export function upgradeRoomController(creep: Creep, context: RoomContext): void 
         return;
     }
 
+    // upgrade the controller if we have energy and are in range
     if (creep.upgradeController(context.room.controller!) === ERR_NOT_IN_RANGE) {
         creep.travelTo(context.room.controller!);
     }
@@ -45,12 +47,15 @@ export function runQueen(creep: Creep, context: RoomContext): void {
 
         // if there are no extensions that need energy, the queen will go to the controller and upgrade it
         if (extensions.length === 0 && creep.body.some(part => part.type === WORK)) {
+
+            // if there are no extensions that need energy, the queen will go to the controller and upgrade it
             upgradeRoomController(creep, context);
 
             return;
         } else if (extensions.length === 0) {
             // if there are no extensions that need energy and the queen has no WORK parts, it will idle
             creep.say('🛑 Idle');
+
             return;
         }
 
@@ -60,8 +65,14 @@ export function runQueen(creep: Creep, context: RoomContext): void {
     }
 
     if (target && (target.structureType === STRUCTURE_EXTENSION || target.structureType === STRUCTURE_SPAWN)) {
-        if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        const transferCode = creep.transfer(target, RESOURCE_ENERGY);
+
+        if (transferCode === ERR_NOT_IN_RANGE) {
             creep.travelTo(target);
+        } else if (transferCode === OK) {
+            // if the transfer was successful, manually purge any tasks associated with this target
+            const taskId = `${target.id}-fill`;
+            purgeTaskById(taskId, context.room.name);
         }
     } else {
         delete creep.memory.focusedOn; // Clear the invalid target from memory

@@ -1,4 +1,4 @@
-import { createTask } from 'utils/TaskManager';
+import { createTask, releaseTask } from 'utils/TaskManager';
 import { resetRoom } from './rooms';
 
 export function addCliFunctions() {
@@ -66,6 +66,28 @@ export function addCliFunctions() {
         } else {
             return `Performance tracking mode has been disabled.`;
         }
+    }
+
+    global.setCacheMode = function (enabled: boolean) {
+        Memory.cacheMode = enabled;
+
+        if (enabled) {
+            return `Cache mode has been enabled.`;
+        } else {
+            return `Cache mode has been disabled.`;
+        }
+    }
+
+    global.setStorageLink = function (roomName: string, linkId: string) {
+        const roomMemory = Memory.rooms[roomName];
+
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        roomMemory.storageLink = linkId;
+
+        return `Storage link for room ${roomName} has been set to ${linkId}.`;
     }
 
     global.snapshotStructures = function (roomName: string) {
@@ -248,5 +270,92 @@ export function addCliFunctions() {
         creep.memory.taskId = undefined;
 
         return `Tasks for creep ${creepName} have been reset.`;
+    }
+
+    global.setRoomType = function (roomName: string, type: 'home' | 'remote', parentRoom?: string) {
+        const room = Game.rooms[roomName];
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        // reset the room to clear any existing tasks and spawn queue
+        resetRoom(room);
+
+        // set the room type to 'home'
+
+
+        if (type === 'remote') {
+            if (!parentRoom) {
+                return `Parent room must be specified when setting room type to 'remote'.`;
+            }
+
+            Memory.rooms[roomName].type = type;
+
+            // set parent type if provided
+            Memory.rooms[roomName].parentRoom = parentRoom || undefined;
+
+            // parent room ref
+            const parentRoomRef = Game.rooms[parentRoom || ''];
+
+            if (parentRoom && parentRoomRef) {
+                // add the room to the parent room's childRooms array if it's not already there
+                if (!parentRoomRef.memory.childRooms) {
+                    parentRoomRef.memory.childRooms = [];
+                }
+
+                if (!parentRoomRef.memory.childRooms.includes(roomName)) {
+                    parentRoomRef.memory.childRooms.push(roomName);
+                }
+
+                // add room energy sources as remote energy sources to the parent room's memory
+                const roomEnergySources = room.find(FIND_SOURCES).map(source => source.id);
+                for (const sourceId of roomEnergySources) {
+                    parentRoomRef.memory.remoteEnergySources![sourceId] = { room: roomName, id: sourceId };
+                }
+            }
+
+            // all creeps in this room should have their tasks wiped and be reassigned to the parent room
+            for (const creepName in Game.creeps) {
+                const creep = Game.creeps[creepName];
+                if (creep.memory.room === roomName) {
+                    releaseTask(creep); // Release the task if the creep is in the remote room
+
+                    creep.memory.taskId = undefined;
+                    creep.memory.room = parentRoom || '';
+                }
+            }
+        } else if (type === 'home') {
+            const parentRoomRef = Game.rooms[room.memory.parentRoom || ''];
+
+            // if room was previously a remote
+            // remove it from the parent room's childRooms array and remove its remote energy sources
+            if (parentRoomRef && parentRoomRef.memory.childRooms) {
+                // remove child dep
+                parentRoomRef.memory.childRooms = parentRoomRef.memory.childRooms.filter((childRoom: string) => childRoom !== roomName);
+
+                // remove remote energy sources
+                const roomEnergySources = room.find(FIND_SOURCES).map(source => source.id);
+                for (const sourceId of roomEnergySources) {
+                    // remove the remote energy source from the parent room's memory if it exists
+                    delete parentRoomRef.memory.remoteEnergySources![sourceId];
+                }
+            }
+
+            // all creeps currently in this room should have their tasks wiped and be reassigned to this room
+            for (const creepName in Game.creeps) {
+                const creep = Game.creeps[creepName];
+                if (creep.memory.room === roomName) {
+                    releaseTask(creep); // Release the task if the creep is in the remote room
+
+                    creep.memory.taskId = undefined;
+                    creep.memory.room = roomName;
+                }
+            }
+
+            Memory.rooms[roomName].type = type;
+            Memory.rooms[roomName].parentRoom = undefined;
+        }
+
+        return `Bootstrap task for room ${roomName} has been added.`;
     }
 }

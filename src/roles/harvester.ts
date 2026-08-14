@@ -7,6 +7,8 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         const task = findTaskForCreep(creep, 'harvest');
         if (task) {
             creep.memory.taskId = task.id;
+            creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
             task.assigned = creep.name;
         }
 
@@ -46,7 +48,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         const nearbyLink = creep.pos.findClosestByRange(FIND_STRUCTURES, {
             filter: (structure) => {
                 return (
-                    structure.structureType === STRUCTURE_LINK && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                    structure.structureType === STRUCTURE_LINK && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && structure.pos.getRangeTo(creep.pos) <= 4
                 );
             }
         });
@@ -67,7 +69,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         const nearbyContainer = creep.pos.findClosestByRange(FIND_STRUCTURES, {
             filter: (structure) => {
                 return (
-                    structure.structureType === STRUCTURE_CONTAINER && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                    structure.structureType === STRUCTURE_CONTAINER && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && structure.pos.getRangeTo(creep.pos) <= 4
                 );
             }
         });
