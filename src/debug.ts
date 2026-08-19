@@ -192,7 +192,9 @@ export function drawHiveDebugInfo() {
             continue;
         }
 
-        Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: roomMemory.hostile ? 'rgba(255, 0, 0, 0.5)' : 'rgba(0, 255, 0, 0.5)' });
-        Game.map.visual.text(`Age: ${roomMemory.lastScan === 0 ? 'N/A' : Game.time - roomMemory.lastScan}`, new RoomPosition(25, 25, roomName), { align: 'center', fontSize: 4, color: '#ffffff' });
+        Game.map.visual.rect(new RoomPosition(0, 0, roomName), 50, 50, { fill: roomMemory.hostile ? '#ff0000' : '#00ff00', opacity: 0.25 });
+        Game.map.visual.text(`Age: ${roomMemory.lastScan === 0 ? 'N/A' : Game.time - roomMemory.lastScan}`, new RoomPosition(25, 25, roomName), { align: 'center', fontSize: 3, color: '#ffffff' });
+        Game.map.visual.text(`Hostile: ${roomMemory.hostile ? 'Yes' : 'No'}`, new RoomPosition(25, 27, roomName), { align: 'center', fontSize: 3, color: '#ffffff' })
+        Game.map.visual.text(`Highway: ${roomMemory.highway ? 'Yes' : 'No'}`, new RoomPosition(25, 29, roomName), { align: 'center', fontSize: 3, color: '#ffffff' })
     }
 }

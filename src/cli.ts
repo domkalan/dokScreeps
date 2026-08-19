@@ -170,6 +170,37 @@ export function addCliFunctions() {
         return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${parentRoomName}.`;
     }
 
+    global.drainStructures = function (roomName: string, resourceType: ResourceConstant) {
+        const room = Game.rooms[roomName];
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        const parentRoomName = room.memory.parentRoom;
+        if (!parentRoomName) {
+            return `No parent room found for room ${roomName}.`;
+        }
+
+        const parentRoom = Game.rooms[parentRoomName];
+        if (!parentRoom) {
+            return `No parent room found with name ${parentRoomName}.`;
+        }
+
+        let totalStructures = 0;
+
+        const structures = room.find(FIND_STRUCTURES, {
+            filter: (structure) => typeof (structure as StructureContainer).store !== 'undefined' && (structure as StructureContainer).store.getUsedCapacity(resourceType) > 0
+        });
+
+        for (const structure of structures) {
+            totalStructures++;
+
+            createTask(parentRoom, 'haul', structure.id, 5, room.name, undefined, Game.time + 5000, resourceType); // high priority for attacking structures
+        }
+
+        return `Drain tasks for ${totalStructures} structures in room ${roomName} have been added to home room ${parentRoomName}.`;
+    }
+
     global.claimRoom = function (roomName: string, existingRoom: string) {
         // make sure the room has a memory object
         if (!Memory.rooms[roomName]) {

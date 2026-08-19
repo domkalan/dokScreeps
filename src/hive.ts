@@ -1,5 +1,13 @@
 import { getRoleNameCounter } from './utils/Counter'
 
+export function isHighwayRoom(roomName: string) {
+    let parsed = /^[WE]([0-9]+)[NS]([0-9]+)$/.exec(roomName);
+    if (!parsed) return false;
+    let x = parseInt(parsed[1], 10);
+    let y = parseInt(parsed[2], 10);
+    return x % 10 === 0 || y % 10 === 0;
+}
+
 export function discoverRooms(roomName: string): void {
     // discover rooms that are within 12 linear range of a given room
     if (Game.map.getRoomLinearDistance(roomName, Memory.hive.scoutingRoom || Game.rooms[0].name) > 6) {
@@ -33,7 +41,7 @@ export function scanRoom(room: Room): void {
             owner: null,
             hostile: false,
             lastScan: 0,
-            highway: room.controller === undefined
+            highway: false
         };
     }
 
@@ -42,8 +50,11 @@ export function scanRoom(room: Room): void {
         Memory.hive.rooms[room.name].owner = room.controller?.owner?.username || null;
         Memory.hive.rooms[room.name].lastScan = Game.time;
 
-        // if the room has a controller, check if it is owned by someone else
-        if ((room.controller?.owner?.username || null) !== null) {
+        // is this room a highway room?
+        Memory.hive.rooms[room.name].highway = isHighwayRoom(room.name);
+
+        // if this room is not highway, check if hostile
+        if (!Memory.hive.rooms[room.name].highway) {
             let hostileRoom = false;
 
             // check room for creeps with attacker parts, if we find any, mark the room as hostile
@@ -65,13 +76,15 @@ export function scanRoom(room: Room): void {
             }
 
             Memory.hive.rooms[room.name].hostile = hostileRoom;
+        } else {
+            Memory.hive.rooms[room.name].hostile = false;
         }
     }
 
     discoverRooms(room.name);
 }
 
-export function runScoutLogic() {
+export function runHiveScan() {
     // scan all current loaded rooms in the game
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -150,10 +163,12 @@ export function runScoutLogic() {
                     const spawn = room.find(FIND_MY_SPAWNS)[0];
                     if (spawn) {
                         const scoutName = `scout-${getRoleNameCounter('scout')}`;
-                        spawn.spawnCreep([MOVE], scoutName, { memory: { role: 'scout', room: room.name } });
-                    }
+                        const spawnResult = spawn.spawnCreep([MOVE], scoutName, { memory: { role: 'scout', room: room.name } });
 
-                    break;
+                        if (spawnResult === OK) {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -211,7 +226,7 @@ export function runHive() {
         // update the hive last scan time
         Memory.hive.lastScan = Game.time;
 
-        // run the scout logic to scan rooms and create tasks
-        runScoutLogic();
+        // run the hive scan
+        runHiveScan();
     }
 }

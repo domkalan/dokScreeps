@@ -97,6 +97,7 @@ export function runScanWork(creep: Creep, context: RoomContext): void {
                 scanRoom(creep.room);
 
                 creep.memory.kv!.inRoom = creep.room.name;
+                creep.memory.kv!.inRoomFor = 0;
             }
 
             // show we are peace

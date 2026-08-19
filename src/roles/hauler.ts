@@ -110,7 +110,9 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
             const target = creep.pos.findClosestByRange(targets);
 
             if (target) {
-                if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                const storeKeys = Object.keys(creep.store);
+
+                if (creep.transfer(target, storeKeys[0] as ResourceConstant) === ERR_NOT_IN_RANGE) {
                     creep.travelTo(target);
                 }
             }
@@ -123,7 +125,9 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
                     return;
                 }
 
-                creep.drop(RESOURCE_ENERGY);
+                const storeKeys = Object.keys(creep.store);
+
+                creep.drop(storeKeys[0] as ResourceConstant);
             }
         }
     }
@@ -204,7 +208,7 @@ export function runHauler(creep: Creep, context: RoomContext) {
             creep.travelTo(target);
         }
     } else if (target instanceof Structure) {
-        const withdrawResult = creep.withdraw(target, RESOURCE_ENERGY);
+        const withdrawResult = creep.withdraw(target, task.resourceType || RESOURCE_ENERGY);
         if (withdrawResult === ERR_NOT_IN_RANGE) {
             creep.travelTo(target);
         } else if (withdrawResult === ERR_NOT_ENOUGH_RESOURCES) {
