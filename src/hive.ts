@@ -1,4 +1,5 @@
 import { getRoleNameCounter } from './utils/Counter'
+import { GLOBAL_CONTEXT } from './utils/Context';
 
 export function isHighwayRoom(roomName: string) {
     let parsed = /^[WE]([0-9]+)[NS]([0-9]+)$/.exec(roomName);
@@ -10,7 +11,7 @@ export function isHighwayRoom(roomName: string) {
 
 export function discoverRooms(roomName: string): void {
     // discover rooms that are within 12 linear range of a given room
-    if (Game.map.getRoomLinearDistance(roomName, Memory.hive.scoutingRoom || Game.rooms[0].name) > 6) {
+    if (Game.map.getRoomLinearDistance(roomName, Memory.hive.scoutingRoom || Object.keys(Game.rooms)[0]) > 6) {
         return;
     }
 
@@ -160,7 +161,7 @@ export function runHiveScan() {
             for (const roomName in Game.rooms) {
                 const room = Game.rooms[roomName];
                 if (room.controller && room.controller.my) {
-                    const spawn = room.find(FIND_MY_SPAWNS)[0];
+                    const spawn = GLOBAL_CONTEXT[room.name]?.spawns[0];
                     if (spawn) {
                         const scoutName = `scout-${getRoleNameCounter('scout')}`;
                         const spawnResult = spawn.spawnCreep([MOVE], scoutName, { memory: { role: 'scout', room: room.name } });
@@ -200,7 +201,7 @@ export function runHiveScan() {
     if (hasTransportTask && transportersNeeded > hasTransporters) {
         const room = Game.rooms[transportSrcRoom || ''];
         if (room && room.controller && room.controller.my) {
-            const spawn = room.find(FIND_MY_SPAWNS)[0];
+            const spawn = GLOBAL_CONTEXT[room.name]?.spawns[0];
             if (spawn) {
                 const transporterName = `transporter-${getRoleNameCounter('transporter')}`;
                 spawn.spawnCreep([CARRY, CARRY, MOVE, MOVE, CARRY, CARRY, MOVE, MOVE], transporterName, { memory: { role: 'transporter', room: room.name } });

@@ -44,42 +44,50 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
 
     // if creep is full check for nearby container or link, otherwise drop
     if (creep.store.getFreeCapacity() === 0) {
-        // if no nearby container, find a nearby link
-        const nearbyLink = creep.pos.findClosestByRange(FIND_STRUCTURES, {
-            filter: (structure) => {
-                return (
-                    structure.structureType === STRUCTURE_LINK && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && structure.pos.getRangeTo(creep.pos) <= 4
-                );
+        const currentContext = GLOBAL_CONTEXT[creep.room.name];
+        let nearbyLink: StructureLink | null = null;
+        let closestRange = 5;
+
+        for (const link of currentContext?.links || []) {
+            if (link.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
+            const range = creep.pos.getRangeTo(link);
+            if (range < closestRange) {
+                nearbyLink = link;
+                closestRange = range;
             }
-        });
+        }
 
         if (nearbyLink) {
-            const transferResult = creep.transfer(nearbyLink, RESOURCE_ENERGY);
-
-            if (transferResult === ERR_NOT_IN_RANGE) {
+            if (!creep.pos.isNearTo(nearbyLink)) {
                 creep.travelTo(nearbyLink);
-            } else if (transferResult === ERR_FULL) {
+                return;
+            }
+
+            if (creep.transfer(nearbyLink, RESOURCE_ENERGY) === ERR_FULL) {
                 creep.drop(RESOURCE_ENERGY); // Drop energy if the link is full
             }
 
             return;
         }
 
-        // find a nearby container
-        const nearbyContainer = creep.pos.findClosestByRange(FIND_STRUCTURES, {
-            filter: (structure) => {
-                return (
-                    structure.structureType === STRUCTURE_CONTAINER && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && structure.pos.getRangeTo(creep.pos) <= 4
-                );
+        let nearbyContainer: StructureContainer | null = null;
+        closestRange = 5;
+        for (const container of currentContext?.containers || []) {
+            if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
+            const range = creep.pos.getRangeTo(container);
+            if (range < closestRange) {
+                nearbyContainer = container;
+                closestRange = range;
             }
-        });
+        }
 
         if (nearbyContainer) {
-            const transferResult = creep.transfer(nearbyContainer, RESOURCE_ENERGY);
-
-            if (transferResult === ERR_NOT_IN_RANGE) {
+            if (!creep.pos.isNearTo(nearbyContainer)) {
                 creep.travelTo(nearbyContainer);
-            } else if (transferResult === ERR_FULL) {
+                return;
+            }
+
+            if (creep.transfer(nearbyContainer, RESOURCE_ENERGY) === ERR_FULL) {
                 creep.drop(RESOURCE_ENERGY); // Drop energy if the storage is full
             }
 
@@ -91,8 +99,9 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    // If the creep is not in range to harvest, move towards the source
-    if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
+    if (!creep.pos.isNearTo(source)) {
         creep.travelTo(source);
+    } else {
+        creep.harvest(source);
     }
 }

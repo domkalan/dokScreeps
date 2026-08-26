@@ -1,6 +1,11 @@
-import { RoomContext } from "../utils/Context";
+import { GLOBAL_CONTEXT, RoomContext } from "../utils/Context";
 
 export function runTransporter(creep: Creep, context: RoomContext): void {
+    // ensure kv exists in memory
+    if (creep.memory.kv === undefined) {
+        creep.memory.kv = {};
+    }
+
     // check if the creep has a task assigned
     if (!creep.memory.taskId) {
         // check if there are any unassigned scout tasks in the hive memory
@@ -69,13 +74,10 @@ export function runTransporter(creep: Creep, context: RoomContext): void {
         if (task.kv && task.kv.destStorageId) {
             destStorageObject = Game.getObjectById(task.kv.destStorageId) as StructureStorage | StructureContainer | undefined;
         } else {
-            // find the nearest storage object in the destination room
-            const storageObjects = creep.room.find(FIND_STRUCTURES, {
-                filter: (structure) => structure.structureType === STRUCTURE_STORAGE || structure.structureType === STRUCTURE_CONTAINER,
-            }) as (StructureStorage | StructureContainer)[];
+            const currentContext = GLOBAL_CONTEXT[creep.room.name] || (context.room.name === creep.room.name ? context : undefined);
+            destStorageObject = currentContext?.storages[0] || currentContext?.containers[0];
 
-            if (storageObjects.length > 0) {
-                destStorageObject = storageObjects[0];
+            if (destStorageObject) {
                 task.kv.destStorageId = destStorageObject.id;
             }
         }

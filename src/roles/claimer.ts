@@ -60,10 +60,13 @@ export function runReserver(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    const reserveResult = creep.reserveController(target);
-    if (reserveResult === ERR_NOT_IN_RANGE) {
+    if (!creep.pos.isNearTo(target)) {
         creep.travelTo(target);
-    } else if (reserveResult === OK) {
+        return;
+    }
+
+    const reserveResult = creep.reserveController(target);
+    if (reserveResult === OK) {
         debugLog(`Creep ${creep.name} successfully reserved controller in room ${task.roomId}`);
         completeTask(creep); // Mark the task as complete
     } else {
@@ -112,10 +115,13 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    const claimResult = creep.claimController(target);
-    if (claimResult === ERR_NOT_IN_RANGE) {
+    if (!creep.pos.isNearTo(target)) {
         creep.travelTo(target);
-    } else if (claimResult === OK) {
+        return;
+    }
+
+    const claimResult = creep.claimController(target);
+    if (claimResult === OK) {
         debugLog(`Creep ${creep.name} successfully claimed controller in room ${task.roomId}`);
         completeTask(creep); // Mark the task as complete
     } else {

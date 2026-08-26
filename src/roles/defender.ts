@@ -20,16 +20,25 @@ export function runDefender(creep: Creep, context: RoomContext): void {
 
     // if there are hostiles, attack the closest one
     if (hostiles.length > 0) {
-        // prioritize attacking the closest hostile creep
-        const target = creep.pos.findClosestByRange(hostiles);
+        let target: Creep | null = null;
+        let closestRange = Infinity;
+        for (const hostile of hostiles) {
+            const range = creep.pos.getRangeTo(hostile);
+            if (range < closestRange) {
+                target = hostile;
+                closestRange = range;
+            }
+        }
         if (target) {
-            if (creep.attack(target) === ERR_NOT_IN_RANGE) {
+            if (!creep.pos.isNearTo(target)) {
                 creep.travelTo(target);
+            } else {
+                creep.attack(target);
             }
         }
     } else {
         // if there are no hostiles, move to a defensive position near the room controller or spawn
-        const defensivePosition = creep.room.controller || context.structures.find(structure => structure.structureType === STRUCTURE_SPAWN)?.pos;
+        const defensivePosition = creep.room.controller || context.spawns[0]?.pos;
 
         if (defensivePosition && creep.pos.getRangeTo(defensivePosition) > 5) {
             creep.travelTo(defensivePosition);

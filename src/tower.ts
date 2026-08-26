@@ -19,9 +19,15 @@ export function runTower(tower: StructureTower, context: RoomContext, room: Room
     const hostiles = context.hostiles;
 
     if (hostiles.length > 0) {
-        const closestHostile = hostiles.reduce((prev, curr) => {
-            return prev.pos.getRangeTo(tower.pos) < curr.pos.getRangeTo(tower.pos) ? prev : curr;
-        });
+        let closestHostile = hostiles[0];
+        let closestRange = tower.pos.getRangeTo(closestHostile);
+        for (let i = 1; i < hostiles.length; i++) {
+            const range = tower.pos.getRangeTo(hostiles[i]);
+            if (range < closestRange) {
+                closestHostile = hostiles[i];
+                closestRange = range;
+            }
+        }
 
         tower.attack(closestHostile);
 
@@ -30,12 +36,18 @@ export function runTower(tower: StructureTower, context: RoomContext, room: Room
 
     // if tower is at least 50% full, heal any injured creeps in the room
     if (tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY) >= 0.5) {
-        const injuredCreeps = context.myCreeps.filter(creep => creep.hits < creep.hitsMax);
+        const injuredCreeps = context.injuredCreeps;
 
         if (injuredCreeps.length > 0) {
-            const closestInjuredCreep = injuredCreeps.reduce((prev, curr) => {
-                return prev.pos.getRangeTo(tower.pos) < curr.pos.getRangeTo(tower.pos) ? prev : curr;
-            });
+            let closestInjuredCreep = injuredCreeps[0];
+            let closestRange = tower.pos.getRangeTo(closestInjuredCreep);
+            for (let i = 1; i < injuredCreeps.length; i++) {
+                const range = tower.pos.getRangeTo(injuredCreeps[i]);
+                if (range < closestRange) {
+                    closestInjuredCreep = injuredCreeps[i];
+                    closestRange = range;
+                }
+            }
 
             tower.heal(closestInjuredCreep);
 
@@ -44,12 +56,7 @@ export function runTower(tower: StructureTower, context: RoomContext, room: Room
     }
 
     // total room standby energy is the sum of all energy in storage and containers
-    const totalRoomStandbyEnergy = context.structures.reduce((acc, structure) => {
-        if (structure instanceof StructureStorage || structure instanceof StructureContainer) {
-            return acc + structure.store.getUsedCapacity(RESOURCE_ENERGY);
-        }
-        return acc;
-    }, 0);
+    const totalRoomStandbyEnergy = context.storedEnergy;
 
     // skip repairing structures if the room has less than 1000 energy in storage and containers
     if (totalRoomStandbyEnergy < 50000) {
@@ -60,13 +67,8 @@ export function runTower(tower: StructureTower, context: RoomContext, room: Room
 
     // if there are no hostiles and tower has at least 75% energy, repair any degraded structures in the room below 50% health
     if (tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY) >= 0.75) {
-        const damagedRegularStructures = context.structures.filter(structure => structure.hits < structure.hitsMax * 0.5 && structure.structureType !== STRUCTURE_WALL && structure.structureType !== STRUCTURE_RAMPART && structure.structureType !== STRUCTURE_ROAD);
-        const damagedDefenseStructures = context.structures.filter(structure => structure.hits < structure.hitsMax * 0.25 && (structure.structureType === STRUCTURE_RAMPART || structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_ROAD));
-
-        const damagedStructures = [...damagedRegularStructures, ...damagedDefenseStructures].sort((a, b) => a.hits - b.hits); // sort by hits descending (most damaged first)
-
-        if (damagedStructures.length > towerCount) {
-            tower.repair(damagedStructures[towerCount]);
+        if (context.towerRepairTargets.length > towerCount) {
+            tower.repair(context.towerRepairTargets[towerCount]);
 
             return;
         }

@@ -70,8 +70,14 @@ export function addCliFunctions() {
             });
 
             for (const defense of defenses) {
-                const existingPlan = room.memory.constructionPlanner.plan.find(item => item.x === defense.pos.x && item.y === defense.pos.y);
-                if (!existingPlan) {
+                let hasExistingPlan = false;
+                for (const item of room.memory.constructionPlanner.plan) {
+                    if (item.x === defense.pos.x && item.y === defense.pos.y) {
+                        hasExistingPlan = true;
+                        break;
+                    }
+                }
+                if (!hasExistingPlan) {
                     const structureType: BuildableStructureConstant = defense.structureType as BuildableStructureConstant;
 
                     room.memory.constructionPlanner.plan.push({
@@ -88,32 +94,6 @@ export function addCliFunctions() {
         }
 
         return `No room found with name ${roomName}.`;
-    }
-
-    global.claimRoom = function (roomName: string, existingRoom: string) {
-        const room = Game.rooms[roomName];
-
-        if (!room) {
-            return `No room found with name ${roomName}.`;
-        }
-
-        const existingRoomMemory = Memory.rooms[existingRoom];
-        if (!existingRoomMemory || existingRoomMemory.type !== 'home') {
-            return `No existing home room found with name ${existingRoom}.`;
-        }
-
-        existingRoomMemory.tasks[roomName] = {
-            id: `claim-${roomName}`,
-            type: 'claim',
-            completed: false,
-            priority: 1,
-            targetId: roomName,
-            roomId: room.name,
-            created: Game.time,
-            expires: Game.time + 10000
-        };
-
-        return `Claim task for room ${roomName} has been added to home room ${existingRoom}.`;
     }
 
     global.attackStructures = function (roomName: string, structureTypes: BuildableStructureConstant[]) {
@@ -170,7 +150,7 @@ export function addCliFunctions() {
         return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${parentRoomName}.`;
     }
 
-    global.drainStructures = function (roomName: string, resourceType: ResourceConstant) {
+    global.drainStructures = function (roomName: string, resourceType: ResourceConstant, structureTypes: string[]) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
@@ -189,13 +169,13 @@ export function addCliFunctions() {
         let totalStructures = 0;
 
         const structures = room.find(FIND_STRUCTURES, {
-            filter: (structure) => typeof (structure as StructureContainer).store !== 'undefined' && (structure as StructureContainer).store.getUsedCapacity(resourceType) > 0
+            filter: (structure) => structureTypes.includes(structure.structureType) && typeof (structure as StructureContainer).store !== 'undefined' && (structure as StructureContainer).store.getUsedCapacity(resourceType) > 0
         });
 
         for (const structure of structures) {
             totalStructures++;
 
-            createTask(parentRoom, 'haul', structure.id, 5, room.name, undefined, Game.time + 5000, resourceType); // high priority for attacking structures
+            createTask(parentRoom, 'haul', structure.id, 5, room.name, undefined, 5000, resourceType); // high priority for attacking structures
         }
 
         return `Drain tasks for ${totalStructures} structures in room ${roomName} have been added to home room ${parentRoomName}.`;
@@ -328,7 +308,11 @@ export function addCliFunctions() {
             // remove it from the parent room's childRooms array and remove its remote energy sources
             if (parentRoomRef && parentRoomRef.memory.childRooms) {
                 // remove child dep
-                parentRoomRef.memory.childRooms = parentRoomRef.memory.childRooms.filter((childRoom: string) => childRoom !== roomName);
+                const childRooms: string[] = [];
+                for (const childRoom of parentRoomRef.memory.childRooms) {
+                    if (childRoom !== roomName) childRooms.push(childRoom);
+                }
+                parentRoomRef.memory.childRooms = childRooms;
 
                 // remove remote energy sources
                 const roomEnergySources = room.find(FIND_SOURCES).map(source => source.id);
@@ -354,22 +338,6 @@ export function addCliFunctions() {
         }
 
         return `Bootstrap task for room ${roomName} has been added.`;
-    }
-
-    global.overrideEnergyThreshold = function (roomName: string, override: boolean) {
-        const roomMemory = Memory.rooms[roomName];
-
-        if (!roomMemory) {
-            return `No room found with name ${roomName}.`;
-        }
-
-        roomMemory.energyThresholdOverride = override;
-
-        if (override) {
-            return `Energy threshold override for room ${roomName} has been enabled.`;
-        } else {
-            return `Energy threshold override for room ${roomName} has been disabled.`;
-        }
     }
 
     global.resetHive = function () {

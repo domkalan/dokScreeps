@@ -133,16 +133,16 @@ export class ConstructionPlanner {
 
         const controllerLevel = room.controller?.level ?? 0;
 
-        const candidates = memory.plan
-            .filter(item => item.minRcl <= controllerLevel)
-            .sort((a, b) => a.priority - b.priority);
-
         let placed = 0;
 
-        for (const item of candidates) {
+        // The plan is kept priority-sorted by setPlan/addToPlan. Iterate it
+        // directly to avoid allocating and sorting a candidate array each run.
+        for (const item of memory.plan) {
             if (placed >= availableSlots) {
                 break;
             }
+
+            if (item.minRcl > controllerLevel) continue;
 
             const state = this.getItemState(room, item);
 
@@ -183,11 +183,11 @@ export class ConstructionPlanner {
     private static createBuildTasks(room: Room, context: RoomContext): void {
         const sites = context.constructionSites;
 
-        const existingTargets = new Set(
-            Object.values(room.memory.tasks)
-                .filter(task => task.type === "build")
-                .map(task => task.targetId)
-        );
+        const existingTargets = new Set<string>();
+        for (const taskId in room.memory.tasks) {
+            const task = room.memory.tasks[taskId];
+            if (task.type === "build") existingTargets.add(task.targetId);
+        }
 
         for (const site of sites) {
             if (existingTargets.has(site.id)) {
@@ -402,17 +402,13 @@ export class ConstructionPlanner {
                 case "construction": {
                     constructing++;
 
-                    const site = room
-                        .lookForAt(
-                            LOOK_CONSTRUCTION_SITES,
-                            item.x,
-                            item.y
-                        )
-                        .find(
-                            value =>
-                                value.structureType ===
-                                item.structureType
-                        );
+                    let site: ConstructionSite | undefined;
+                    for (const value of room.lookForAt(LOOK_CONSTRUCTION_SITES, item.x, item.y)) {
+                        if (value.structureType === item.structureType) {
+                            site = value;
+                            break;
+                        }
+                    }
 
                     const progress = site
                         ? site.progress / site.progressTotal

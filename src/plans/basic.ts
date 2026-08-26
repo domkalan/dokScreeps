@@ -47,9 +47,10 @@ export const ROAD_OFFSETS: Array<[number, number]> = [
 ];
 
 export function createBasicRoomPlan(
-    room: Room
+    room: Room,
+    knownSpawn?: StructureSpawn
 ): ConstructionPlanItem[] {
-    const spawn = room.find(FIND_MY_SPAWNS)[0];
+    const spawn = knownSpawn || room.find(FIND_MY_SPAWNS)[0];
 
     if (!spawn) {
         return [];
@@ -99,11 +100,12 @@ export function createBasicRoomPlan(
         minRcl: 4,
     });
 
-    return plan.filter(
-        item =>
-            item.x > 0 &&
-            item.x < 49 &&
-            item.y > 0 &&
-            item.y < 49
-    );
+    const validPlan: ConstructionPlanItem[] = [];
+    for (const item of plan) {
+        if (item.x > 0 && item.x < 49 && item.y > 0 && item.y < 49) {
+            validPlan.push(item);
+        }
+    }
+
+    return validPlan;
 }

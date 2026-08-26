@@ -10,8 +10,10 @@ export function upgradeRoomController(creep: Creep, context: RoomContext): void 
     }
 
     // upgrade the controller if we have energy and are in range
-    if (creep.upgradeController(context.room.controller!) === ERR_NOT_IN_RANGE) {
+    if (!creep.pos.inRangeTo(context.room.controller!, 3)) {
         creep.travelTo(context.room.controller!);
+    } else {
+        creep.upgradeController(context.room.controller!);
     }
 }
 
@@ -39,39 +41,45 @@ export function runQueen(creep: Creep, context: RoomContext): void {
     }
 
     if (!target || target.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-        // get all the extensions in the room that are not full
-        const extensions = context.structures.filter(structure => {
-            return (structure.structureType === STRUCTURE_EXTENSION || structure.structureType === STRUCTURE_SPAWN) &&
-                (structure as StructureExtension).store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-        }) as Array<StructureExtension | StructureSpawn>;
+        let closestRange = Infinity;
+        for (const receiver of context.spawnEnergyReceivers) {
+            if (receiver.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
+            const range = creep.pos.getRangeTo(receiver);
+            if (range < closestRange) {
+                target = receiver;
+                closestRange = range;
+            }
+        }
 
         // if there are no extensions that need energy, the queen will go to the controller and upgrade it
-        if (extensions.length === 0 && creep.body.some(part => part.type === WORK)) {
+        if (!target && creep.body.some(part => part.type === WORK)) {
 
             // if there are no extensions that need energy, the queen will go to the controller and upgrade it
             upgradeRoomController(creep, context);
 
             return;
-        } else if (extensions.length === 0) {
+        } else if (!target) {
             // if there are no extensions that need energy and the queen has no WORK parts, it will idle
-            creep.say('🛑 Idle');
+            if (Game.time % 25 === 0) {
+                creep.say('🛑 Idle');
+            }
 
             return;
         }
 
-        // set the target to the closet extension that needs energy
-        target = creep.pos.findClosestByRange(extensions);
         creep.memory.focusedOn = target!.id; // Store the target in memory
     }
 
     if (target && (target.structureType === STRUCTURE_EXTENSION || target.structureType === STRUCTURE_SPAWN)) {
-        const transferCode = creep.transfer(target, RESOURCE_ENERGY);
-
-        if (transferCode === ERR_NOT_IN_RANGE) {
+        if (!creep.pos.isNearTo(target)) {
             creep.travelTo(target);
-        } else if (transferCode === OK) {
+            return;
+        }
+
+        const transferCode = creep.transfer(target, RESOURCE_ENERGY);
+        if (transferCode === OK) {
             // if the transfer was successful, manually purge any tasks associated with this target
-            const taskId = `${target.id}-fill`;
+            const taskId = `fill-${target.id}`;
             purgeTaskById(taskId, context.room.name);
         }
     } else {

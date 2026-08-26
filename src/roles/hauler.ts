@@ -59,14 +59,17 @@ export function runFillTask(creep: Creep, context: RoomContext) {
     }
 
     // watch for stuck tasks, haulers sometimes get stuck
-    watchForStuckTask(creep);
+    if (watchForStuckTask(creep)) return;
 
     // run a fill action based on the type of target
     if (target instanceof Structure) {
-        const transferResult = creep.transfer(target, RESOURCE_ENERGY);
-        if (transferResult === ERR_NOT_IN_RANGE) {
+        if (!creep.pos.isNearTo(target)) {
             creep.travelTo(target);
-        } else if (transferResult === ERR_FULL) {
+            return;
+        }
+
+        const transferResult = creep.transfer(target, RESOURCE_ENERGY);
+        if (transferResult === ERR_FULL) {
             debugLog(`Target ${target.id} is full for creep ${creep.name}`);
 
             // mark the task as completed since the target is full
@@ -89,19 +92,29 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
         const resources = Object.keys(creep.store) as ResourceConstant[];
         if (resources.length > 0) {
             const resourceType = resources[0]; // Assuming we only want to deposit one type of resource at a time
-            if (creep.transfer(storage, resourceType) === ERR_NOT_IN_RANGE) {
+            if (!creep.pos.isNearTo(storage)) {
                 creep.travelTo(storage);
+            } else {
+                creep.transfer(storage, resourceType);
             }
         }
     } else {
         // if not else just fill spawn and extensions
-        const target = context.structures.find(structure => (structure.structureType === STRUCTURE_EXTENSION || structure.structureType === STRUCTURE_SPAWN) && (structure as StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+        let target: StructureSpawn | StructureExtension | undefined;
+        for (const receiver of context.spawnEnergyReceivers) {
+            if (receiver.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                target = receiver;
+                break;
+            }
+        }
 
         if (target) {
             const storeKeys = Object.keys(creep.store);
 
-            if (creep.transfer(target, storeKeys[0] as ResourceConstant) === ERR_NOT_IN_RANGE) {
+            if (!creep.pos.isNearTo(target)) {
                 creep.travelTo(target);
+            } else {
+                creep.transfer(target, storeKeys[0] as ResourceConstant);
             }
         } else {
             const spawn = context.spawns[0];
@@ -178,7 +191,7 @@ export function runHauler(creep: Creep, context: RoomContext) {
     }
 
     // haulers sometimes get stuck, watch for stuck tasks
-    watchForStuckTask(creep);
+    if (watchForStuckTask(creep)) return;
 
     // run a pickup or withdraw action based on the type of target
     if (target instanceof Resource) {
@@ -189,16 +202,19 @@ export function runHauler(creep: Creep, context: RoomContext) {
             return;
         }
 
-        const pickupResult = creep.pickup(target);
-
-        if (pickupResult === ERR_NOT_IN_RANGE) {
+        if (!creep.pos.isNearTo(target)) {
             creep.travelTo(target);
+        } else {
+            creep.pickup(target);
         }
     } else if (target instanceof Structure) {
-        const withdrawResult = creep.withdraw(target, task.resourceType || RESOURCE_ENERGY);
-        if (withdrawResult === ERR_NOT_IN_RANGE) {
+        if (!creep.pos.isNearTo(target)) {
             creep.travelTo(target);
-        } else if (withdrawResult === ERR_NOT_ENOUGH_RESOURCES) {
+            return;
+        }
+
+        const withdrawResult = creep.withdraw(target, task.resourceType || RESOURCE_ENERGY);
+        if (withdrawResult === ERR_NOT_ENOUGH_RESOURCES) {
             debugLog(`Target ${target.id} does not have enough resources for creep ${creep.name}`);
 
             // mark the task as completed since the target does not have enough resources

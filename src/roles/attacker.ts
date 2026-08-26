@@ -43,8 +43,9 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    // attempt to attack the target, if not in range, move towards it
-    if (creep.attack(target) === ERR_NOT_IN_RANGE) {
+    if (!creep.pos.isNearTo(target)) {
         creep.travelTo(target);
+    } else {
+        creep.attack(target);
     }
 }

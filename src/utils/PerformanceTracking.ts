@@ -81,34 +81,12 @@ export function onCreepsTicked(cpuUsedTotal: number) {
 }
 
 export function onRoomTick(room: Room, cpuUsed: number, context: RoomContext, creepCounts: { [role: string]: number }) {
-    // log the energy stored in the room by summing the energy in all containers and storage structures
-    tickData.roomEnergyStored[room.name] = context.structures.filter((structure) => {
-        return (
-            (structure.structureType === STRUCTURE_CONTAINER) ||
-            (structure.structureType === STRUCTURE_STORAGE)
-        );
-    }).reduce((total, structure) => {
-        if (structure.structureType === STRUCTURE_CONTAINER || structure.structureType === STRUCTURE_STORAGE) {
-            return total + (structure as StructureContainer | StructureStorage).store.getUsedCapacity(RESOURCE_ENERGY);
-        }
-        return total;
-    }, 0);
+    tickData.roomEnergyStored[room.name] = context.storedEnergy;
 
     // log the creep counts for the room
     tickData.roomCreepCounts[room.name] = creepCounts;
 
-    // log the energy stored in the room's spawns and extensions
-    tickData.roomSpawnEnergyStored[room.name] = context.structures.filter((structure) => {
-        return (
-            (structure.structureType === STRUCTURE_SPAWN) ||
-            (structure.structureType === STRUCTURE_EXTENSION)
-        );
-    }).reduce((total, structure) => {
-        if (structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) {
-            return total + (structure as StructureSpawn | StructureExtension).store.getUsedCapacity(RESOURCE_ENERGY);
-        }
-        return total;
-    }, 0);
+    tickData.roomSpawnEnergyStored[room.name] = room.energyAvailable;
 
     // log the CPU used for this room
     tickData.roomCPUUsage[room.name] = cpuUsed;

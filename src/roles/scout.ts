@@ -35,12 +35,7 @@ export function runPortalLogic(creep: Creep, context: RoomContext): void {
             return;
         }
 
-        // find all portals in the room
-        const portals = creep.room.find(FIND_STRUCTURES, {
-            filter: (structure) => structure.structureType === STRUCTURE_PORTAL
-        }) as StructurePortal[];
-
-        const targetPortal = portals.find(portal => portal.id === task.targetId);
+        const targetPortal = Game.getObjectById(task.targetId) as StructurePortal | null;
 
         if (targetPortal) {
             // move to the portal
@@ -63,11 +58,21 @@ export function runPortalLogic(creep: Creep, context: RoomContext): void {
 export function runScanWork(creep: Creep, context: RoomContext): void {
     // check for the next unassigned scan task in the hive memory
     if (!creep.memory.taskId) {
-        const tasks = Object.entries(Memory.hive.tasks).filter(([key, task]) => task.type === 'scan' && !task.assigned && !task.completed).sort((a, b) => Game.map.getRoomLinearDistance(a[1].roomId, creep.room.name) - Game.map.getRoomLinearDistance(b[1].roomId, creep.room.name));
-        if (tasks.length > 0) {
-            tasks[0][1].assigned = creep.name;
+        let closestTaskId: string | undefined;
+        let closestDistance = Infinity;
+        for (const taskId in Memory.hive.tasks) {
+            const task = Memory.hive.tasks[taskId];
+            if (task.type !== 'scan' || task.assigned || task.completed) continue;
+            const distance = Game.map.getRoomLinearDistance(task.roomId, creep.room.name);
+            if (distance < closestDistance) {
+                closestTaskId = taskId;
+                closestDistance = distance;
+            }
+        }
 
-            creep.memory.taskId = tasks[0][0];
+        if (closestTaskId) {
+            Memory.hive.tasks[closestTaskId].assigned = creep.name;
+            creep.memory.taskId = closestTaskId;
         }
     }
 
@@ -81,7 +86,9 @@ export function runScanWork(creep: Creep, context: RoomContext): void {
     } else {
         // if the creep does not have a task, check for any unassigned tasks
 
-        creep.say('Idle');
+        if (Game.time % 25 === 0) {
+            creep.say('Idle');
+        }
 
         return;
     }
@@ -101,7 +108,9 @@ export function runScanWork(creep: Creep, context: RoomContext): void {
             }
 
             // show we are peace
-            creep.say(`✌️`, true);
+            if (Game.time % 25 === 0) {
+                creep.say(`✌️`, true);
+            }
 
             // move to the target room
             creep.travelTo(new RoomPosition(25, 25, task.roomId));
@@ -158,8 +167,11 @@ export function runScout(creep: Creep, context: RoomContext): void {
         creep.memory.kv = {};
     }
 
-    // force set creep notify to false
-    creep.notifyWhenAttacked(false);
+    // This setting persists, so only issue the intent once per creep.
+    if (!creep.memory.kv.attackNotificationsDisabled) {
+        creep.notifyWhenAttacked(false);
+        creep.memory.kv.attackNotificationsDisabled = true;
+    }
 
     runScanWork(creep, context);
 }

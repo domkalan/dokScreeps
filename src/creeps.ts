@@ -26,12 +26,13 @@ export function runCreeps(): void {
     const cpuStart = Game.cpu.getUsed();
     // reset the creep cpu usage for this tick
     CREEP_CPU = {};
+    const trackIndividualCpu = Memory.perfMode || typeof Memory.debugDisplay !== 'undefined';
 
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
         const context = GLOBAL_CONTEXT[creep.memory.room];
 
-        const creepCpuStart = Game.cpu.getUsed();
+        const creepCpuStart = trackIndividualCpu ? Game.cpu.getUsed() : 0;
 
         try {
             // attempt to protect the creep by adding a in danger mode
@@ -45,11 +46,15 @@ export function runCreeps(): void {
             } else if (creep.memory.inDanger && Game.time - (creep.memory.lastDamageTime || 0) > 100) {
                 debugLog(`Creep ${creep.name} is no longer in danger.`);
                 creep.memory.inDanger = false;
+            } if (creep.hits > creep.memory.lastHealth) {
+                creep.memory.lastHealth = creep.hits;
             }
 
             // if the creep is in danger and not an attacker or defender, move it back to the home room
             if (creep.memory.inDanger && creep.memory.role !== 'attacker' && creep.memory.role !== 'defender') {
-                creep.say(`😱`);
+                if (Game.time % 10 === 0) {
+                    creep.say(`😱`);
+                }
 
                 // if the creep is not in the home room, move it back to the home room
                 if (creep.room.name !== creep.memory.room) {
@@ -58,7 +63,7 @@ export function runCreeps(): void {
                     // if the creep is in the home room, move it to a safe position (e.g., near the spawn)
                     const homeRoom = Game.rooms[creep.memory.room];
                     if (homeRoom) {
-                        const spawn = homeRoom.find(FIND_MY_SPAWNS)[0];
+                        const spawn = GLOBAL_CONTEXT[creep.memory.room]?.spawns[0];
                         if (spawn) {
                             creep.travelTo(spawn.pos);
                         }
@@ -99,7 +104,9 @@ export function runCreeps(): void {
                     runClaimer(creep, context);
                     break;
                 default:
-                    creep.say(`❓`);
+                    if (Game.time % 25 === 0) {
+                        creep.say(`❓`);
+                    }
                     debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
             }
         } catch (error) {
@@ -114,10 +121,12 @@ export function runCreeps(): void {
             creep.say(`ERR`);
         }
 
-        CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
+        if (trackIndividualCpu) {
+            CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
 
-        // signal to perfTracking that this creep has finished its tick
-        perfTracking.onCreepTick(creepName, CREEP_CPU[creepName]);
+            // signal to perfTracking that this creep has finished its tick
+            perfTracking.onCreepTick(creepName, CREEP_CPU[creepName]);
+        }
     }
 
     CREEP_CPU_TOTAL = Game.cpu.getUsed() - cpuStart;

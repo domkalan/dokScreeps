@@ -121,12 +121,12 @@ export function completeTask(creep: Creep): void {
 export function releaseTask(creep: Creep): void {
     if (!creep.memory.taskId) return;
 
-    const task = creep.room.memory.tasks[creep.memory.taskId];
+    const task = Memory.rooms[creep.memory.room]?.tasks?.[creep.memory.taskId];
 
     if (task) {
         task.assigned = undefined; // Unassign the task
     } else {
-        debugLog(`Task with ID ${creep.memory.taskId} not found in room ${creep.room.name}`);
+        debugLog(`Task with ID ${creep.memory.taskId} not found in home room ${creep.memory.room}`);
     }
 
     creep.memory.taskId = undefined; // Clear the task ID from the creep's memory
@@ -135,12 +135,13 @@ export function releaseTask(creep: Creep): void {
 export function deleteTask(creep: Creep): void {
     if (!creep.memory.taskId) return;
 
-    const task = creep.room.memory.tasks[creep.memory.taskId];
+    const tasks = Memory.rooms[creep.memory.room]?.tasks;
+    const task = tasks?.[creep.memory.taskId];
 
-    if (task) {
-        delete creep.room.memory.tasks[creep.memory.taskId];
+    if (task && tasks) {
+        delete tasks[creep.memory.taskId];
     } else {
-        debugLog(`Task with ID ${creep.memory.taskId} not found in room ${creep.room.name}`);
+        debugLog(`Task with ID ${creep.memory.taskId} not found in home room ${creep.memory.room}`);
     }
 
     delete creep.memory.taskId; // Clear the task ID from the creep's memory
@@ -158,8 +159,11 @@ export function monitorTasks(room: Room): void {
             continue;
         }
 
-        if (task.assigned && !Game.creeps[task.assigned]) {
-            delete task.assigned;
+        if (task.assigned) {
+            const assignedCreep = Game.creeps[task.assigned];
+            if (!assignedCreep || assignedCreep.memory.taskId !== taskId) {
+                delete task.assigned;
+            }
         }
     }
 }
@@ -175,6 +179,9 @@ export function getTaskCounts(room: Room): { [role: string]: number } {
         }
 
         switch (task.type) {
+            case 'harvest':
+                roleCounts.harvester = (roleCounts.harvester || 0) + 1;
+                break;
             case 'haul':
                 roleCounts.hauler = (roleCounts.hauler || 0) + 1;
                 break;
@@ -224,8 +231,8 @@ export function purgeTaskById(taskId: string, roomName: string): void {
     }
 }
 
-export function watchForStuckTask(creep: Creep): void {
-    if (!creep.memory.taskId) return;
+export function watchForStuckTask(creep: Creep): boolean {
+    if (!creep.memory.taskId) return false;
 
     const task = getTaskById(creep.memory.room, creep.memory.taskId);
 
@@ -233,7 +240,7 @@ export function watchForStuckTask(creep: Creep): void {
         debugLog(`Task with ID ${creep.memory.taskId} not found for creep ${creep.name}`);
         releaseTask(creep); // Clear the invalid task ID
 
-        return;
+        return false;
     }
 
     // check if the task has expired or if the creep has been working on it for too long
@@ -244,6 +251,8 @@ export function watchForStuckTask(creep: Creep): void {
 
         creep.say(`🛑 T_EXP`);
 
-        return;
+        return true;
     }
+
+    return false;
 }
