@@ -95,28 +95,15 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
         }
     } else {
         // if not else just fill spawn and extensions
-        const targets = context.room.find(FIND_STRUCTURES, {
-            filter: (structure) => {
-                return (
-                    (structure.structureType === STRUCTURE_EXTENSION ||
-                        structure.structureType === STRUCTURE_SPAWN ||
-                        structure.structureType === STRUCTURE_TOWER) &&
-                    structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-                );
-            },
-        });
+        const target = context.structures.find(structure => (structure.structureType === STRUCTURE_EXTENSION || structure.structureType === STRUCTURE_SPAWN) && (structure as StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) > 0);
 
-        if (targets.length > 0) {
-            const target = creep.pos.findClosestByRange(targets);
+        if (target) {
+            const storeKeys = Object.keys(creep.store);
 
-            if (target) {
-                const storeKeys = Object.keys(creep.store);
-
-                if (creep.transfer(target, storeKeys[0] as ResourceConstant) === ERR_NOT_IN_RANGE) {
-                    creep.travelTo(target);
-                }
+            if (creep.transfer(target, storeKeys[0] as ResourceConstant) === ERR_NOT_IN_RANGE) {
+                creep.travelTo(target);
             }
-        } else if (targets.length === 0) {
+        } else {
             const spawn = context.spawns[0];
             if (spawn) {
                 if (!creep.pos.isNearTo(spawn)) {

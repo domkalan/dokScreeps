@@ -64,8 +64,8 @@ export function goForEnergy(creep: Creep, context: RoomContext): void {
 
     if (!target || (target instanceof Structure && target.store.getUsedCapacity(RESOURCE_ENERGY) === 0)) {
         const energySources = [
-            context.structures,
-            context.resources,
+            ...context.structures,
+            ...context.resources,
             ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].structures : [],
             ...GLOBAL_CONTEXT[creep.room.name] ? GLOBAL_CONTEXT[creep.room.name].resources : []
         ].filter(resource => {

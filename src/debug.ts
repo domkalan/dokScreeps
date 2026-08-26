@@ -22,6 +22,10 @@ export function drawDebugInfo() {
 }
 
 export function drawRoomDebugInfo() {
+    if (typeof Memory.debugDisplay === 'undefined') {
+        return;
+    }
+
     const roomDisplay = Memory.debugDisplay || Object.keys(Game.rooms)[0];
     const roomMemory = Memory.rooms[roomDisplay];
 

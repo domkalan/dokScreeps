@@ -356,6 +356,22 @@ export function addCliFunctions() {
         return `Bootstrap task for room ${roomName} has been added.`;
     }
 
+    global.overrideEnergyThreshold = function (roomName: string, override: boolean) {
+        const roomMemory = Memory.rooms[roomName];
+
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        roomMemory.energyThresholdOverride = override;
+
+        if (override) {
+            return `Energy threshold override for room ${roomName} has been enabled.`;
+        } else {
+            return `Energy threshold override for room ${roomName} has been disabled.`;
+        }
+    }
+
     global.resetHive = function () {
         if (Memory.hive) {
             Memory.hive.rooms = {};

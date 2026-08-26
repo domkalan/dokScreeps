@@ -92,7 +92,7 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     const taskCounts = getTaskCounts(room);
 
     const idealCounts: { [role: string]: { count: number, priority: number } } = {
-        harvester: { count: room.memory.energySources.length, priority: 0 },
+        harvester: { count: taskCounts.harvester, priority: 0 },
         builder: { count: 1, priority: 10 }, // builders are important, but not as critical as harvesters, medium priority
         queen: { count: 1, priority: 2.5 }, // always have one queen, low priority since we don't need it until later,
         hauler: { count: 1, priority: 5 }, // always have one hauler, medium priority
@@ -111,7 +111,6 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
 
     // remote harvester spawning
     if (roleCounts.harvester && roleCounts.harvester >= room.memory.energySources.length) {
-        idealCounts.harvester.count = Object.keys(room.memory.remoteEnergySources || {}).length + room.memory.energySources.length; // if we have enough harvesters, spawn more for remote sources
         idealCounts.harvester.priority = 5; // if we have enough haulers, lower the priority
     }
 
@@ -251,16 +250,18 @@ function scanRoom(room: Room, context: RoomContext): void {
     // Scan for energy sources in the room
     room.memory.energySources = context.sources.map(source => source.id);
 
-    // create a harvest task for each energy source
-    for (const source of context.sources) {
-        createTask(room, 'harvest', source.id, 1);
-    }
+    if (!room.memory.energyThresholdMet) {
+        // create a harvest task for each energy source
+        for (const source of context.sources) {
+            createTask(room, 'harvest', source.id, 1);
+        }
 
-    // process any nearby remote energy sources and create tasks for them if they are not already in memory
-    for (const source in room.memory.remoteEnergySources) {
-        const remoteSource = room.memory.remoteEnergySources[source];
+        // process any nearby remote energy sources and create tasks for them if they are not already in memory
+        for (const source in room.memory.remoteEnergySources) {
+            const remoteSource = room.memory.remoteEnergySources[source];
 
-        createTask(room, 'harvest', source, 10, remoteSource.room); // low priority for remote harvesting
+            createTask(room, 'harvest', source, 10, remoteSource.room); // low priority for remote harvesting
+        }
     }
 
     // create a task for upgrading the controller if it exists
@@ -371,6 +372,15 @@ function scanRoom(room: Room, context: RoomContext): void {
 
     for (const structure of structuresToFill) {
         createTask(room, 'fill', structure.id, 5, room.name); // medium priority for filling spawns and extensions
+    }
+
+    // get total count of stored energy from storage if it exists
+    const storedEnergy = getStoredEnergy(context);
+
+    if (storedEnergy > 250000 && !room.memory.energyThresholdMet && !room.memory.energyThresholdOverride) {
+        room.memory.energyThresholdMet = true;
+    } else if (storedEnergy < 75000 && room.memory.energyThresholdMet) {
+        room.memory.energyThresholdMet = false;
     }
 
     debugLog(`Room ${room.name} scanned. Found ${context.sources.length} energy sources.`);

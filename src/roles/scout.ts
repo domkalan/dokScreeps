@@ -153,9 +153,13 @@ export function runScanWork(creep: Creep, context: RoomContext): void {
 }
 
 export function runScout(creep: Creep, context: RoomContext): void {
+    // ensure the creep has a kv object in memory
     if (!creep.memory.kv) {
         creep.memory.kv = {};
     }
+
+    // force set creep notify to false
+    creep.notifyWhenAttacked(false);
 
     runScanWork(creep, context);
 }

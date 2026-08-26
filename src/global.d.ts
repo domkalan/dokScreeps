@@ -60,6 +60,11 @@ declare global {
 
         // energy sources available in this room
         energySources: string[];
+        // whether the room has met the energy threshold for spawning harvesters
+        energyThresholdMet?: boolean;
+        // allow an override to continue spawning harvesters even if the energy threshold is met
+        energyThresholdOverride?: boolean;
+        // track remote energy sources that are in other rooms, keyed by source id
         remoteEnergySources?: { [sourceId: string]: { room: string; id: string } };
 
         // child rooms that are near this room
