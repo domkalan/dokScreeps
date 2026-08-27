@@ -13,7 +13,7 @@ const profiler = require('screeps-profiler');
 debug.attachDebug();
 
 // attach cli functions to the global object for easy access in the console
-cli.addCliFunctions();
+cli.mountCommands();
 
 // attach profiler
 profiler.enable();

@@ -32,7 +32,7 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
     } else if (role === 'claimer') {
         baseBody = [CLAIM, MOVE];
         energyUsed = 630; // CLAIM + MOVE costs 630 energy
-    } else if (role === 'hauler' || role === 'filler' || role === 'transporter') {
+    } else if (role === 'hauler' || role === 'filler') {
         baseBody = [WORK, CARRY, MOVE];
         energyUsed = 200; // WORK + CARRY + MOVE costs 200 energy
     }
@@ -50,7 +50,7 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
             nextParts = [WORK];
         } else if (role === 'builder') {
             nextParts = [WORK, CARRY, MOVE];
-        } else if (role === 'queen' || role === 'hauler' || role === 'filler' || role === 'transporter') {
+        } else if (role === 'queen' || role === 'hauler' || role === 'filler') {
             nextParts = [CARRY, MOVE];
         } else if (role === 'defender' || role === 'attacker') {
             nextParts = [TOUGH, MOVE, ATTACK];

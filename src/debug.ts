@@ -125,11 +125,8 @@ export function drawRoomDebugInfo() {
     // draw what room the scout is in if we have a scout
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
-        if (creep.memory.role === 'scout') {
-            Game.rooms[roomDisplay].visual.text(`Scout: ${creep.name} - (${creep.room.name}, ${creep.pos.x}, ${creep.pos.y})`, 0.5, textOffset, { align: 'left', font: 0.5 });
-            textOffset += 0.5;
-        } else if (creep.memory.role === 'transporter') {
-            Game.rooms[roomDisplay].visual.text(`Transporter: ${creep.name} - (${creep.room.name}, ${creep.pos.x}, ${creep.pos.y}) - pocket=${creep.store.getUsedCapacity() || 0}/${creep.store.getCapacity() || 0}`, 0.5, textOffset, { align: 'left', font: 0.5 });
+        if (creep.name.startsWith('hive-')) {
+            Game.rooms[roomDisplay].visual.text(`Hive Creep: ${creep.name} - (${creep.room.name}, ${creep.pos.x}, ${creep.pos.y}) - pocket=${creep.store.getUsedCapacity() || 0}/${creep.store.getCapacity() || 0}`, 0.5, textOffset, { align: 'left', font: 0.5 });
             textOffset += 0.5;
         }
     }

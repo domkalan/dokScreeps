@@ -10,7 +10,8 @@ import { runDefender } from "roles/defender";
 import { runAttacker } from "roles/attacker";
 import { runClaimer } from "roles/claimer";
 import { completeTask } from "utils/TaskManager";
-import { runTransporter } from "roles/transporter";
+import { runHiveColonizer } from "roles/h-colonizer";
+import { runHiveBuilder } from "roles/h-builder";
 
 export let CREEP_COUNTS: {
     [room: string]: { [role: string]: number } | undefined
@@ -73,41 +74,44 @@ export function runCreeps(): void {
                 continue; // skip the rest of the logic for this creep
             }
 
-            // run the appropriate role logic for the creep
-            switch (creep.memory.role) {
-                case 'harvester':
-                    runHarvester(creep, context);
-                    break;
-                case 'builder':
-                    runBuilder(creep, context);
-                    break;
-                case 'queen':
-                    runQueen(creep, context);
-                    break;
-                case 'scout':
-                    runScout(creep, context);
-                    break;
-                case 'transporter':
-                    runTransporter(creep, context);
-                    break;
-                case 'filler':
-                case 'hauler':
-                    runHauler(creep, context);
-                    break;
-                case 'defender':
-                    runDefender(creep, context);
-                    break;
-                case 'attacker':
-                    runAttacker(creep, context);
-                    break;
-                case 'claimer':
-                    runClaimer(creep, context);
-                    break;
-                default:
-                    if (Game.time % 25 === 0) {
-                        creep.say(`❓`);
-                    }
-                    debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
+            if (creep.name.startsWith('hive-colonizer-')) {
+                runHiveColonizer(creep, context);
+            } else if (creep.name.startsWith('hive-builder-')) {
+                runHiveBuilder(creep, context);
+            } else {
+                // run the appropriate role logic for the creep
+                switch (creep.memory.role) {
+                    case 'harvester':
+                        runHarvester(creep, context);
+                        break;
+                    case 'builder':
+                        runBuilder(creep, context);
+                        break;
+                    case 'queen':
+                        runQueen(creep, context);
+                        break;
+                    case 'scout':
+                        runScout(creep, context);
+                        break;
+                    case 'filler':
+                    case 'hauler':
+                        runHauler(creep, context);
+                        break;
+                    case 'defender':
+                        runDefender(creep, context);
+                        break;
+                    case 'attacker':
+                        runAttacker(creep, context);
+                        break;
+                    case 'claimer':
+                        runClaimer(creep, context);
+                        break;
+                    default:
+                        if (Game.time % 25 === 0) {
+                            creep.say(`❓`);
+                        }
+                        debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
+                }
             }
         } catch (error) {
             debugLog(`Error running creep ${creep.name}: ${error}`);

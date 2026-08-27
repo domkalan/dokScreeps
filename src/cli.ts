@@ -1,8 +1,17 @@
 import { createTask, releaseTask } from 'utils/TaskManager';
 import { resetRoom } from './rooms';
+import { HiveColonizePlan } from './types/hive';
+import { colonizePlanExists } from './hive';
 
-export function addCliFunctions() {
-    global.resetRoom = function (roomName: string) {
+const HELP_ENTRIES: { [key: string]: { desc: string, opts?: { [key: string]: { req: true } } } } = {};
+export function registerCommand(name: string, description: string, opts: { [key: string]: { req: true } }, func: (...args: any[]) => any) {
+    HELP_ENTRIES[name] = { desc: description, opts };
+
+    global[name] = func;
+}
+
+export function mountCommands() {
+    registerCommand('resetRoom', 'Resets the specified room, clearing tasks and spawn queue.', { roomName: { req: true } }, function (roomName: string) {
         const room = Game.rooms[roomName];
 
         if (!room) {
@@ -12,9 +21,10 @@ export function addCliFunctions() {
         resetRoom(room);
 
         return `Room ${roomName} has been reset.`;
-    }
+    });
 
-    global.setDebug = function (room: string) {
+
+    registerCommand('setDebug', 'Sets the room for debug display. Pass an empty string to disable.', { room: { req: true } }, function (room: string) {
         Memory.debugDisplay = room;
 
         if (!room) {
@@ -22,9 +32,9 @@ export function addCliFunctions() {
         }
 
         return `Debug display set to room ${room}.`;
-    }
+    });
 
-    global.setPerfMode = function (enabled: boolean) {
+    registerCommand('setPerfMode', 'Enables or disables performance tracking mode.', { enabled: { req: true } }, function (enabled: boolean) {
         Memory.perfMode = enabled;
 
         if (enabled) {
@@ -32,9 +42,9 @@ export function addCliFunctions() {
         } else {
             return `Performance tracking mode has been disabled.`;
         }
-    }
+    });
 
-    global.setCacheMode = function (enabled: boolean) {
+    registerCommand('setCacheMode', 'Enables or disables cache mode.', { enabled: { req: true } }, function (enabled: boolean) {
         Memory.cacheMode = enabled;
 
         if (enabled) {
@@ -42,9 +52,9 @@ export function addCliFunctions() {
         } else {
             return `Cache mode has been disabled.`;
         }
-    }
+    });
 
-    global.setStorageLink = function (roomName: string, linkId: string) {
+    registerCommand('setStorageLink', 'Sets the storage link for the specified room.', { roomName: { req: true } }, function (roomName: string, linkId: string) {
         const roomMemory = Memory.rooms[roomName];
 
         if (!roomMemory) {
@@ -54,9 +64,9 @@ export function addCliFunctions() {
         roomMemory.storageLink = linkId;
 
         return `Storage link for room ${roomName} has been set to ${linkId}.`;
-    }
+    });
 
-    global.snapshotStructures = function (roomName: string) {
+    registerCommand('snapshotStructures', 'Snapshots the current structures in the room and adds them to the construction plan.', { roomName: { req: true } }, function (roomName: string) {
         const room = Game.rooms[roomName];
         if (room) {
             if (!room.memory.constructionPlanner) {
@@ -94,9 +104,9 @@ export function addCliFunctions() {
         }
 
         return `No room found with name ${roomName}.`;
-    }
+    });
 
-    global.attackStructures = function (roomName: string, structureTypes: BuildableStructureConstant[]) {
+    registerCommand('attackStructures', 'Creates attack tasks for all structures of the specified types in the given room.', { roomName: { req: true } }, function (roomName: string, structureTypes: BuildableStructureConstant[]) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
@@ -127,9 +137,9 @@ export function addCliFunctions() {
         }
 
         return `Attack tasks for ${totalStructures} structures in room ${roomName} have been added to home room ${parentRoomName}.`;
-    }
+    });
 
-    global.attackStructureById = function (roomName: string, structureId: string) {
+    registerCommand('attackStructureById', 'Creates an attack task for the specified structure ID in the given room.', { roomName: { req: true }, structureId: { req: true } }, function (roomName: string, structureId: string) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
@@ -148,9 +158,9 @@ export function addCliFunctions() {
         createTask(parentRoom, 'attack', structureId, 5, room.name); // high priority for attacking structures
 
         return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${parentRoomName}.`;
-    }
+    });
 
-    global.drainStructures = function (roomName: string, resourceType: ResourceConstant, structureTypes: string[]) {
+    registerCommand('drainStructures', 'Creates drain tasks for all structures of the specified types in the given room that contain the specified resource type.', { roomName: { req: true }, resourceType: { req: true }, structureTypes: { req: true } }, function (roomName: string, resourceType: ResourceConstant, structureTypes: string[]) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
@@ -179,9 +189,9 @@ export function addCliFunctions() {
         }
 
         return `Drain tasks for ${totalStructures} structures in room ${roomName} have been added to home room ${parentRoomName}.`;
-    }
+    });
 
-    global.claimRoom = function (roomName: string, existingRoom: string) {
+    registerCommand('claimRoom', 'Creates a claim task for the specified room and adds it to the existing home room.', { roomName: { req: true }, existingRoom: { req: true } }, function (roomName: string, existingRoom: string) {
         // make sure the room has a memory object
         if (!Memory.rooms[roomName]) {
             Memory.rooms[roomName] = {
@@ -213,9 +223,9 @@ export function addCliFunctions() {
         };
 
         return `Claim task for room ${roomName} has been added to home room ${existingRoom}.`;
-    }
+    });
 
-    global.addRemoteRoom = function (roomName: string, existingRoom: string) {
+    registerCommand('addRemoteRoom', 'Adds a remote room to the specified existing home room.', { roomName: { req: true }, existingRoom: { req: true } }, function (roomName: string, existingRoom: string) {
         // make sure the room has a memory object
         if (!Memory.rooms[roomName] || Memory.rooms[roomName].type !== 'remote') {
             Memory.rooms[roomName] = {
@@ -236,9 +246,9 @@ export function addCliFunctions() {
         }
 
         return `Add remote task for room ${roomName} has been added to home room ${existingRoom}.`;
-    }
+    });
 
-    global.resetCreepTask = function (creepName: string) {
+    registerCommand('resetCreepTask', 'Resets the task for the specified creep.', { creepName: { req: true } }, function (creepName: string) {
         const creep = Game.creeps[creepName];
         if (!creep) {
             return `No creep found with name ${creepName}.`;
@@ -247,9 +257,23 @@ export function addCliFunctions() {
         creep.memory.taskId = undefined;
 
         return `Tasks for creep ${creepName} have been reset.`;
-    }
+    });
 
-    global.setRoomType = function (roomName: string, type: 'home' | 'remote', parentRoom?: string) {
+    registerCommand('forceEnergyHarvest', 'Forces the specified room to continue spawning harvesters even if the energy threshold is met.', { roomName: { req: true }, setting: { req: true } }, function (roomName: string, setting: boolean) {
+        const room = Game.rooms[roomName];
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        room.memory.energyThresholdOverride = setting;
+        if (setting === true) {
+            room.memory.energyThresholdMet = false; // reset the energy threshold met flag to force spawning
+        }
+
+        return `Energy threshold override for room ${roomName} has been set to ${setting}.`;
+    });
+
+    registerCommand('setRoomType', 'Sets the specified room type to either "home" or "remote". If setting to "remote", a parent room must be specified.', { roomName: { req: true }, type: { req: true } }, function (roomName: string, type: 'home' | 'remote', parentRoom?: string) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
@@ -338,9 +362,9 @@ export function addCliFunctions() {
         }
 
         return `Bootstrap task for room ${roomName} has been added.`;
-    }
+    });
 
-    global.resetHive = function () {
+    registerCommand('resetHive', 'Resets the entire hive, clearing all data and tasks.', {}, function () {
         if (Memory.hive) {
             Memory.hive.rooms = {};
             Memory.hive.tasks = {};
@@ -358,18 +382,18 @@ export function addCliFunctions() {
         } else {
             return `Hive not found.`;
         }
-    }
+    });
 
-    global.resetHiveTick = function () {
+    registerCommand('resetHiveTick', 'Resets the hive tick, causing the hive to rescan all rooms.', {}, function () {
         if (Memory.hive) {
             Memory.hive.lastScan = 0;
             return `Hive tick has been reset.`;
         } else {
             return `Hive not found.`;
         }
-    }
+    });
 
-    global.resetHiveRoomScan = function (roomName: string) {
+    registerCommand('resetHiveRoomScan', 'Resets the scout timer for the specified room.', { roomName: { req: true } }, function (roomName: string) {
         if (Memory.hive && Memory.hive.rooms[roomName]) {
             Memory.hive.rooms[roomName].lastScan = 0;
 
@@ -377,44 +401,56 @@ export function addCliFunctions() {
         } else {
             return `No room found with name ${roomName}.`;
         }
-    }
+    });
 
-    global.jumpPortal = function (roomName: string, portalId: string) {
-        Memory.hive.tasks[`jump-${portalId}`] = {
-            type: 'jump',
-            completed: false,
-            priority: 1,
-            targetId: portalId,
-            roomId: roomName,
-            shardId: Game.shard.name,
-            assigned: null,
-            expires: Game.time + 10000
+    // hiveColonizePlan([['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f']], 'shard1', 'E1S18')
+    // hiveColonizePlan([['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f'], ['shard1', 'W0S20', '69f291863d008a3381151b1b']], 'shard0', 'W1S19')
+    registerCommand('hiveColonizePlan', 'Creates a hive colonization plan with the specified portals, target shard, and target room.', { portals: { req: true }, targetShard: { req: true }, targetRoom: { req: true } }, function (portals: [string, string, string][], targetShard: string, targetRoom: string) {
+        const colonizeRunning = colonizePlanExists();
+
+        if (colonizeRunning) {
+            return `Hive colonization plan already exists on another shard.`;
+        }
+
+        const hiveColonizePlan: HiveColonizePlan = {
+            lastUpdated: Game.time,
+            portals: portals, // third element is portal id, which will be filled in later
+            targetShard: targetShard,
+            targetRoom: targetRoom,
+            owningShard: Game.shard.name,
+            owningRoom: '',
+            phase: 'planning',
+            creepsSpawned: {}
         };
 
-        return `Jump task for portal ${portalId} in room ${roomName} has been added.`;
-    }
+        if (Memory.hive.interShard.colonizePlan) {
+            return `Hive colonization plan already exists.`;
+        }
 
-    // add a global function to create a transport task
-    // hiveTransport('W3S23', '6a777a379ba7274776316799', 'energy', 'E2S22', 10000, 4)
-    global.hiveTransport = function (roomName: string, targetId: string, resourceType: ResourceConstant, destRoom: string, amount: number = 0, transporterCount: number = 1) {
-        Memory.hive.tasks[`transport-${targetId}`] = {
-            type: 'transport',
-            completed: false,
-            priority: 1,
-            targetId: targetId,
-            roomId: roomName,
-            shardId: Game.shard.name,
-            assigned: null,
-            expires: Game.time + (4000 * Math.floor(amount / 5000)), // expire based on amount to transport, 4k ticks per 5k amount
-            kv: {
-                destRoom,
-                transportAmount: amount,
-                transportTotal: 0,
-                transporterCount
-            },
-            resourceType
-        };
+        Memory.hive.interShard.colonizePlan = hiveColonizePlan;
+        Memory.hive.interShard.lastUpdated = Game.time;
 
-        return `Transport task for ${resourceType} from ${targetId} in room ${roomName} to room ${destRoom} has been added.`;
-    }
+        Memory.hive.lastScan = 0; // force hive to rescan and pick up the new colonization plan
+
+        return `Hive colonization plan for ${targetRoom} on shard ${targetShard} has been created.`;
+    });
+
+    registerCommand('help', 'Displays a list of all available CLI commands.', {}, function () {
+        let helpText = 'Available CLI commands:\n';
+
+        for (const command in HELP_ENTRIES) {
+            const entry = HELP_ENTRIES[command];
+            helpText += `\n${command}: ${entry.desc}\n`;
+
+            if (entry.opts) {
+                helpText += '\tOptions:\n';
+                for (const opt in entry.opts) {
+                    const optEntry = entry.opts[opt];
+                    helpText += `\t\t${opt}: ${optEntry.req ? 'Required' : 'Optional'}\n`;
+                }
+            }
+        }
+
+        return helpText;
+    });
 }

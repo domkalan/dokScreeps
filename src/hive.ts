@@ -1,5 +1,7 @@
 import { getRoleNameCounter } from './utils/Counter'
 import { GLOBAL_CONTEXT } from './utils/Context';
+import { getStoredEnergy } from 'rooms';
+import { HiveIntershardData } from './types/hive';
 
 export function isHighwayRoom(roomName: string) {
     let parsed = /^[WE]([0-9]+)[NS]([0-9]+)$/.exec(roomName);
@@ -85,6 +87,136 @@ export function scanRoom(room: Room): void {
     discoverRooms(room.name);
 }
 
+export function syncHiveData(): void {
+    const otherShards = ['shard0', 'shard1', 'shard2', 'shard3'].filter(shard => shard !== Game.shard.name);
+    let recentIntershard: HiveIntershardData | undefined = Memory.hive.interShard;
+    let recentShard: string | undefined = undefined;
+
+    for (const shard of otherShards) {
+        // skip the current shard
+        if (Game.shard.name === shard) {
+            continue;
+        }
+
+        const rawMemory = InterShardMemory.getRemote(shard);
+        if (!rawMemory) {
+            continue;
+        }
+
+        const parsedMemory = JSON.parse(rawMemory) as Memory;
+
+        if (parsedMemory.hive && parsedMemory.hive.interShard) {
+            if (!recentIntershard || parsedMemory.hive.interShard.lastUpdated > recentIntershard.lastUpdated) {
+                recentIntershard = parsedMemory.hive.interShard;
+                recentShard = shard;
+            }
+        }
+    }
+
+    if (recentIntershard && recentShard) {
+        console.log(`[HIVE][Sync] Updating hive intershard data from shard ${recentShard} with lastUpdated ${recentIntershard.lastUpdated}`);
+
+        Memory.hive.interShard = recentIntershard;
+    }
+}
+
+export function colonizePlanExists(): boolean {
+    const otherShards = ['shard0', 'shard1', 'shard2', 'shard3'].filter(shard => shard !== Game.shard.name);
+    let planExists: boolean = false;
+
+    for (const shard of otherShards) {
+        const rawMemory = InterShardMemory.getRemote(shard);
+
+        if (!rawMemory) {
+            continue;
+        }
+
+        const parsedMemory = JSON.parse(rawMemory) as Memory;
+
+        if (parsedMemory.hive && parsedMemory.hive.interShard && parsedMemory.hive.interShard.colonizePlan) {
+            planExists = true;
+            break;
+        }
+    }
+
+    return planExists;
+}
+
+export function runHiveColonizePlan() {
+    // check if we have a hive colonize plan
+    if (!Memory.hive.interShard.colonizePlan) {
+        return;
+    }
+
+    // check if the plan is in the planning phase and no owning room has been set yet
+    if (Memory.hive.interShard.colonizePlan.phase === 'planning') {
+        // find the room in our current shard with the most standby energy
+        let bestRoom: Room | undefined;
+        let bestEnergy = 0;
+
+        for (const roomName in Game.rooms) {
+            const room = Game.rooms[roomName];
+            if (room.controller && room.controller.my) {
+                const energy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
+                if (energy > bestEnergy) {
+                    bestEnergy = energy;
+                    bestRoom = room;
+                }
+            }
+        }
+
+        if (bestRoom) {
+            // set the owning room and shard in the plan
+            Memory.hive.interShard.colonizePlan.owningRoom = bestRoom.name;
+            Memory.hive.interShard.colonizePlan.owningShard = Game.shard.name;
+
+            // move to the next phase
+            Memory.hive.interShard.colonizePlan.phase = 'colonize';
+        }
+
+        return;
+    }
+
+    // if room is in spawning mode, check if we have spawned a scout
+    if (Memory.hive.interShard.colonizePlan.phase === 'colonize' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] < Game.time - 1000)) {
+        // spawn a hive grade colonizer in the owning room
+        const owningRoom = Game.rooms[Memory.hive.interShard.colonizePlan.owningRoom];
+        if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
+            const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
+            if (spawn) {
+                const colonizerName = `hive-colonizer-${getRoleNameCounter('hiveColonizer')}`;
+                const spawnResult = spawn.spawnCreep([MOVE, CLAIM], colonizerName, { memory: { role: 'hiveColonizer', room: owningRoom.name } });
+
+                if (spawnResult === OK) {
+                    Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] = Game.time;
+                }
+            }
+        }
+    }
+
+    // if the room is in bootstrap mode, check if we have spawned a hive grade builder
+    if (Memory.hive.interShard.colonizePlan.phase === 'bootstrap' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] < Game.time - 1000)) {
+        // spawn a hive grade builder in the owning room
+        const owningRoom = Game.rooms[Memory.hive.interShard.colonizePlan.owningRoom];
+        if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
+            const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
+            if (spawn) {
+                const builderName = `hive-builder-${getRoleNameCounter('hiveBuilder')}`;
+                const spawnResult = spawn.spawnCreep([WORK, CARRY, MOVE, MOVE, WORK, CARRY, MOVE], builderName, { memory: { role: 'hiveBuilder', room: owningRoom.name } });
+
+                if (spawnResult === OK) {
+                    Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] = Game.time;
+                }
+            }
+        }
+    }
+
+    // if the plan is finalized, we can set it to undefined
+    if (Memory.hive.interShard.colonizePlan.phase === 'finished') {
+        Memory.hive.interShard.colonizePlan = undefined;
+    }
+}
+
 export function runHiveScan() {
     // scan all current loaded rooms in the game
     for (const roomName in Game.rooms) {
@@ -160,10 +292,16 @@ export function runHiveScan() {
             // spawn a scout in the first room we own
             for (const roomName in Game.rooms) {
                 const room = Game.rooms[roomName];
+                const roomStandbyEnergy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
+
+                if (roomStandbyEnergy < 75000) {
+                    continue;
+                }
+
                 if (room.controller && room.controller.my) {
                     const spawn = GLOBAL_CONTEXT[room.name]?.spawns[0];
                     if (spawn) {
-                        const scoutName = `scout-${getRoleNameCounter('scout')}`;
+                        const scoutName = `hive-scout-${getRoleNameCounter('scout')}`;
                         const spawnResult = spawn.spawnCreep([MOVE], scoutName, { memory: { role: 'scout', room: room.name } });
 
                         if (spawnResult === OK) {
@@ -171,40 +309,6 @@ export function runHiveScan() {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    let hasTransporters = 0;
-    for (const creepName in Game.creeps) {
-        const creep = Game.creeps[creepName];
-        if (creep.memory.role === 'transporter') {
-            hasTransporters++;
-        }
-    }
-
-    // check if we have a transporter task
-    let hasTransportTask = false;
-    let transportSrcRoom: string | undefined;
-    let transportersNeeded = 1;
-
-    for (const taskId in Memory.hive.tasks) {
-        const task = Memory.hive.tasks[taskId];
-        if (task.type === 'transport') {
-            hasTransportTask = true;
-            transportSrcRoom = task.roomId;
-            transportersNeeded = Math.max(transportersNeeded, task.kv?.transporterCount || 0);
-            break;
-        }
-    }
-
-    if (hasTransportTask && transportersNeeded > hasTransporters) {
-        const room = Game.rooms[transportSrcRoom || ''];
-        if (room && room.controller && room.controller.my) {
-            const spawn = GLOBAL_CONTEXT[room.name]?.spawns[0];
-            if (spawn) {
-                const transporterName = `transporter-${getRoleNameCounter('transporter')}`;
-                spawn.spawnCreep([CARRY, CARRY, MOVE, MOVE, CARRY, CARRY, MOVE, MOVE], transporterName, { memory: { role: 'transporter', room: room.name } });
             }
         }
     }
@@ -218,8 +322,15 @@ export function runHive() {
         Memory.hive = {
             rooms: {},
             tasks: {},
+            interShard: {
+                lastUpdated: 0
+            },
             lastScan: 0
         };
+
+        syncHiveData();
+
+        return;
     }
 
     // only run the hive logic every 100 ticks
@@ -227,7 +338,20 @@ export function runHive() {
         // update the hive last scan time
         Memory.hive.lastScan = Game.time;
 
-        // run the hive scan
+        // run the local shard hive scan
         runHiveScan();
+
+        // sync hive data first
+        syncHiveData();
+
+        // run the hive colonization logic
+        runHiveColonizePlan();
+
+        // set the local shard memory for future comparison with other shards
+        InterShardMemory.setLocal(JSON.stringify({
+            hive: {
+                interShard: Memory.hive.interShard
+            }
+        }));
     }
 }
