@@ -11,6 +11,16 @@ export function isHighwayRoom(roomName: string) {
     return x % 10 === 0 || y % 10 === 0;
 }
 
+function setTravelerRoomAvoidance(roomName: string, avoid: boolean): void {
+    if (!Memory.rooms) {
+        Memory.rooms = {};
+    }
+
+    const travelerRoomMemory = Memory.rooms[roomName] ||
+        (Memory.rooms[roomName] = {} as RoomMemory);
+    travelerRoomMemory.avoid = avoid;
+}
+
 export function discoverRooms(roomName: string): void {
     // discover rooms that are within 12 linear range of a given room
     if (Game.map.getRoomLinearDistance(roomName, Memory.hive.scoutingRoom || Object.keys(Game.rooms)[0]) > 6) {
@@ -48,40 +58,48 @@ export function scanRoom(room: Room): void {
         };
     }
 
-    // we have never been in this room before, so lets understand the exits
-    if (Memory.hive.rooms[room.name].lastScan === 0 || Game.time - Memory.hive.rooms[room.name].lastScan > 1000) {
-        Memory.hive.rooms[room.name].owner = room.controller?.owner?.username || null;
-        Memory.hive.rooms[room.name].lastScan = Game.time;
+    const roomMemory = Memory.hive.rooms[room.name];
+    roomMemory.owner = room.controller?.owner?.username || null;
+    roomMemory.lastScan = Game.time;
+    roomMemory.highway = isHighwayRoom(room.name);
 
-        // is this room a highway room?
-        Memory.hive.rooms[room.name].highway = isHighwayRoom(room.name);
+    // A claimed room owned by somebody else is unsafe even if its defensive
+    // creeps and towers are not currently visible in the arrays below.
+    let hostileRoom = !!room.controller?.owner && !room.controller.my;
 
-        // if this room is not highway, check if hostile
-        if (!Memory.hive.rooms[room.name].highway) {
-            let hostileRoom = false;
-
-            // check room for creeps with attacker parts, if we find any, mark the room as hostile
-            const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
-            for (const hostileCreep of hostileCreeps) {
-                if (hostileCreep.body.some(part => part.type === ATTACK || part.type === RANGED_ATTACK)) {
-                    hostileRoom = true;
-                    break;
-                }
+    if (!hostileRoom) {
+        const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
+        for (const hostileCreep of hostileCreeps) {
+            if (hostileCreep.getActiveBodyparts(ATTACK) > 0 ||
+                hostileCreep.getActiveBodyparts(RANGED_ATTACK) > 0 ||
+                hostileCreep.getActiveBodyparts(WORK) > 0) {
+                hostileRoom = true;
+                break;
             }
-
-            // check room for towers or nukes
-            const hostileStructures = room.find(FIND_HOSTILE_STRUCTURES);
-            for (const hostileStructure of hostileStructures) {
-                if (hostileStructure.structureType === STRUCTURE_TOWER || hostileStructure.structureType === STRUCTURE_NUKER) {
-                    hostileRoom = true;
-                    break;
-                }
-            }
-
-            Memory.hive.rooms[room.name].hostile = hostileRoom;
-        } else {
-            Memory.hive.rooms[room.name].hostile = false;
         }
+    }
+
+    if (!hostileRoom) {
+        const hostileStructures = room.find(FIND_HOSTILE_STRUCTURES);
+        for (const hostileStructure of hostileStructures) {
+            if (hostileStructure.structureType === STRUCTURE_TOWER ||
+                hostileStructure.structureType === STRUCTURE_NUKER) {
+                hostileRoom = true;
+                break;
+            }
+        }
+    }
+
+    roomMemory.hostile = hostileRoom;
+
+    // BonzAI Traveler's default route callback reads Memory.rooms[name].avoid.
+    // Keeping the flag here makes every travelTo call avoid scanned hostile
+    // rooms without allocating a routeCallback in each creep role.
+    setTravelerRoomAvoidance(room.name, hostileRoom);
+
+    // A successful scan proves that a previously timed-out room is reachable.
+    if (roomMemory.inaccessible) {
+        delete roomMemory.inaccessible;
     }
 
     discoverRooms(room.name);
@@ -148,37 +166,8 @@ export function runHiveColonizePlan() {
         return;
     }
 
-    // check if the plan is in the planning phase and no owning room has been set yet
-    if (Memory.hive.interShard.colonizePlan.phase === 'planning') {
-        // find the room in our current shard with the most standby energy
-        let bestRoom: Room | undefined;
-        let bestEnergy = 0;
-
-        for (const roomName in Game.rooms) {
-            const room = Game.rooms[roomName];
-            if (room.controller && room.controller.my) {
-                const energy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
-                if (energy > bestEnergy) {
-                    bestEnergy = energy;
-                    bestRoom = room;
-                }
-            }
-        }
-
-        if (bestRoom) {
-            // set the owning room and shard in the plan
-            Memory.hive.interShard.colonizePlan.owningRoom = bestRoom.name;
-            Memory.hive.interShard.colonizePlan.owningShard = Game.shard.name;
-
-            // move to the next phase
-            Memory.hive.interShard.colonizePlan.phase = 'colonize';
-        }
-
-        return;
-    }
-
     // if room is in spawning mode, check if we have spawned a scout
-    if (Memory.hive.interShard.colonizePlan.phase === 'colonize' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] < Game.time - 1000)) {
+    if (Memory.hive.interShard.colonizePlan.phase === 'colonize' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] < Game.time)) {
         // spawn a hive grade colonizer in the owning room
         const owningRoom = Game.rooms[Memory.hive.interShard.colonizePlan.owningRoom];
         if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
@@ -188,24 +177,80 @@ export function runHiveColonizePlan() {
                 const spawnResult = spawn.spawnCreep([MOVE, CLAIM], colonizerName, { memory: { role: 'hiveColonizer', room: owningRoom.name } });
 
                 if (spawnResult === OK) {
-                    Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] = Game.time;
+                    Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] = Game.time + 600; // add a cooldown to prevent spawning too many colonizers
+
+                    // initialize the portalsJumped map if it doesn't exist
+                    if (!Memory.hive.interShard.portalsJumped) {
+                        Memory.hive.interShard.portalsJumped = {};
+                    }
+
+                    // reset the portalsJumped array for this colonizer
+                    if (!Memory.hive.interShard.portalsJumped[colonizerName]) {
+                        Memory.hive.interShard.portalsJumped[colonizerName] = [];
+                    }
                 }
             }
         }
     }
 
     // if the room is in bootstrap mode, check if we have spawned a hive grade builder
-    if (Memory.hive.interShard.colonizePlan.phase === 'bootstrap' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] < Game.time - 1000)) {
-        // spawn a hive grade builder in the owning room
-        const owningRoom = Game.rooms[Memory.hive.interShard.colonizePlan.owningRoom];
-        if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
-            const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
-            if (spawn) {
-                const builderName = `hive-builder-${getRoleNameCounter('hiveBuilder')}`;
-                const spawnResult = spawn.spawnCreep([WORK, CARRY, MOVE, MOVE, WORK, CARRY, MOVE], builderName, { memory: { role: 'hiveBuilder', room: owningRoom.name } });
+    if (Memory.hive.interShard.colonizePlan.phase === 'bootstrap' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] < Game.time)) {
+        // spawn a hive grade builder in any of our rooms that we own
+        for (const roomName in Game.rooms) {
+            const owningRoom = Game.rooms[roomName];
 
-                if (spawnResult === OK) {
-                    Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] = Game.time;
+            if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
+                const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
+
+                if (spawn) {
+                    const builderName = `hive-builder-${getRoleNameCounter('hiveBuilder')}`;
+                    const spawnResult = spawn.spawnCreep([WORK, CARRY, MOVE, MOVE, WORK, CARRY, MOVE], builderName, { memory: { role: 'hiveBuilder', room: owningRoom.name } });
+
+                    if (spawnResult === OK) {
+                        Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] = Game.time + 200; // add a cooldown to prevent spawning too many builders
+
+                        // initialize the portalsJumped map if it doesn't exist
+                        if (!Memory.hive.interShard.portalsJumped) {
+                            Memory.hive.interShard.portalsJumped = {};
+                        }
+
+                        // reset the portalsJumped array for this builder
+                        if (!Memory.hive.interShard.portalsJumped[builderName]) {
+                            Memory.hive.interShard.portalsJumped[builderName] = [];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // if the room is in bootstrap mode, check if we have spawned a hive grade builder
+    if (Memory.hive.interShard.colonizePlan.phase === 'defend' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-agent'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-agent'] < Game.time)) {
+        // spawn a hive grade builder in any of our rooms that we own
+        for (const roomName in Game.rooms) {
+            const owningRoom = Game.rooms[roomName];
+
+            if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
+                const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
+
+                if (spawn) {
+                    const agentName = `hive-agent-${getRoleNameCounter('hiveAgent')}`;
+                    const spawnResult = spawn.spawnCreep([MOVE, ATTACK, MOVE, ATTACK], agentName, { memory: { role: 'hiveAgent', room: owningRoom.name } });
+
+                    if (spawnResult === OK) {
+                        Memory.hive.interShard.colonizePlan.creepsSpawned['hive-agent'] = Game.time + 200; // add a cooldown to prevent spawning too many agents
+
+                        // initialize the portalsJumped map if it doesn't exist
+                        if (!Memory.hive.interShard.portalsJumped) {
+                            Memory.hive.interShard.portalsJumped = {};
+                        }
+
+
+                        // reset the portalsJumped array for this agent
+                        if (!Memory.hive.interShard.portalsJumped[agentName]) {
+                            Memory.hive.interShard.portalsJumped[agentName] = [];
+                        }
+                    }
                 }
             }
         }
@@ -218,26 +263,25 @@ export function runHiveColonizePlan() {
 }
 
 export function runHiveScan() {
-    // scan all current loaded rooms in the game
+    // Refresh every visible room. This clears Traveler's avoid flag promptly
+    // after a transient threat leaves and also covers rooms visible to remote
+    // workers, not only owned rooms.
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
 
         // skip rooms that could be invalid
         if (!room) continue;
 
-        if (room.controller && room.controller.my) {
-            // did we know about this room?
-            if (!Memory.hive.rooms[roomName]) {
-                scanRoom(room);
-            } else {
-                scanRoom(room);
-            }
-        }
+        scanRoom(room);
     }
 
     // scan all rooms in the hive memory that we have not scanned recently
     for (const roomName in Memory.hive.rooms) {
         const roomMemory = Memory.hive.rooms[roomName];
+
+        // Migrate existing scout data to Traveler even when the room is not
+        // currently visible. A later successful scan clears stale avoidance.
+        setTravelerRoomAvoidance(roomName, roomMemory.hostile);
 
         // if the room is marked as inaccessible, skip it
         if (roomMemory.inaccessible) continue;
@@ -246,6 +290,11 @@ export function runHiveScan() {
         if (Game.time - roomMemory.lastScan > 1000) {
             // create a task in the hive task to scan this room
             const taskId = `scan-${roomName}`;
+            const existingTask = Memory.hive.tasks[taskId];
+            if (existingTask && !existingTask.completed && Game.time <= existingTask.expires) {
+                continue;
+            }
+
             Memory.hive.tasks[taskId] = {
                 type: 'scan',
                 roomId: roomName,
@@ -312,6 +361,15 @@ export function runHiveScan() {
             }
         }
     }
+
+    // check if we have valid creeps for portal jumps
+    for (const creepStoreName in Memory.hive.interShard.portalsJumped || {}) {
+        const creep = Game.creeps[creepStoreName];
+
+        if (!creep) {
+            delete Memory.hive.interShard.portalsJumped![creepStoreName];
+        }
+    }
 }
 
 /**
@@ -333,6 +391,11 @@ export function runHive() {
         return;
     }
 
+    // sync intershard data every 2 ticks
+    if (Game.time % 2 === 0 || Game.time - Memory.hive.interShard.lastUpdated > 100) {
+        syncHiveData();
+    }
+
     // only run the hive logic every 100 ticks
     if (Game.time - Memory.hive.lastScan > 100) {
         // update the hive last scan time
@@ -340,9 +403,6 @@ export function runHive() {
 
         // run the local shard hive scan
         runHiveScan();
-
-        // sync hive data first
-        syncHiveData();
 
         // run the hive colonization logic
         runHiveColonizePlan();

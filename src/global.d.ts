@@ -53,6 +53,10 @@ declare global {
     }
 
     interface RoomMemory {
+        // Traveler reads this flag while planning inter-room routes. It is
+        // maintained by the hive scout whenever the room is scanned.
+        avoid?: boolean;
+
         type: 'home' | 'remote';
 
         // last time we scanned this room

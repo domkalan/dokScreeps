@@ -3,8 +3,9 @@ import { resetRoom } from './rooms';
 import { HiveColonizePlan } from './types/hive';
 import { colonizePlanExists } from './hive';
 
-const HELP_ENTRIES: { [key: string]: { desc: string, opts?: { [key: string]: { req: true } } } } = {};
-export function registerCommand(name: string, description: string, opts: { [key: string]: { req: true } }, func: (...args: any[]) => any) {
+
+const HELP_ENTRIES: { [key: string]: { desc: string, opts?: { [key: string]: { req: boolean } } } } = {};
+export function registerCommand(name: string, description: string, opts: { [key: string]: { req: boolean } }, func: (...args: any[]) => any) {
     HELP_ENTRIES[name] = { desc: description, opts };
 
     global[name] = func;
@@ -403,27 +404,27 @@ export function mountCommands() {
         }
     });
 
-    // hiveColonizePlan([['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f']], 'shard1', 'E1S18')
-    // hiveColonizePlan([['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f'], ['shard1', 'W0S20', '69f291863d008a3381151b1b']], 'shard0', 'W1S19')
-    registerCommand('hiveColonizePlan', 'Creates a hive colonization plan with the specified portals, target shard, and target room.', { portals: { req: true }, targetShard: { req: true }, targetRoom: { req: true } }, function (portals: [string, string, string][], targetShard: string, targetRoom: string) {
+
+    // hiveColonizePlan(['shard3', 'W1S22'], [['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f']], 'shard1', 'E1S18')
+    // hiveColonizePlan(['shard3', 'W1S22'], [['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f'], ['shard1', 'W0S20', '69f291863d008a3381151b1b']], 'shard0', 'W1S19')
+    registerCommand('hiveColonizePlan', 'Creates a hive colonization plan with the specified portals, target shard, and target room.', { portals: { req: true }, targetShard: { req: true }, targetRoom: { req: true }, force: { req: false } }, function (owningRoom: [string, string], portals: [string, string, string][], targetShard: string, targetRoom: string, force: boolean = false) {
         const colonizeRunning = colonizePlanExists();
 
-        if (colonizeRunning) {
+        if (colonizeRunning && !force) {
             return `Hive colonization plan already exists on another shard.`;
         }
 
         const hiveColonizePlan: HiveColonizePlan = {
-            lastUpdated: Game.time,
             portals: portals, // third element is portal id, which will be filled in later
             targetShard: targetShard,
             targetRoom: targetRoom,
-            owningShard: Game.shard.name,
-            owningRoom: '',
-            phase: 'planning',
+            owningShard: owningRoom[0],
+            owningRoom: owningRoom[1],
+            phase: 'colonize',
             creepsSpawned: {}
         };
 
-        if (Memory.hive.interShard.colonizePlan) {
+        if (Memory.hive.interShard.colonizePlan && !force) {
             return `Hive colonization plan already exists.`;
         }
 

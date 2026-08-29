@@ -79,30 +79,18 @@ export function runScanWork(creep: Creep, context: RoomContext): void {
         }
 
         if (task.roomId === creep.room.name) {
-            // mark the room as hostile when we enter
-            Memory.hive.rooms[task.roomId].hostile = true;
-            Memory.hive.rooms[task.roomId].lastScan = Game.time;
+            // Room vision is complete as soon as the scout crosses the exit;
+            // scan before completing so the real result reaches Traveler.
+            // The old code pre-marked every destination hostile and advanced
+            // lastScan, which prevented scanRoom from correcting it.
+            scanRoom(creep.room);
+            task.completed = true;
+            task.assigned = null;
+            creep.memory.taskId = undefined;
+            delete creep.memory.kv!.travelingRoom;
+            delete creep.memory.kv!.travelingFor;
 
-            if (!creep.memory.kv!.inRoomFor) {
-                creep.memory.kv!.inRoomFor = 0;
-            }
-
-            if (creep.memory.kv!.inRoomFor >= 5) {
-                // the creep has been in the room for 5 ticks, so complete the task
-                task.completed = true;
-                creep.memory.taskId = undefined;
-
-                scanRoom(creep.room);
-
-                creep.say('Thanks!', true);
-
-                creep.memory.kv!.inRoomFor = 0;
-            } else {
-                creep.travelTo(new RoomPosition(25, 25, task.roomId));
-            }
-
-            // increment the inRoomFor counter
-            creep.memory.kv!.inRoomFor++;
+            creep.say('Thanks!', true);
         }
     }
 }

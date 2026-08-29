@@ -29,9 +29,20 @@ export function doHiveClaim(creep: Creep, context: RoomContext): void {
         creep.say('CLAIMED');
 
         Memory.hive.interShard.colonizePlan!.phase = 'bootstrap';
-        Memory.hive.interShard.colonizePlan!.lastUpdated = Game.time;
         Memory.hive.interShard.lastUpdated = Game.time;
         Memory.hive.lastScan = 0;
+
+        // Declare the room as owned by the player in memory
+        Memory.rooms[creep.room.name] = {
+            type: 'home',
+            parentRoom: undefined,
+            remoteEnergySources: {},
+            lastScan: 0,
+            energySources: [],
+            tasks: {},
+            spawnQueue: [],
+            defenseMode: false
+        };
 
         Game.notify(`Hive colonization: Room ${creep.room.name} claimed by ${creep.name}.`);
 
@@ -43,16 +54,27 @@ export function moveToPortal(creep: Creep, context: RoomContext): void {
     // check if the creep knows what portal it is going to jump through
     if (!creep.memory.kv!.portalId || creep.memory.kv!.portalRoom) {
         const portals = Memory.hive.interShard.colonizePlan!.portals;
+        let closerPortalDist: number = Infinity;
 
         for (const [shardId, roomId, portalId] of portals) {
+            // dont use portals in other shards
             if (shardId !== Game.shard.name) {
                 continue;
             }
 
-            creep.memory.kv!.portalId = portalId;
-            creep.memory.kv!.portalRoom = roomId;
+            // dont use portals that have already been jumped through
+            if (Memory.hive.interShard.portalsJumped && Memory.hive.interShard.portalsJumped[creep.name]?.includes(portalId)) {
+                continue;
+            }
 
-            break;
+            const distFromCreep = Game.map.getRoomLinearDistance(creep.room.name, roomId);
+
+            if (distFromCreep < closerPortalDist) {
+                closerPortalDist = distFromCreep;
+
+                creep.memory.kv!.portalId = portalId;
+                creep.memory.kv!.portalRoom = roomId;
+            }
         }
     }
 
@@ -73,8 +95,23 @@ export function moveToPortal(creep: Creep, context: RoomContext): void {
     }
 
     // move the creep to the portal
-    if (creep.pos.getRangeTo(portal) > 0) {
+    const portalRange = creep.pos.getRangeTo(portal);
+    if (portalRange > 0) {
         creep.travelTo(portal);
+
+        return;
+    } else if (portalRange === 0) {
+        // track the portal jump in memory
+        if (!Memory.hive.interShard.portalsJumped) {
+            Memory.hive.interShard.portalsJumped = {};
+        }
+
+        if (!Memory.hive.interShard.portalsJumped[creep.name]) {
+            Memory.hive.interShard.portalsJumped[creep.name] = [];
+        }
+
+        // add this portal to the list of portals jumped through
+        Memory.hive.interShard.portalsJumped[creep.name].push(portal.id);
 
         return;
     }

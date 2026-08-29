@@ -1,11 +1,10 @@
 export interface HiveColonizePlan {
-    lastUpdated: number;
     portals: [string, string, string][]; // array of tuples, each containing a shard id, room id, and portal id
     targetShard: string;
     targetRoom: string;
     owningShard: string;
     owningRoom: string;
-    phase: 'planning' | 'colonize' | 'bootstrap' | 'finished';
+    phase: 'planning' | 'colonize' | 'bootstrap' | 'defend' | 'finished';
     creepsSpawned: { [creepName: string]: number }; // map of creep names to the game time they were spawned
 }
 
@@ -13,6 +12,7 @@ export interface HiveIntershardData {
     lastUpdated: number;
     kv?: { [key: string]: any };
     colonizePlan?: HiveColonizePlan;
+    portalsJumped?: { [creepName: string]: string[] }; // map of creep names to an array of portal ids they have jumped through
 }
 
 export interface HiveMemory {

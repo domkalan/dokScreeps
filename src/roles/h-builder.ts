@@ -1,5 +1,7 @@
 import { LOCAL_PLAYER } from 'config';
 import { RoomContext } from '../utils/Context';
+import { moveToPortal } from './h-colonizer';
+import { GLOBAL_CONTEXT } from '../utils/Context';
 
 export function doHiveConstruction(creep: Creep, context: RoomContext): void {
     if (Memory.hive.interShard.colonizePlan!.targetRoom !== creep.room.name) {
@@ -8,13 +10,7 @@ export function doHiveConstruction(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 || creep.memory.focusedOn === 'energy') {
-        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-            delete creep.memory.focusedOn;
-
-            return;
-        }
-
+    if (creep.store.energy === 0 || creep.memory.focusedOn === 'energy') {
         creep.memory.focusedOn = 'energy';
 
         // find the closest energy source
@@ -26,17 +22,35 @@ export function doHiveConstruction(creep: Creep, context: RoomContext): void {
             if (harvestResult === ERR_NOT_IN_RANGE) {
                 creep.travelTo(energySource);
             }
+
+            if (creep.store.getFreeCapacity() === 0) {
+                creep.memory.focusedOn = 'construction';
+            }
+        }
+
+        return;
+    }
+
+    // find the controller in the room, if under 2000 ticks to downgrade, prioritize upgrading the controller
+    const controller = creep.room.controller;
+
+    if (controller && controller.ticksToDowngrade < 2000) {
+        const upgradeResult = creep.upgradeController(controller);
+
+        if (upgradeResult === ERR_NOT_IN_RANGE) {
+            creep.travelTo(controller);
         }
     }
 
     // find all construction sites in the room
-    const constructionSites = creep.room.find(FIND_CONSTRUCTION_SITES);
+    const constructionSites = GLOBAL_CONTEXT[creep.room.name].constructionSites;
 
     if (constructionSites.length === 0) {
         creep.say('NO_SITES');
 
+        delete creep.memory.focusedOn;
+
         Memory.hive.interShard.colonizePlan!.phase = 'finished';
-        Memory.hive.interShard.colonizePlan!.lastUpdated = Game.time;
         Memory.hive.interShard.lastUpdated = Game.time;
         Memory.hive.lastScan = 0;
 
@@ -66,49 +80,6 @@ export function doHiveConstruction(creep: Creep, context: RoomContext): void {
             return;
         }
     }
-}
-
-export function moveToPortal(creep: Creep, context: RoomContext): void {
-    // check if the creep knows what portal it is going to jump through
-    if (!creep.memory.kv!.portalId || creep.memory.kv!.portalRoom) {
-        const portals = Memory.hive.interShard.colonizePlan!.portals;
-
-        for (const [shardId, roomId, portalId] of portals) {
-            if (shardId !== Game.shard.name) {
-                continue;
-            }
-
-            creep.memory.kv!.portalId = portalId;
-            creep.memory.kv!.portalRoom = roomId;
-
-            break;
-        }
-    }
-
-    // move the creep into the right room
-    if (creep.room.name !== creep.memory.kv!.portalRoom) {
-        creep.travelTo(new RoomPosition(25, 25, creep.memory.kv!.portalRoom));
-
-        return;
-    }
-
-    // find the portal in the room
-    const portal = Game.getObjectById(creep.memory.kv!.portalId) as StructurePortal | null;
-
-    if (!portal) {
-        creep.say('NO_PORTAL');
-
-        return;
-    }
-
-    // move the creep to the portal
-    if (creep.pos.getRangeTo(portal) > 0) {
-        creep.travelTo(portal);
-
-        return;
-    }
-
-    creep.say('???');
 }
 
 export function runHiveBuilder(creep: Creep, context: RoomContext): void {

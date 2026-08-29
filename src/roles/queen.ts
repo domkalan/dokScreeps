@@ -76,6 +76,12 @@ export function runQueen(creep: Creep, context: RoomContext): void {
             return;
         }
 
+        if (target.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+            // if the target is full, clear the focused target from memory and return
+            delete creep.memory.focusedOn;
+            return;
+        }
+
         const transferCode = creep.transfer(target, RESOURCE_ENERGY);
         if (transferCode === OK) {
             // if the transfer was successful, manually purge any tasks associated with this target
