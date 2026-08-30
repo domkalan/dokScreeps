@@ -19,7 +19,7 @@ export function buildConstructionSite(creep: Creep): void {
         if (nearestHostile) {
             if (creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
                 if (nearestHostileRange > 3) {
-                    creep.travelTo(nearestHostile);
+                    if (creep.fatigue === 0) creep.travelTo(nearestHostile);
                 } else if (nearestHostileRange < 2) {
                     // move away from the hostile
                     const fleePos = creep.pos.getDirectionTo(nearestHostile) + 4; // opposite direction
@@ -31,7 +31,7 @@ export function buildConstructionSite(creep: Creep): void {
                 creep.rangedAttack(nearestHostile);
             } else {
                 if (nearestHostileRange > 1) {
-                    creep.travelTo(nearestHostile);
+                    if (creep.fatigue === 0) creep.travelTo(nearestHostile);
                 } else {
                     creep.attack(nearestHostile);
                 }
@@ -72,7 +72,7 @@ export function buildConstructionSite(creep: Creep): void {
         }
 
         if (creep.pos.getRangeTo(energySource) > 1) {
-            creep.travelTo(energySource);
+            if (creep.fatigue === 0) creep.travelTo(energySource);
             return;
         }
 
@@ -90,7 +90,7 @@ export function buildConstructionSite(creep: Creep): void {
 
     if (controller && controller.my && controller.ticksToDowngrade < 5000) {
         if (creep.pos.getRangeTo(controller) > 3) {
-            creep.travelTo(controller);
+            if (creep.fatigue === 0) creep.travelTo(controller);
             return;
         }
 
@@ -135,7 +135,7 @@ export function buildConstructionSite(creep: Creep): void {
     }
 
     if (creep.pos.getRangeTo(closestConstructionSite) > 1) {
-        creep.travelTo(closestConstructionSite);
+        if (creep.fatigue === 0) creep.travelTo(closestConstructionSite);
         return;
     }
 
@@ -146,7 +146,7 @@ export function claimController(creep: Creep, context: RoomContext, plan: HiveEx
     // make sure that we are in the target room before we attempt to claim the controller
     if (plan.target.room !== creep.room.name) {
         // if we are not in the target room, move to it
-        creep.travelTo(new RoomPosition(25, 25, plan.target.room));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, plan.target.room));
 
         return;
     }
@@ -161,7 +161,7 @@ export function claimController(creep: Creep, context: RoomContext, plan: HiveEx
 
     // attempt to claim the controller if we are in range
     if (creep.pos.getRangeTo(controller) > 1) {
-        creep.travelTo(controller);
+        if (creep.fatigue === 0) creep.travelTo(controller);
         return;
     }
 
@@ -219,7 +219,7 @@ export function jumpNextPortal(creep: Creep, plan: HiveExpansionPlan) {
 
     // if we are not in the room with the portal, move to it
     if (creep.pos.roomName !== targetedPortalRoom) {
-        creep.travelTo(new RoomPosition(25, 25, targetedPortalRoom));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, targetedPortalRoom));
         return;
     }
 
@@ -232,7 +232,7 @@ export function jumpNextPortal(creep: Creep, plan: HiveExpansionPlan) {
     }
 
     if (creep.pos.getRangeTo(portal) > 0) {
-        creep.travelTo(portal);
+        if (creep.fatigue === 0) creep.travelTo(portal);
 
         return;
     }
@@ -246,7 +246,7 @@ export function runHiveExpansionCreep(creep: Creep, contextRaw: RoomContext) {
     if (!Memory.hive.interShard.expansionPlan) {
         // if we don't have an expansion plan, the creep will idle in the room
         if (creep.pos.roomName !== context.room.name) {
-            creep.travelTo(new RoomPosition(25, 25, context.room.name));
+            if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, context.room.name));
         }
 
         creep.say('NO_PLAN!');
@@ -274,7 +274,7 @@ export function runHiveExpansionCreep(creep: Creep, contextRaw: RoomContext) {
     }
 
     if (plan.target.room !== creep.room.name) {
-        creep.travelTo(new RoomPosition(25, 25, plan.target.room));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, plan.target.room));
         return;
     }
 

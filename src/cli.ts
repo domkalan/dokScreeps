@@ -40,11 +40,12 @@ export function mountCommands() {
 
 
     registerCommand('setDebug', 'Sets the room for debug display. Pass an empty string to disable.', { room: { req: true } }, function (room: string) {
-        Memory.debugDisplay = room;
-
         if (!room) {
+            delete Memory.debugDisplay;
             return `Debug display has been disabled.`;
         }
+
+        Memory.debugDisplay = room;
 
         return `Debug display set to room ${room}.`;
     });

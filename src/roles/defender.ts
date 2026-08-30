@@ -13,7 +13,7 @@ export function runDefender(creep: Creep, context: RoomContext): void {
     // make sure defenders only operate in their assigned room
     if (creep.room.name !== context.room.name) {
         // if the creep is not in the room, move to the center of the room
-        creep.travelTo(new RoomPosition(25, 25, context.room.name));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, context.room.name));
 
         return;
     }
@@ -31,7 +31,7 @@ export function runDefender(creep: Creep, context: RoomContext): void {
         }
         if (target) {
             if (!creep.pos.isNearTo(target)) {
-                creep.travelTo(target);
+                if (creep.fatigue === 0) creep.travelTo(target);
             } else {
                 creep.attack(target);
             }
@@ -41,7 +41,7 @@ export function runDefender(creep: Creep, context: RoomContext): void {
         const defensivePosition = creep.room.controller || context.spawns[0]?.pos;
 
         if (defensivePosition && creep.pos.getRangeTo(defensivePosition) > 5) {
-            creep.travelTo(defensivePosition);
+            if (creep.fatigue === 0) creep.travelTo(defensivePosition);
         }
     }
 }

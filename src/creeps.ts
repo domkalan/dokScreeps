@@ -55,7 +55,12 @@ export function runCreepDefenses(creep: Creep, context: RoomContext): boolean {
             creep.say(`😱`);
         }
 
-        if (creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+        // Body-part scans walk the creep body. Cache them for this defense pass
+        // instead of repeating getActiveBodyparts several times below.
+        const attackParts = creep.getActiveBodyparts(ATTACK);
+        const rangedAttackParts = creep.getActiveBodyparts(RANGED_ATTACK);
+
+        if (attackParts > 0 || rangedAttackParts > 0) {
             // find the nearest hostile creep and attack it
             let nearestHostileId: string | null = null;
             let nearestHostileRange = Infinity;
@@ -74,23 +79,23 @@ export function runCreepDefenses(creep: Creep, context: RoomContext): boolean {
                 const creepRange = creep.pos.getRangeTo(nearestHostile);
 
                 // for ranged creeps, get near but not too close, for melee creeps, get as close as possible
-                if (creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+                if (rangedAttackParts > 0) {
                     if (creepRange > 3) {
-                        creep.travelTo(nearestHostile);
+                        if (creep.fatigue === 0) creep.travelTo(nearestHostile);
                     } else if (creepRange < 2) {
                         // move away from the hostile
                         const fleePos = creep.pos.getDirectionTo(nearestHostile) + 4; // opposite direction
                         const newPos = new RoomPosition(creep.pos.x + Math.cos(fleePos * (Math.PI / 4)), creep.pos.y + Math.sin(fleePos * (Math.PI / 4)), creep.pos.roomName);
 
                         if (newPos) {
-                            creep.travelTo(newPos);
+                            if (creep.fatigue === 0) creep.travelTo(newPos);
                         }
                     }
 
                     creep.rangedAttack(nearestHostile);
                 } else {
                     if (creepRange > 1) {
-                        creep.travelTo(nearestHostile);
+                        if (creep.fatigue === 0) creep.travelTo(nearestHostile);
                     } else {
                         creep.attack(nearestHostile);
                     }
@@ -99,14 +104,14 @@ export function runCreepDefenses(creep: Creep, context: RoomContext): boolean {
         } else {
             // if the creep is not in the home room, move it back to the home room
             if (creep.room.name !== creep.memory.room) {
-                creep.travelTo(new RoomPosition(25, 25, creep.memory.room)); // Move to the center of the home room
+                if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, creep.memory.room)); // Move to the center of the home room
             } else {
                 // if the creep is in the home room, move it to a safe position (e.g., near the spawn)
                 const homeRoom = Game.rooms[creep.memory.room];
                 if (homeRoom) {
                     const spawn = GLOBAL_CONTEXT[creep.memory.room]?.spawns[0];
                     if (spawn) {
-                        creep.travelTo(spawn.pos);
+                        if (creep.fatigue === 0) creep.travelTo(spawn.pos);
                     }
                 }
             }
@@ -138,7 +143,7 @@ export function runCreeps(): void {
     const cpuStart = Game.cpu.getUsed();
     // reset the creep cpu usage for this tick
     CREEP_CPU = {};
-    const trackIndividualCpu = Memory.perfMode || typeof Memory.debugDisplay !== 'undefined';
+    const trackIndividualCpu = Memory.perfMode || !!Memory.debugDisplay;
 
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
@@ -160,6 +165,9 @@ export function runCreeps(): void {
         try {
             if (runCreepDefenses(creep, context)) {
                 // if the creep is in danger and is performing defensive maneuvers, skip the rest of its logic
+                if (trackIndividualCpu) {
+                    CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
+                }
                 continue;
             }
 

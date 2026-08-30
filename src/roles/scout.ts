@@ -59,7 +59,7 @@ export function runScanWork(creep: Creep, context: RoomContext): void {
             }
 
             // move to the target room
-            creep.travelTo(new RoomPosition(25, 25, task.roomId));
+            if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
 
             if (!creep.memory.kv!.travelingRoom || creep.memory.kv!.travelingRoom !== task.roomId) {
                 creep.memory.kv!.travelingRoom = task.roomId;

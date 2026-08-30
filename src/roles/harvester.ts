@@ -29,7 +29,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
 
     // if the creep is outside of the task room, go there
     if (creep.room.name !== task.roomId) {
-        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
 
         return;
     }
@@ -59,7 +59,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
 
         if (nearbyLink) {
             if (!creep.pos.isNearTo(nearbyLink)) {
-                creep.travelTo(nearbyLink);
+                if (creep.fatigue === 0) creep.travelTo(nearbyLink);
                 return;
             }
 
@@ -83,7 +83,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
 
         if (nearbyContainer) {
             if (!creep.pos.isNearTo(nearbyContainer)) {
-                creep.travelTo(nearbyContainer);
+                if (creep.fatigue === 0) creep.travelTo(nearbyContainer);
                 return;
             }
 
@@ -100,7 +100,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
     }
 
     if (!creep.pos.isNearTo(source)) {
-        creep.travelTo(source);
+        if (creep.fatigue === 0) creep.travelTo(source);
     } else {
         creep.harvest(source);
     }

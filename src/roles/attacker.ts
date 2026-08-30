@@ -28,7 +28,7 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
 
     // if the creep is outside of the task room, go there
     if (creep.room.name !== attackTask.roomId) {
-        creep.travelTo(new RoomPosition(25, 25, attackTask.roomId));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, attackTask.roomId));
 
         return;
     }
@@ -44,7 +44,7 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
     }
 
     if (!creep.pos.isNearTo(target)) {
-        creep.travelTo(target);
+        if (creep.fatigue === 0) creep.travelTo(target);
     } else {
         creep.attack(target);
     }

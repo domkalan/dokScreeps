@@ -11,7 +11,7 @@ export function upgradeRoomController(creep: Creep, context: RoomContext): void 
 
     // upgrade the controller if we have energy and are in range
     if (!creep.pos.inRangeTo(context.room.controller!, 3)) {
-        creep.travelTo(context.room.controller!);
+        if (creep.fatigue === 0) creep.travelTo(context.room.controller!);
     } else {
         creep.upgradeController(context.room.controller!);
     }
@@ -72,7 +72,7 @@ export function runQueen(creep: Creep, context: RoomContext): void {
 
     if (target && (target.structureType === STRUCTURE_EXTENSION || target.structureType === STRUCTURE_SPAWN)) {
         if (!creep.pos.isNearTo(target)) {
-            creep.travelTo(target);
+            if (creep.fatigue === 0) creep.travelTo(target);
             return;
         }
 

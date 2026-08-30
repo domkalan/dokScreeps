@@ -22,7 +22,7 @@ export function drawDebugInfo() {
 }
 
 export function drawRoomDebugInfo() {
-    if (typeof Memory.debugDisplay === 'undefined') {
+    if (!Memory.debugDisplay) {
         return;
     }
 
@@ -180,7 +180,7 @@ export function drawCpuDebugInfo() {
 export function attachDebug() {
     // Attach the debugLog function to the global object for easy access in the console
     global.debugLog = function (message: string): void {
-        if (typeof Memory.debugDisplay !== 'undefined') {
+        if (!!Memory.debugDisplay) {
             console.log(`[DEBUG] ${message}`);
         }
     }

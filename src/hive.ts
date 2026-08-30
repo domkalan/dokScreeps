@@ -3,6 +3,52 @@ import { GLOBAL_CONTEXT } from './utils/Context';
 import { getStoredEnergy } from 'rooms';
 import { HiveIntershardData } from './types/hive';
 
+const INTERSHARD_SYNC_INTERVAL = 25;
+const INTERSHARD_HISTORY_TTL = 5000;
+
+// Module globals survive between ticks in Screeps until the global is reset.
+// Cache the serialized payload so unchanged inter-shard data does not pay for
+// JSON.stringify + InterShardMemory.setLocal every sync pass.
+let cachedInterShardSerialized: string | null = null;
+let cachedInterShardUpdatedAt = -1;
+
+function markInterShardUpdated(): void {
+    Memory.hive.interShard.lastUpdated = Date.now();
+}
+
+function pruneInterShardHistory(): void {
+    const interShard = Memory.hive.interShard;
+    if (!interShard) {
+        return;
+    }
+
+    const plan = interShard.expansionPlan;
+
+    if (!plan || !plan.spawned) {
+        return;
+    }
+
+    let changed = false;
+
+    for (const creepName in plan.spawned) {
+        const spawnRecord = plan.spawned[creepName];
+
+        if (Game.time - spawnRecord.spawnedAt > INTERSHARD_HISTORY_TTL) {
+            delete plan.spawned[creepName];
+
+            if (interShard.portalsJumped?.[creepName]) {
+                delete interShard.portalsJumped[creepName];
+            }
+
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        markInterShardUpdated();
+    }
+}
+
 export function isHighwayRoom(roomName: string) {
     let parsed = /^[WE]([0-9]+)[NS]([0-9]+)$/.exec(roomName);
     if (!parsed) return false;
@@ -129,9 +175,26 @@ export function spawnInRoom(role: string, body: BodyPartConstant[], limit: numbe
                         console.log(`[HIVE] Spawned ${roleName} in ${room.name}`);
 
                         // reset portals jumped for this creep in inter-shard data
-                        if (Memory.hive.interShard.portalsJumped) {
-                            Memory.hive.interShard.portalsJumped[roleName] = [];
+                        if (!Memory.hive.interShard.portalsJumped) {
+                            Memory.hive.interShard.portalsJumped = {};
                         }
+                        Memory.hive.interShard.portalsJumped[roleName] = [];
+
+                        // Expansion spawn history is used to throttle future
+                        // waves and also gives us a timestamp for pruning old
+                        // portal-history records.
+                        if (role === 'expansion' && Memory.hive.interShard.expansionPlan) {
+                            const plan = Memory.hive.interShard.expansionPlan;
+                            if (!plan.spawned) {
+                                plan.spawned = {};
+                            }
+                            plan.spawned[roleName] = {
+                                role,
+                                spawnedAt: Game.time
+                            };
+                        }
+
+                        markInterShardUpdated();
 
                         spawnSuccess = true;
                         spawnedCount++;
@@ -240,25 +303,33 @@ export function runHiveExpansionPlan() {
         return;
     }
 
-    // check if we have a current expansion plan
-    const lastSpawned: { [key: string]: number } = {};
+    // Backwards-compatible migration for expansion plans created before the
+    // spawn history field was populated by spawnInRoom.
+    if (!plan.spawned) {
+        plan.spawned = {};
+    }
+
+    // Find the most recent expansion spawn. The previous implementation keyed
+    // this map by creep name and then looked up "expansion", which meant the
+    // throttle never engaged.
+    let lastExpansionSpawn = 0;
 
     for (const creepName in plan.spawned) {
         const creepData = plan.spawned[creepName];
 
-        if (creepData.role === 'expansion') {
-            lastSpawned[creepName] = creepData.spawnedAt;
+        if (creepData.role === 'expansion' && creepData.spawnedAt > lastExpansionSpawn) {
+            lastExpansionSpawn = creepData.spawnedAt;
         }
     }
 
     // if we have not spawned an expansion creep in the last 750 ticks, spawn one
-    if (!lastSpawned['expansion'] || lastSpawned['expansion'] && Game.time - lastSpawned['expansion'] > 750) {
+    if (lastExpansionSpawn === 0 || Game.time - lastExpansionSpawn > 750) {
         console.log('Requesting new expansion creep to be spawned...');
 
         if (plan.phase === 'settle') {
-            spawnInRoom('expansion', [CLAIM, MOVE, WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], Infinity);
+            spawnInRoom('expansion', [CLAIM, MOVE, WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], 1);
         } else if (plan.phase === 'build') {
-            spawnInRoom('expansion', [WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], Infinity);
+            spawnInRoom('expansion', [WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], 1);
         }
     }
 }
@@ -279,6 +350,9 @@ export function syncHiveInterShard() {
         return;
     }
 
+    // Keep historical maps bounded before serializing them.
+    pruneInterShardHistory();
+
     let newestInterShardDataFrom: string | null = null;
     let newestInterShardData: HiveIntershardData | null = null;
     let newestInterShardDataUpdatedAt: number = localInterShardData.lastUpdated;
@@ -297,8 +371,15 @@ export function syncHiveInterShard() {
             continue;
         }
 
-        // parse the inter-shard data from the other shard
-        const interShardData: HiveIntershardData = JSON.parse(interShardDataRaw);
+        let interShardData: HiveIntershardData;
+
+        try {
+            // parse the inter-shard data from the other shard
+            interShardData = JSON.parse(interShardDataRaw);
+        } catch (error) {
+            console.error(`[HIVE] Failed to parse inter-shard data from ${shard}:`, error);
+            continue;
+        }
 
         // if the other shard's inter-shard data is newer, update the local inter-shard data
         if (interShardData.lastUpdated > newestInterShardDataUpdatedAt) {
@@ -312,10 +393,18 @@ export function syncHiveInterShard() {
     if (newestInterShardData) {
         console.info(`Syncing InterShard data from ${newestInterShardDataFrom} -> ${Game.shard.name}`);
         Memory.hive.interShard = newestInterShardData;
+        cachedInterShardSerialized = null;
+        cachedInterShardUpdatedAt = -1;
     }
 
-    // write our local inter-shard data to the inter-shard memory for other shards to read
-    InterShardMemory.setLocal(JSON.stringify(Memory.hive.interShard));
+    // Only stringify/write if the inter-shard version changed. setLocal data
+    // persists, so repeatedly writing identical JSON just burns CPU.
+    const interShardData = Memory.hive.interShard;
+    if (cachedInterShardSerialized === null || cachedInterShardUpdatedAt !== interShardData.lastUpdated) {
+        cachedInterShardSerialized = JSON.stringify(interShardData);
+        cachedInterShardUpdatedAt = interShardData.lastUpdated;
+        InterShardMemory.setLocal(cachedInterShardSerialized);
+    }
 }
 
 /**
@@ -335,8 +424,9 @@ export function runHive() {
         return;
     }
 
-    // only run the hive logic every 5 ticks
-    if ((Game.time - Memory.hive.lastScan) % 5 === 0) {
+    // Inter-shard state does not need tick-level freshness. Reducing this from
+    // every 5 ticks to every 25 avoids repeated remote reads / JSON parsing.
+    if (Game.time % INTERSHARD_SYNC_INTERVAL === 0) {
         // sync inter-shard data between shards
         syncHiveInterShard();
     }

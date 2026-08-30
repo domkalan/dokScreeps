@@ -7,7 +7,6 @@ import { createBasicRoomPlan } from "plans/basic";
 import { buildRoomContext, RoomContext, GLOBAL_CONTEXT, CONTEXT_CACHE } from "utils/Context";
 import { getRoleNameCounter } from "utils/Counter";
 import { createTask, getTaskCounts, monitorTasks } from "utils/TaskManager";
-import { LOCAL_PLAYER } from "config";
 
 export let ROOM_TOTAL_CPU: number = 0;
 export let ROOM_CPU: { [roomName: string]: number } = {};
@@ -137,7 +136,7 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // if we have excess energy, spawn a goat to boost the controller upgrade
-    if (roomEnergyAvailable >= 500000 && roleCounts.goat < 1) {
+    if (roomEnergyAvailable >= 500000 && (roleCounts.goat || 0) < 1) {
         idealCounts.goat.count = 1;
         idealCounts.goat.priority = 5;
     }
@@ -654,12 +653,17 @@ export function runRooms() {
     ROOM_CPU = {};
 
     const cpuStart = Game.cpu.getUsed();
-    const trackIndividualCpu = Memory.perfMode || typeof Memory.debugDisplay !== 'undefined';
+    const trackIndividualCpu = Memory.perfMode || !!Memory.debugDisplay;
 
-    // build context on our rooms globally
+    // Build full contexts only where colony/remote logic runs. Incidental
+    // vision from scouts and traveling creeps gets a lightweight context.
     for (const roomName in Game.rooms) {
         try {
-            buildRoomContext(Game.rooms[roomName]);
+            const room = Game.rooms[roomName];
+            const needsFullContext =
+                (room.controller?.my === true && room.memory.type === 'home') ||
+                room.memory.type === 'remote';
+            buildRoomContext(room, !needsFullContext);
         } catch (error) {
             debugLog(`Error building context for room ${roomName}: ${error}`);
         }

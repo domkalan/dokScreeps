@@ -4,6 +4,54 @@ import { runQueen } from './queen';
 
 type EnergyTarget = Source | StructureStorage | StructureContainer | Resource | Ruin | Tombstone;
 
+function isRoomEdge(pos: RoomPosition): boolean {
+    return pos.x === 0 || pos.x === 49 || pos.y === 0 || pos.y === 49;
+}
+
+/**
+ * Builder-specific movement wrapper. Builders normally only need range 3 for
+ * build/repair/upgrade intents, so do not make Traveler solve a path all the
+ * way to range 1. When a creep has just entered a room and is sitting on an
+ * exit tile, step inward with a cheap native move before invoking Traveler;
+ * starting PathFinder searches from room borders is both fragile and can be
+ * surprisingly expensive when repeated.
+ */
+function moveBuilderTo(
+    creep: Creep,
+    target: RoomPosition | { pos: RoomPosition },
+    range: number = 1
+): void {
+    if (creep.fatigue > 0) return;
+
+    const pos = target instanceof RoomPosition ? target : target.pos;
+
+    if (pos.roomName === creep.room.name && isRoomEdge(creep.pos)) {
+        // Discard Traveler's old edge path and step onto a normal room tile.
+        // Use a cardinal inward step so we return through the same traversable
+        // exit lane the creep just used instead of diagonally hitting terrain.
+        delete creep.memory._trav;
+        const inward = creep.pos.x === 0 ? RIGHT
+            : creep.pos.x === 49 ? LEFT
+                : creep.pos.y === 0 ? BOTTOM
+                    : TOP;
+        creep.move(inward);
+        return;
+    }
+
+    creep.travelTo(target, { range });
+}
+
+function repairCompletionHits(target: Structure): number {
+    // Roads are selected for repair below 25%. Bringing them back to 50% is
+    // enough to keep them out of the repair queue while avoiding builders
+    // spending many extra ticks topping every road up to 100%.
+    if (target.structureType === STRUCTURE_ROAD) {
+        return Math.ceil(target.hitsMax * 0.5);
+    }
+
+    return target.hitsMax;
+}
+
 function hasWithdrawableEnergy(target: EnergyTarget): boolean {
     if (target instanceof StructureStorage || target instanceof StructureContainer ||
         target instanceof Ruin || target instanceof Tombstone) {
@@ -38,7 +86,7 @@ function unloadNonEnergyCargo(creep: Creep, context: RoomContext): boolean {
     }
 
     if (!creep.pos.isNearTo(storage)) {
-        creep.travelTo(storage);
+        moveBuilderTo(creep, storage, 1);
     } else {
         creep.transfer(storage, resourceType);
     }
@@ -108,7 +156,7 @@ export function bootstrapEnergy(creep: Creep): void {
     creep.memory.focusedOn = 'bootstrap_' + closestSource.id; // Store the target in memory
 
     if (!creep.pos.isNearTo(closestSource)) {
-        creep.travelTo(closestSource);
+        moveBuilderTo(creep, closestSource, 1);
         return;
     }
 
@@ -171,7 +219,7 @@ export function goForEnergy(creep: Creep, context: RoomContext): void {
     }
 
     if (!creep.pos.isNearTo(target)) {
-        creep.travelTo(target);
+        moveBuilderTo(creep, target, 1);
         return;
     }
 
@@ -270,7 +318,7 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
 
     // task is not in the same room as the creep, so we should move to the target room first before attempting to build
     if (task.roomId && task.roomId !== creep.room.name) {
-        creep.travelTo(new RoomPosition(25, 25, task.roomId)); // Move to the center of the target room
+        moveBuilderTo(creep, new RoomPosition(25, 25, task.roomId), 20); // Cross into the target room; exact center is unnecessary
 
         return;
     }
@@ -279,7 +327,7 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
     if (!target) {
         debugLog(`Construction site with ID ${task.targetId} not found for creep ${creep.name}`);
 
-        releaseTask(creep); // Release the task if the target is no longer valid
+        completeTask(creep); // Remove stale tasks so they cannot be immediately reacquired
 
         return;
     }
@@ -289,32 +337,48 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
 
     if (target instanceof ConstructionSite) {
         if (!creep.pos.inRangeTo(target, 3)) {
-            creep.travelTo(target);
+            moveBuilderTo(creep, target, 3);
         } else {
             creep.build(target);
         }
     } else if (target instanceof StructureController) {
         if (!creep.pos.inRangeTo(target, 3)) {
-            creep.travelTo(target);
+            moveBuilderTo(creep, target, 3);
         } else if (creep.upgradeController(target) === OK) {
             // If the controller is upgraded successfully, sign it if necessary
             if (Memory.controllerSign && target.sign?.text !== Memory.controllerSign) {
                 if (!creep.pos.isNearTo(target)) {
-                    creep.travelTo(target);
+                    moveBuilderTo(creep, target, 1);
                 } else {
                     creep.signController(target, Memory.controllerSign);
                 }
             }
         }
     } else if (target instanceof Structure) {
+        const completionHits = repairCompletionHits(target);
+
+        // A stale repair task can survive after another builder/tower finishes
+        // the target. Complete it immediately instead of waiting 200 ticks.
+        if (target.hits >= completionHits) {
+            completeTask(creep);
+            return;
+        }
+
+        if (!creep.pos.inRangeTo(target, 3)) {
+            moveBuilderTo(creep, target, 3);
+            return;
+        }
+
         const repairResult = creep.repair(target);
-        if (repairResult === ERR_NOT_IN_RANGE) {
-            creep.travelTo(target);
-        } else if (repairResult === OK) {
-            // roads for some reason get stuck, so release on finish
-            if (target.structureType === STRUCTURE_ROAD) {
-                releaseTask(creep); // Release the task if the road is repaired successfully
+        if (repairResult === OK) {
+            const repairPower = creep.getActiveBodyparts(WORK) * REPAIR_POWER;
+            // Structure.hits is not updated until intents resolve. Predict the
+            // post-repair value so the task can be removed on the finishing tick.
+            if (target.hits + repairPower >= completionHits) {
+                completeTask(creep);
             }
+        } else if (repairResult === ERR_INVALID_TARGET) {
+            completeTask(creep);
         }
     }
 }

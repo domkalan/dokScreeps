@@ -5,7 +5,7 @@ export function returnHome(creep: Creep, context: RoomContext): void {
     const homeRoomName = creep.memory.room;
 
     if (creep.room.name !== homeRoomName) {
-        creep.travelTo(new RoomPosition(25, 25, homeRoomName));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, homeRoomName));
 
         return;
     }
@@ -46,7 +46,7 @@ export function runReserver(creep: Creep, context: RoomContext): void {
 
     if (creep.room.name !== task.roomId) {
         // Travel to the target room
-        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
 
         return;
     }
@@ -61,7 +61,7 @@ export function runReserver(creep: Creep, context: RoomContext): void {
     }
 
     if (!creep.pos.isNearTo(target)) {
-        creep.travelTo(target);
+        if (creep.fatigue === 0) creep.travelTo(target);
         return;
     }
 
@@ -102,7 +102,7 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
 
     if (creep.room.name !== task.roomId) {
         // Travel to the target room
-        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
 
         return;
     }
@@ -118,7 +118,7 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
     }
 
     if (!creep.pos.isNearTo(target)) {
-        creep.travelTo(target);
+        if (creep.fatigue === 0) creep.travelTo(target);
         return;
     }
 

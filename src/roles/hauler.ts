@@ -44,7 +44,7 @@ export function runFillTask(creep: Creep, context: RoomContext) {
 
     // travel to the room of the task if not already there
     if (creep.room.name !== task.roomId) {
-        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
 
         return;
     }
@@ -64,7 +64,7 @@ export function runFillTask(creep: Creep, context: RoomContext) {
     // run a fill action based on the type of target
     if (target instanceof Structure) {
         if (!creep.pos.isNearTo(target)) {
-            creep.travelTo(target);
+            if (creep.fatigue === 0) creep.travelTo(target);
             return;
         }
 
@@ -93,7 +93,7 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
         if (resources.length > 0) {
             const resourceType = resources[0]; // Assuming we only want to deposit one type of resource at a time
             if (!creep.pos.isNearTo(storage)) {
-                creep.travelTo(storage);
+                if (creep.fatigue === 0) creep.travelTo(storage);
             } else {
                 creep.transfer(storage, resourceType);
             }
@@ -112,7 +112,7 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
             const storeKeys = Object.keys(creep.store);
 
             if (!creep.pos.isNearTo(target)) {
-                creep.travelTo(target);
+                if (creep.fatigue === 0) creep.travelTo(target);
             } else {
                 creep.transfer(target, storeKeys[0] as ResourceConstant);
             }
@@ -120,7 +120,7 @@ export function depositToStorage(creep: Creep, context: RoomContext) {
             const spawn = context.spawns[0];
             if (spawn) {
                 if (!creep.pos.isNearTo(spawn)) {
-                    creep.travelTo(spawn);
+                    if (creep.fatigue === 0) creep.travelTo(spawn);
 
                     return;
                 }
@@ -175,7 +175,7 @@ export function runHauler(creep: Creep, context: RoomContext) {
 
     // travel to the room of the task if not already there
     if (creep.room.name !== task.roomId) {
-        creep.travelTo(new RoomPosition(25, 25, task.roomId));
+        if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
 
         return;
     }
@@ -203,13 +203,13 @@ export function runHauler(creep: Creep, context: RoomContext) {
         }
 
         if (!creep.pos.isNearTo(target)) {
-            creep.travelTo(target);
+            if (creep.fatigue === 0) creep.travelTo(target);
         } else {
             creep.pickup(target);
         }
     } else if (target instanceof Structure) {
         if (!creep.pos.isNearTo(target)) {
-            creep.travelTo(target);
+            if (creep.fatigue === 0) creep.travelTo(target);
             return;
         }
 
