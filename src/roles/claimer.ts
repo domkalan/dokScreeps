@@ -65,13 +65,7 @@ export function runReserver(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    const reserveResult = creep.reserveController(target);
-    if (reserveResult === OK) {
-        debugLog(`Creep ${creep.name} successfully reserved controller in room ${task.roomId}`);
-        completeTask(creep); // Mark the task as complete
-    } else {
-        debugLog(`Creep ${creep.name} failed to reserve controller in room ${task.roomId} with error: ${reserveResult}`);
-    }
+    creep.reserveController(target);
 }
 
 export function runClaimer(creep: Creep, context: RoomContext): void {
@@ -83,7 +77,15 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
 
             task.assigned = creep.name;
         } else {
-            runReserver(creep, context); // If no claim task is found, fallback to reserving the controller
+            // if no claim task is found, check task if we have a reserve task, if so, run the reserver role
+            const reserveTask = findTaskForCreep(creep, 'reserve');
+
+            if (reserveTask) {
+                creep.memory.taskId = reserveTask.id;
+                creep.memory.taskStarted = Game.time; // Record the time when the task was started
+
+                reserveTask.assigned = creep.name;
+            }
 
             return;
         }
@@ -117,6 +119,12 @@ export function runClaimer(creep: Creep, context: RoomContext): void {
 
     if (!creep.pos.isNearTo(target)) {
         creep.travelTo(target);
+        return;
+    }
+
+    if (task.type === 'reserve') {
+        runReserver(creep, context); // If the task is a reserve task, run the reserver role
+
         return;
     }
 

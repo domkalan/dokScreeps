@@ -105,150 +105,38 @@ export function scanRoom(room: Room): void {
     discoverRooms(room.name);
 }
 
-export function syncHiveData(): void {
-    const otherShards = ['shard0', 'shard1', 'shard2', 'shard3'].filter(shard => shard !== Game.shard.name);
-    let recentIntershard: HiveIntershardData | undefined = Memory.hive.interShard;
-    let recentShard: string | undefined = undefined;
+export function spawnInRoom(role: string, body: BodyPartConstant[], limit: number = 1): void {
+    let spawnedCount = 0;
+    let spawnSuccess = false;
 
-    for (const shard of otherShards) {
-        // skip the current shard
-        if (Game.shard.name === shard) {
+    for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        const roomStandbyEnergy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
+
+        if (roomStandbyEnergy < 75000) {
             continue;
         }
 
-        const rawMemory = InterShardMemory.getRemote(shard);
-        if (!rawMemory) {
-            continue;
-        }
+        if (room.controller && room.controller.my) {
+            for (const spawn of GLOBAL_CONTEXT[room.name].spawns) {
+                if (spawn && !spawn.spawning) {
+                    const roleName = `hive-${role}-${getRoleNameCounter(role)}`;
+                    const spawnResult = spawn.spawnCreep(body, roleName, { memory: { role: role, room: room.name } });
 
-        const parsedMemory = JSON.parse(rawMemory) as Memory;
-
-        if (parsedMemory.hive && parsedMemory.hive.interShard) {
-            if (!recentIntershard || parsedMemory.hive.interShard.lastUpdated > recentIntershard.lastUpdated) {
-                recentIntershard = parsedMemory.hive.interShard;
-                recentShard = shard;
-            }
-        }
-    }
-
-    if (recentIntershard && recentShard) {
-        console.log(`[HIVE][Sync] Updating hive intershard data from shard ${recentShard} with lastUpdated ${recentIntershard.lastUpdated}`);
-
-        Memory.hive.interShard = recentIntershard;
-    }
-}
-
-export function colonizePlanExists(): boolean {
-    const otherShards = ['shard0', 'shard1', 'shard2', 'shard3'].filter(shard => shard !== Game.shard.name);
-    let planExists: boolean = false;
-
-    for (const shard of otherShards) {
-        const rawMemory = InterShardMemory.getRemote(shard);
-
-        if (!rawMemory) {
-            continue;
-        }
-
-        const parsedMemory = JSON.parse(rawMemory) as Memory;
-
-        if (parsedMemory.hive && parsedMemory.hive.interShard && parsedMemory.hive.interShard.colonizePlan) {
-            planExists = true;
-            break;
-        }
-    }
-
-    return planExists;
-}
-
-export function runHiveColonizePlan() {
-    // check if we have a hive colonize plan
-    if (!Memory.hive.interShard.colonizePlan) {
-        return;
-    }
-
-    // if room is in spawning mode, check if we have spawned a scout
-    if (Memory.hive.interShard.colonizePlan.phase === 'colonize' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] < Game.time)) {
-        // spawn a hive grade colonizer in the owning room
-        const owningRoom = Game.rooms[Memory.hive.interShard.colonizePlan.owningRoom];
-        if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
-            const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
-            if (spawn) {
-                const colonizerName = `hive-colonizer-${getRoleNameCounter('hiveColonizer')}`;
-                const spawnResult = spawn.spawnCreep([MOVE, CLAIM], colonizerName, { memory: { role: 'hiveColonizer', room: owningRoom.name } });
-
-                if (spawnResult === OK) {
-                    Memory.hive.interShard.colonizePlan.creepsSpawned['hive-colonizer'] = Game.time + 600; // add a cooldown to prevent spawning too many colonizers
-
-                    // initialize the portalsJumped map if it doesn't exist
-                    if (!Memory.hive.interShard.portalsJumped) {
-                        Memory.hive.interShard.portalsJumped = {};
-                    }
-
-                    // reset the portalsJumped array for this colonizer
-                    if (!Memory.hive.interShard.portalsJumped[colonizerName]) {
-                        Memory.hive.interShard.portalsJumped[colonizerName] = [];
-                    }
-                }
-            }
-        }
-    }
-
-    // if the room is in bootstrap mode, check if we have spawned a hive grade builder
-    if (Memory.hive.interShard.colonizePlan.phase === 'bootstrap' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] < Game.time)) {
-        // spawn a hive grade builder in any of our rooms that we own
-        for (const roomName in Game.rooms) {
-            const owningRoom = Game.rooms[roomName];
-
-            if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
-                const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
-
-                if (spawn) {
-                    const builderName = `hive-builder-${getRoleNameCounter('hiveBuilder')}`;
-                    const spawnResult = spawn.spawnCreep([WORK, CARRY, MOVE, MOVE, WORK, CARRY, MOVE], builderName, { memory: { role: 'hiveBuilder', room: owningRoom.name } });
+                    debugLog(`Attempting to spawn ${roleName} in ${room.name}: ${spawnResult}`);
 
                     if (spawnResult === OK) {
-                        Memory.hive.interShard.colonizePlan.creepsSpawned['hive-builder'] = Game.time + 200; // add a cooldown to prevent spawning too many builders
+                        console.log(`[HIVE] Spawned ${roleName} in ${room.name}`);
 
-                        // initialize the portalsJumped map if it doesn't exist
-                        if (!Memory.hive.interShard.portalsJumped) {
-                            Memory.hive.interShard.portalsJumped = {};
+                        // reset portals jumped for this creep in inter-shard data
+                        if (Memory.hive.interShard.portalsJumped) {
+                            Memory.hive.interShard.portalsJumped[roleName] = [];
                         }
 
-                        // reset the portalsJumped array for this builder
-                        if (!Memory.hive.interShard.portalsJumped[builderName]) {
-                            Memory.hive.interShard.portalsJumped[builderName] = [];
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // if the room is in bootstrap mode, check if we have spawned a hive grade builder
-    if (Memory.hive.interShard.colonizePlan.phase === 'defend' && (Memory.hive.interShard.colonizePlan.creepsSpawned['hive-agent'] === undefined || Memory.hive.interShard.colonizePlan.creepsSpawned['hive-agent'] < Game.time)) {
-        // spawn a hive grade builder in any of our rooms that we own
-        for (const roomName in Game.rooms) {
-            const owningRoom = Game.rooms[roomName];
-
-            if (owningRoom && owningRoom.controller && owningRoom.controller.my) {
-                const spawn = GLOBAL_CONTEXT[owningRoom.name]?.spawns[0];
-
-                if (spawn) {
-                    const agentName = `hive-agent-${getRoleNameCounter('hiveAgent')}`;
-                    const spawnResult = spawn.spawnCreep([MOVE, ATTACK, MOVE, ATTACK], agentName, { memory: { role: 'hiveAgent', room: owningRoom.name } });
-
-                    if (spawnResult === OK) {
-                        Memory.hive.interShard.colonizePlan.creepsSpawned['hive-agent'] = Game.time + 200; // add a cooldown to prevent spawning too many agents
-
-                        // initialize the portalsJumped map if it doesn't exist
-                        if (!Memory.hive.interShard.portalsJumped) {
-                            Memory.hive.interShard.portalsJumped = {};
-                        }
-
-
-                        // reset the portalsJumped array for this agent
-                        if (!Memory.hive.interShard.portalsJumped[agentName]) {
-                            Memory.hive.interShard.portalsJumped[agentName] = [];
+                        spawnSuccess = true;
+                        spawnedCount++;
+                        if (spawnedCount >= limit) {
+                            return;
                         }
                     }
                 }
@@ -256,9 +144,10 @@ export function runHiveColonizePlan() {
         }
     }
 
-    // if the plan is finalized, we can set it to undefined
-    if (Memory.hive.interShard.colonizePlan.phase === 'finished') {
-        Memory.hive.interShard.colonizePlan = undefined;
+    if (!spawnSuccess) {
+        console.log(`[HIVE] Failed to spawn ${role} in any room. All spawns are busy or insufficient energy.`);
+    } else {
+        console.log(`[HIVE] Spawned ${spawnedCount} ${role}(s) across available rooms.`);
     }
 }
 
@@ -339,37 +228,94 @@ export function runHiveScan() {
 
         if (hasScoutTask) {
             // spawn a scout in the first room we own
-            for (const roomName in Game.rooms) {
-                const room = Game.rooms[roomName];
-                const roomStandbyEnergy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
+            spawnInRoom('scout', [MOVE], 1);
+        }
+    }
+}
 
-                if (roomStandbyEnergy < 75000) {
-                    continue;
-                }
+export function runHiveExpansionPlan() {
+    const plan = Memory.hive.interShard.expansionPlan;
 
-                if (room.controller && room.controller.my) {
-                    const spawn = GLOBAL_CONTEXT[room.name]?.spawns[0];
-                    if (spawn) {
-                        const scoutName = `hive-scout-${getRoleNameCounter('scout')}`;
-                        const spawnResult = spawn.spawnCreep([MOVE], scoutName, { memory: { role: 'scout', room: room.name } });
+    if (!plan) {
+        return;
+    }
 
-                        if (spawnResult === OK) {
-                            break;
-                        }
-                    }
-                }
-            }
+    // check if we have a current expansion plan
+    const lastSpawned: { [key: string]: number } = {};
+
+    for (const creepName in plan.spawned) {
+        const creepData = plan.spawned[creepName];
+
+        if (creepData.role === 'expansion') {
+            lastSpawned[creepName] = creepData.spawnedAt;
         }
     }
 
-    // check if we have valid creeps for portal jumps
-    for (const creepStoreName in Memory.hive.interShard.portalsJumped || {}) {
-        const creep = Game.creeps[creepStoreName];
+    // if we have not spawned an expansion creep in the last 750 ticks, spawn one
+    if (!lastSpawned['expansion'] || lastSpawned['expansion'] && Game.time - lastSpawned['expansion'] > 750) {
+        console.log('Requesting new expansion creep to be spawned...');
 
-        if (!creep) {
-            delete Memory.hive.interShard.portalsJumped![creepStoreName];
+        if (plan.phase === 'settle') {
+            spawnInRoom('expansion', [CLAIM, MOVE, WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], Infinity);
+        } else if (plan.phase === 'build') {
+            spawnInRoom('expansion', [WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], Infinity);
         }
     }
+}
+
+export function syncHiveInterShard() {
+    // set each shard we should iterate through and send the inter-shard data to
+    const shards = ['shard0', 'shard1', 'shard2', 'shard3'];
+
+    // get the local shard inter-shard data
+    const localInterShardData: HiveIntershardData = Memory.hive.interShard;
+
+    if (!localInterShardData) {
+        console.error('Local inter-shard data is missing. Initializing...');
+        Memory.hive.interShard = {
+            lastUpdated: 0
+        };
+
+        return;
+    }
+
+    let newestInterShardDataFrom: string | null = null;
+    let newestInterShardData: HiveIntershardData | null = null;
+    let newestInterShardDataUpdatedAt: number = localInterShardData.lastUpdated;
+
+    // loop through each shard to compare current shard data
+    for (const shard of shards) {
+        if (shard === Game.shard.name) {
+            continue;
+        }
+
+        // get the raw inter-shard data from the other shard
+        const interShardDataRaw = InterShardMemory.getRemote(shard);
+
+        // if data does not exist on the other shard, skip it
+        if (!interShardDataRaw) {
+            continue;
+        }
+
+        // parse the inter-shard data from the other shard
+        const interShardData: HiveIntershardData = JSON.parse(interShardDataRaw);
+
+        // if the other shard's inter-shard data is newer, update the local inter-shard data
+        if (interShardData.lastUpdated > newestInterShardDataUpdatedAt) {
+            newestInterShardData = interShardData;
+            newestInterShardDataFrom = shard;
+            newestInterShardDataUpdatedAt = interShardData.lastUpdated;
+        }
+    }
+
+    // if we found newer inter-shard data, update the local inter-shard data
+    if (newestInterShardData) {
+        console.info(`Syncing InterShard data from ${newestInterShardDataFrom} -> ${Game.shard.name}`);
+        Memory.hive.interShard = newestInterShardData;
+    }
+
+    // write our local inter-shard data to the inter-shard memory for other shards to read
+    InterShardMemory.setLocal(JSON.stringify(Memory.hive.interShard));
 }
 
 /**
@@ -386,14 +332,13 @@ export function runHive() {
             lastScan: 0
         };
 
-        syncHiveData();
-
         return;
     }
 
-    // sync intershard data every 2 ticks
-    if (Game.time % 2 === 0 || Game.time - Memory.hive.interShard.lastUpdated > 100) {
-        syncHiveData();
+    // only run the hive logic every 5 ticks
+    if ((Game.time - Memory.hive.lastScan) % 5 === 0) {
+        // sync inter-shard data between shards
+        syncHiveInterShard();
     }
 
     // only run the hive logic every 100 ticks
@@ -404,14 +349,7 @@ export function runHive() {
         // run the local shard hive scan
         runHiveScan();
 
-        // run the hive colonization logic
-        runHiveColonizePlan();
-
-        // set the local shard memory for future comparison with other shards
-        InterShardMemory.setLocal(JSON.stringify({
-            hive: {
-                interShard: Memory.hive.interShard
-            }
-        }));
+        // run the hive expansion plan
+        runHiveExpansionPlan();
     }
 }

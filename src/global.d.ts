@@ -5,8 +5,10 @@ declare global {
     // Definition for the global console object
     const console: {
         log(...data: any[]): void;
+        logUnsafe(...data: any[]): void;
         warn(...data: any[]): void;
         error(...data: any[]): void;
+        info(...data: any[]): void;
     };
 
     function debugLog(message: string): void;
@@ -43,6 +45,8 @@ declare global {
         lastDamageTime?: number;
         // allow the creep to know when it was last in danger
         inDanger?: boolean;
+        // allow the creep to disable the in danger mode
+        disableInDanger?: boolean;
 
         // allow the creep to store arbitrary key-value pairs
         kv?: { [key: string]: any };

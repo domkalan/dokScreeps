@@ -1,5 +1,4 @@
-import { GLOBAL_CONTEXT } from "utils/Context";
-import * as perfTracking from "utils/PerformanceTracking";
+import { GLOBAL_CONTEXT, RoomContext } from "utils/Context";
 
 import { runHarvester } from "roles/harvester";
 import { runBuilder } from "roles/builder";
@@ -10,8 +9,8 @@ import { runDefender } from "roles/defender";
 import { runAttacker } from "roles/attacker";
 import { runClaimer } from "roles/claimer";
 import { completeTask } from "utils/TaskManager";
-import { runHiveColonizer } from "roles/h-colonizer";
-import { runHiveBuilder } from "roles/h-builder";
+import { runHiveExpansionCreep } from "roles/hive/expansion";
+import { runGoat } from "roles/goat";
 
 export let CREEP_COUNTS: {
     [room: string]: { [role: string]: number } | undefined
@@ -21,6 +20,118 @@ export let CREEP_COUNTS_GENERIC: {
 } = {};
 export let CREEP_CPU_TOTAL: number = 0;
 export let CREEP_CPU: { [creepName: string]: number } = {};
+
+/**
+ * Blocking style function that will take over the creeps logic to perform defensive maneuvers.
+ * 
+ * Returns true if the creep is in danger and is performing defensive maneuvers, false otherwise.
+ * @param creep 
+ * @param context 
+ * @returns 
+ */
+export function runCreepDefenses(creep: Creep, context: RoomContext): boolean {
+    // attempt to protect the creep by adding a in danger mode
+    if (!creep.memory.lastHealth) {
+        creep.memory.lastHealth = creep.hits;
+    } else if (creep.hits < creep.memory.lastHealth) {
+        debugLog(`Creep ${creep.name} took damage. Health: ${creep.hits}/${creep.hitsMax}`);
+        creep.memory.lastHealth = creep.hits;
+        creep.memory.lastDamageTime = Game.time;
+        creep.memory.inDanger = true;
+    } else if (creep.memory.inDanger && Game.time - (creep.memory.lastDamageTime || 0) > 100) {
+        debugLog(`Creep ${creep.name} is no longer in danger.`);
+        creep.memory.inDanger = false;
+    } if (creep.hits > creep.memory.lastHealth) {
+        creep.memory.lastHealth = creep.hits;
+    }
+
+    if (creep.memory.disableInDanger) {
+        return false;
+    }
+
+    // if the creep is in danger and not an attacker or defender, move it back to the home room
+    if (creep.memory.inDanger) {
+        if (Game.time % 10 === 0) {
+            creep.say(`😱`);
+        }
+
+        if (creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+            // find the nearest hostile creep and attack it
+            let nearestHostileId: string | null = null;
+            let nearestHostileRange = Infinity;
+
+            for (const hostile of context.hostiles) {
+                const range = creep.pos.getRangeTo(hostile);
+                if (range < nearestHostileRange) {
+                    nearestHostileId = hostile.id;
+                    nearestHostileRange = range;
+                }
+            }
+
+            const nearestHostile = nearestHostileId ? Game.getObjectById(nearestHostileId) as Creep | null : null;
+
+            if (nearestHostile) {
+                const creepRange = creep.pos.getRangeTo(nearestHostile);
+
+                // for ranged creeps, get near but not too close, for melee creeps, get as close as possible
+                if (creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+                    if (creepRange > 3) {
+                        creep.travelTo(nearestHostile);
+                    } else if (creepRange < 2) {
+                        // move away from the hostile
+                        const fleePos = creep.pos.getDirectionTo(nearestHostile) + 4; // opposite direction
+                        const newPos = new RoomPosition(creep.pos.x + Math.cos(fleePos * (Math.PI / 4)), creep.pos.y + Math.sin(fleePos * (Math.PI / 4)), creep.pos.roomName);
+
+                        if (newPos) {
+                            creep.travelTo(newPos);
+                        }
+                    }
+
+                    creep.rangedAttack(nearestHostile);
+                } else {
+                    if (creepRange > 1) {
+                        creep.travelTo(nearestHostile);
+                    } else {
+                        creep.attack(nearestHostile);
+                    }
+                }
+            }
+        } else {
+            // if the creep is not in the home room, move it back to the home room
+            if (creep.room.name !== creep.memory.room) {
+                creep.travelTo(new RoomPosition(25, 25, creep.memory.room)); // Move to the center of the home room
+            } else {
+                // if the creep is in the home room, move it to a safe position (e.g., near the spawn)
+                const homeRoom = Game.rooms[creep.memory.room];
+                if (homeRoom) {
+                    const spawn = GLOBAL_CONTEXT[creep.memory.room]?.spawns[0];
+                    if (spawn) {
+                        creep.travelTo(spawn.pos);
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+export function runHiveCreep(creep: Creep, context: RoomContext): void {
+    try {
+        // expansion creeps operate under different logic, so we will handle them separately
+        if (creep.name.startsWith('hive-expansion')) {
+            runHiveExpansionCreep(creep, context);
+        }
+    } catch (error) {
+        console.error('[CREEP] Error running on hive creep:', error);
+
+        creep.say(`H_ERR`);
+    }
+}
 
 export function runCreeps(): void {
     // get cpu usage at the start of the tick
@@ -35,86 +146,61 @@ export function runCreeps(): void {
 
         const creepCpuStart = trackIndividualCpu ? Game.cpu.getUsed() : 0;
 
+        // hive creeps operate on a different set of logic
+        if (creep.name.startsWith('hive-')) {
+            runHiveCreep(creep, context);
+
+            if (trackIndividualCpu) {
+                CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
+            }
+
+            continue;
+        }
+
         try {
-            // attempt to protect the creep by adding a in danger mode
-            if (!creep.memory.lastHealth) {
-                creep.memory.lastHealth = creep.hits;
-            } else if (creep.hits < creep.memory.lastHealth) {
-                debugLog(`Creep ${creep.name} took damage. Health: ${creep.hits}/${creep.hitsMax}`);
-                creep.memory.lastHealth = creep.hits;
-                creep.memory.lastDamageTime = Game.time;
-                creep.memory.inDanger = true;
-            } else if (creep.memory.inDanger && Game.time - (creep.memory.lastDamageTime || 0) > 100) {
-                debugLog(`Creep ${creep.name} is no longer in danger.`);
-                creep.memory.inDanger = false;
-            } if (creep.hits > creep.memory.lastHealth) {
-                creep.memory.lastHealth = creep.hits;
+            if (runCreepDefenses(creep, context)) {
+                // if the creep is in danger and is performing defensive maneuvers, skip the rest of its logic
+                continue;
             }
 
-            // if the creep is in danger and not an attacker or defender, move it back to the home room
-            if (creep.memory.inDanger && creep.memory.role !== 'attacker' && creep.memory.role !== 'defender') {
-                if (Game.time % 10 === 0) {
-                    creep.say(`😱`);
-                }
-
-                // if the creep is not in the home room, move it back to the home room
-                if (creep.room.name !== creep.memory.room) {
-                    creep.travelTo(new RoomPosition(25, 25, creep.memory.room)); // Move to the center of the home room
-                } else {
-                    // if the creep is in the home room, move it to a safe position (e.g., near the spawn)
-                    const homeRoom = Game.rooms[creep.memory.room];
-                    if (homeRoom) {
-                        const spawn = GLOBAL_CONTEXT[creep.memory.room]?.spawns[0];
-                        if (spawn) {
-                            creep.travelTo(spawn.pos);
-                        }
+            // run the appropriate role logic for the creep
+            switch (creep.memory.role) {
+                case 'harvester':
+                    runHarvester(creep, context);
+                    break;
+                case 'builder':
+                    runBuilder(creep, context);
+                    break;
+                case 'queen':
+                    runQueen(creep, context);
+                    break;
+                case 'scout':
+                    runScout(creep, context);
+                    break;
+                case 'filler':
+                case 'hauler':
+                    runHauler(creep, context);
+                    break;
+                case 'defender':
+                    runDefender(creep, context);
+                    break;
+                case 'attacker':
+                    runAttacker(creep, context);
+                    break;
+                case 'claimer':
+                    runClaimer(creep, context);
+                    break;
+                case 'goat':
+                    runGoat(creep, context);
+                    break;
+                default:
+                    if (Game.time % 25 === 0) {
+                        creep.say(`❓`);
                     }
-                }
-
-                continue; // skip the rest of the logic for this creep
-            }
-
-            if (creep.name.startsWith('hive-colonizer-')) {
-                runHiveColonizer(creep, context);
-            } else if (creep.name.startsWith('hive-builder-')) {
-                runHiveBuilder(creep, context);
-            } else {
-                // run the appropriate role logic for the creep
-                switch (creep.memory.role) {
-                    case 'harvester':
-                        runHarvester(creep, context);
-                        break;
-                    case 'builder':
-                        runBuilder(creep, context);
-                        break;
-                    case 'queen':
-                        runQueen(creep, context);
-                        break;
-                    case 'scout':
-                        runScout(creep, context);
-                        break;
-                    case 'filler':
-                    case 'hauler':
-                        runHauler(creep, context);
-                        break;
-                    case 'defender':
-                        runDefender(creep, context);
-                        break;
-                    case 'attacker':
-                        runAttacker(creep, context);
-                        break;
-                    case 'claimer':
-                        runClaimer(creep, context);
-                        break;
-                    default:
-                        if (Game.time % 25 === 0) {
-                            creep.say(`❓`);
-                        }
-                        debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
-                }
+                    debugLog(`Creep ${creep.name} has an unknown role: ${creep.memory.role}`);
             }
         } catch (error) {
-            debugLog(`Error running creep ${creep.name}: ${error}`);
+            console.error(`[CREEP] Error running creep ${creep.name}:`, error);
 
             completeTask(creep); // Clear the task if there's an error
 
@@ -127,16 +213,10 @@ export function runCreeps(): void {
 
         if (trackIndividualCpu) {
             CREEP_CPU[creepName] = Game.cpu.getUsed() - creepCpuStart;
-
-            // signal to perfTracking that this creep has finished its tick
-            perfTracking.onCreepTick(creepName, CREEP_CPU[creepName]);
         }
     }
 
     CREEP_CPU_TOTAL = Game.cpu.getUsed() - cpuStart;
-
-    // signal to perfTracking that all creeps have finished their ticks
-    perfTracking.onCreepsTicked(CREEP_CPU_TOTAL);
 }
 
 export function indexCreeps() {
@@ -176,7 +256,4 @@ export function indexCreeps() {
             debugLog(`Error counting creep ${creep.name}: ${error}`);
         }
     }
-
-    // signal to perfTracking that all creeps have been counted
-    perfTracking.onCreepsCounted(CREEP_COUNTS_GENERIC);
 }

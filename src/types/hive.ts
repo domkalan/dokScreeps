@@ -1,18 +1,21 @@
-export interface HiveColonizePlan {
-    portals: [string, string, string][]; // array of tuples, each containing a shard id, room id, and portal id
-    targetShard: string;
-    targetRoom: string;
-    owningShard: string;
-    owningRoom: string;
-    phase: 'planning' | 'colonize' | 'bootstrap' | 'defend' | 'finished';
-    creepsSpawned: { [creepName: string]: number }; // map of creep names to the game time they were spawned
+export interface HiveExpansionPlan {
+    portals: [string, string, string][];
+    target: { shard: string, room: string };
+    phase: 'settle' | 'build';
+    spawned: { [creepName: string]: { role: string, spawnedAt: number } };
 }
 
 export interface HiveIntershardData {
     lastUpdated: number;
+
+    // generic kv store for intershard data, can be used for anything
     kv?: { [key: string]: any };
-    colonizePlan?: HiveColonizePlan;
-    portalsJumped?: { [creepName: string]: string[] }; // map of creep names to an array of portal ids they have jumped through
+
+    // allow creeps the ability to track portals they have jumped
+    portalsJumped?: { [creepName: string]: string[] };
+
+    // expansion plans for the hive, keyed by target shard and room
+    expansionPlan?: HiveExpansionPlan;
 }
 
 export interface HiveMemory {

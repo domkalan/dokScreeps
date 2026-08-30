@@ -1,17 +1,31 @@
 import { createTask, releaseTask } from 'utils/TaskManager';
 import { resetRoom } from './rooms';
-import { HiveColonizePlan } from './types/hive';
-import { colonizePlanExists } from './hive';
+import { HiveExpansionPlan } from './types/hive';
 
+export function patchGlobal() {
+    global.console.error = function (...args: any[]) {
+        // Combine arguments into one string and wrap in raw()
+        console.logUnsafe(`<span style="color: #ff5555; font-weight: bold;">[ERROR]`, ...args, `</span>`);
+    }
 
-const HELP_ENTRIES: { [key: string]: { desc: string, opts?: { [key: string]: { req: boolean } } } } = {};
-export function registerCommand(name: string, description: string, opts: { [key: string]: { req: boolean } }, func: (...args: any[]) => any) {
-    HELP_ENTRIES[name] = { desc: description, opts };
+    global.console.warn = function (...args: any[]) {
+        console.logUnsafe(`<span style="color: #ffb86c;">[WARN]`, ...args, `</span>`);
+    }
 
-    global[name] = func;
+    global.console.info = function (...args: any[]) {
+        console.logUnsafe(`<span style="color: #8be9fd;">[INFO]`, ...args, `</span>`);
+    }
 }
 
 export function mountCommands() {
+    // Mount commands to the global object so they can be called from the console
+    const HELP_ENTRIES: { [key: string]: { desc: string, opts?: { [key: string]: { req: boolean } } } } = {};
+    function registerCommand(name: string, description: string, opts: { [key: string]: { req: boolean } }, func: (...args: any[]) => any) {
+        HELP_ENTRIES[name] = { desc: description, opts };
+
+        global[name] = func;
+    }
+
     registerCommand('resetRoom', 'Resets the specified room, clearing tasks and spawn queue.', { roomName: { req: true } }, function (roomName: string) {
         const room = Game.rooms[roomName];
 
@@ -159,6 +173,26 @@ export function mountCommands() {
         createTask(parentRoom, 'attack', structureId, 5, room.name); // high priority for attacking structures
 
         return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${parentRoomName}.`;
+    });
+
+    registerCommand('removeStructures', 'Removes all structures of the specified types in the given room.', { roomName: { req: true }, structureTypes: { req: true } }, function (roomName: string, structureTypes: BuildableStructureConstant[]) {
+        const room = Game.rooms[roomName];
+
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        for (const structureType of structureTypes) {
+            const structures = room.find(FIND_STRUCTURES, {
+                filter: (structure) => structure.structureType === structureType
+            });
+
+            for (const structure of structures) {
+                structure.destroy();
+            }
+        }
+
+        return `Structures of types ${structureTypes.join(', ')} in room ${roomName} have been removed.`;
     });
 
     registerCommand('drainStructures', 'Creates drain tasks for all structures of the specified types in the given room that contain the specified resource type.', { roomName: { req: true }, resourceType: { req: true }, structureTypes: { req: true } }, function (roomName: string, resourceType: ResourceConstant, structureTypes: string[]) {
@@ -404,54 +438,41 @@ export function mountCommands() {
         }
     });
 
-
-    // hiveColonizePlan(['shard3', 'W1S22'], [['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f']], 'shard1', 'E1S18')
-    // hiveColonizePlan(['shard3', 'W1S22'], [['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f'], ['shard1', 'W0S20', '69f291863d008a3381151b1b']], 'shard0', 'W1S19')
-    registerCommand('hiveColonizePlan', 'Creates a hive colonization plan with the specified portals, target shard, and target room.', { portals: { req: true }, targetShard: { req: true }, targetRoom: { req: true }, force: { req: false } }, function (owningRoom: [string, string], portals: [string, string, string][], targetShard: string, targetRoom: string, force: boolean = false) {
-        const colonizeRunning = colonizePlanExists();
-
-        if (colonizeRunning && !force) {
-            return `Hive colonization plan already exists on another shard.`;
-        }
-
-        const hiveColonizePlan: HiveColonizePlan = {
-            portals: portals, // third element is portal id, which will be filled in later
-            targetShard: targetShard,
-            targetRoom: targetRoom,
-            owningShard: owningRoom[0],
-            owningRoom: owningRoom[1],
-            phase: 'colonize',
-            creepsSpawned: {}
-        };
-
-        if (Memory.hive.interShard.colonizePlan && !force) {
-            return `Hive colonization plan already exists.`;
-        }
-
-        Memory.hive.interShard.colonizePlan = hiveColonizePlan;
-        Memory.hive.interShard.lastUpdated = Game.time;
-
-        Memory.hive.lastScan = 0; // force hive to rescan and pick up the new colonization plan
-
-        return `Hive colonization plan for ${targetRoom} on shard ${targetShard} has been created.`;
-    });
-
     registerCommand('help', 'Displays a list of all available CLI commands.', {}, function () {
-        let helpText = 'Available CLI commands:\n';
-
+        let helpText = '';
         for (const command in HELP_ENTRIES) {
             const entry = HELP_ENTRIES[command];
-            helpText += `\n${command}: ${entry.desc}\n`;
-
-            if (entry.opts) {
-                helpText += '\tOptions:\n';
-                for (const opt in entry.opts) {
-                    const optEntry = entry.opts[opt];
-                    helpText += `\t\t${opt}: ${optEntry.req ? 'Required' : 'Optional'}\n`;
-                }
-            }
+            helpText += `${command}(${Object.keys(entry.opts || {}).join(', ')}): ${entry.desc}\n`;
         }
 
         return helpText;
+    });
+
+    // hiveExpansion('E4S21', 'shard0', [['shard3', 'W0S20', '5c0e406c504e0a34e3d61df0'], ['shard2', 'W0S20', '59f1c0062b28ff65f7f2166f'], ['shard1', 'W0S20', '69f291863d008a3381151b1b']]);
+    registerCommand('hiveExpansion', 'Sets a new hive expansion plan', { room: { req: true }, shard: { req: true }, portals: { req: true } }, function (room: string, shard: string, portals: [string, string, string][]) {
+        if (!shard && !room && !portals) {
+            Memory.hive.interShard.expansionPlan = undefined;
+            Memory.hive.interShard.lastUpdated = Date.now();
+
+            return `Hive expansion plan has been cleared.`;
+        }
+
+        const expansionPlan: HiveExpansionPlan = {
+            portals,
+            target: { shard, room },
+            phase: 'settle',
+            spawned: {}
+        };
+
+        if (!Memory.hive.interShard) {
+            Memory.hive.interShard = {
+                lastUpdated: 0,
+            };
+        }
+
+        Memory.hive.interShard.expansionPlan = expansionPlan;
+        Memory.hive.interShard.lastUpdated = Date.now();
+
+        return `Hive expansion plan set for room ${room} on shard ${shard}.`;
     });
 }

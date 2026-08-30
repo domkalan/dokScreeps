@@ -7,7 +7,7 @@ import { createBasicRoomPlan } from "plans/basic";
 import { buildRoomContext, RoomContext, GLOBAL_CONTEXT, CONTEXT_CACHE } from "utils/Context";
 import { getRoleNameCounter } from "utils/Counter";
 import { createTask, getTaskCounts, monitorTasks } from "utils/TaskManager";
-import * as perfTracking from "utils/PerformanceTracking";
+import { LOCAL_PLAYER } from "config";
 
 export let ROOM_TOTAL_CPU: number = 0;
 export let ROOM_CPU: { [roomName: string]: number } = {};
@@ -30,8 +30,8 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
         baseBody = [ATTACK, MOVE];
         energyUsed = 130; // ATTACK + MOVE costs 130 energy
     } else if (role === 'claimer') {
-        baseBody = [CLAIM, MOVE];
-        energyUsed = 630; // CLAIM + MOVE costs 630 energy
+        baseBody = [CLAIM, MOVE, CLAIM, MOVE];
+        energyUsed = 1260; // CLAIM + MOVE + CLAIM + MOVE costs 1260 energy
     } else if (role === 'hauler' || role === 'filler') {
         baseBody = [WORK, CARRY, MOVE];
         energyUsed = 200; // WORK + CARRY + MOVE costs 200 energy
@@ -48,7 +48,7 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
             }
 
             nextParts = [WORK];
-        } else if (role === 'builder') {
+        } else if (role === 'builder' || role === 'goat') {
             nextParts = [WORK, CARRY, MOVE];
         } else if (role === 'queen' || role === 'hauler' || role === 'filler') {
             nextParts = [CARRY, MOVE];
@@ -80,6 +80,7 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
 // get the ideal number of creeps that should exist
 function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [role: string]: number }): { [role: string]: { count: number, priority: number } } {
     const roomControlLevel = context.room.controller?.level || 0;
+    const roomEnergyAvailable = getStoredEnergy(context);
     const taskCounts = getTaskCounts(room);
 
     const idealCounts: { [role: string]: { count: number, priority: number } } = {
@@ -91,7 +92,8 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         defender: { count: 0, priority: 10 }, // only spawn a defender if we have a hostile, medium priority
         attacker: { count: 0, priority: 10 }, // only spawn an attacker if we have an attack task, medium priority,
         scout: { count: 0, priority: 10 }, // only spawn a scout if we have a remote room to scout, medium priority,
-        filler: { count: 0, priority: 15 } // filler creeps are only spawned if we have a fill task and sufficient energy, medium priority
+        filler: { count: 0, priority: 15 }, // filler creeps are only spawned if we have a fill task and sufficient energy, medium priority
+        goat: { count: 0, priority: 5 }, // goat creeps are only spawned if we have a goat task and sufficient energy, medium priority
     };
 
     // if we have more than 10 builder tasks, spawn more builders, but not more than the room control level
@@ -114,12 +116,12 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // if we have any filler jobs, spawn a filler creep if we have enough energy
-    if (Math.max(taskCounts.filler + taskCounts.filler, 1) > idealCounts.filler.count && getStoredEnergy(context) > 50000) {
+    if (Math.max(taskCounts.filler + taskCounts.filler, 1) > idealCounts.filler.count && roomEnergyAvailable >= 75000) {
         // increase the number of fillers to match the number of tasks, but not more than the room control level
         idealCounts.filler.count = 1;
     }
 
-    if (taskCounts.claimer > 0 && getStoredEnergy(context) > 10000) {
+    if (taskCounts.claimer > 0 && roomEnergyAvailable >= 75000) {
         idealCounts.claimer.count = taskCounts.claimer;
         idealCounts.claimer.priority = 7.5; // if we have claim tasks, increase the priority of claimers
     }
@@ -132,6 +134,12 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         if (idealCounts.attacker.count > roomControlLevel) {
             idealCounts.attacker.count = roomControlLevel; // limit the number of attackers to the room control level
         }
+    }
+
+    // if we have excess energy, spawn a goat to boost the controller upgrade
+    if (roomEnergyAvailable >= 500000 && roleCounts.goat < 1) {
+        idealCounts.goat.count = 1;
+        idealCounts.goat.priority = 5;
     }
 
     return idealCounts;
@@ -583,7 +591,7 @@ function scanRemoteRoom(room: Room, context: RoomContext, parentRoom: Room): voi
         }
     } else {
         // if this room is not owned by us, we should create a task to reserve it if we have a controller
-        if (context.room.controller) {
+        if (context.room.controller && (context.room.controller.reservation?.ticksToEnd || 0) < 1000) {
             createTask(parentRoom, 'reserve', context.room.controller.id, 5, room.name); // medium priority for reserving remote rooms
         }
     }
@@ -671,9 +679,6 @@ export function runRooms() {
 
             if (trackIndividualCpu) {
                 ROOM_CPU[roomName] = Game.cpu.getUsed() - roomCpuStart;
-
-                // signal to perfTracking room tick finished
-                perfTracking.onRoomTick(room, ROOM_CPU[roomName], GLOBAL_CONTEXT[roomName], CREEP_COUNTS[roomName] || {});
             }
         } catch (error) {
             debugLog(`Error running room ${roomName}: ${error}`);
@@ -681,7 +686,4 @@ export function runRooms() {
     }
 
     ROOM_TOTAL_CPU = Game.cpu.getUsed() - cpuStart;
-
-    // signal to perfTracking room tick finished
-    perfTracking.onRoomsTicked(ROOM_TOTAL_CPU);
 }

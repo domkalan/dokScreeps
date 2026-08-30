@@ -307,10 +307,14 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
             }
         }
     } else if (target instanceof Structure) {
-        if (!creep.pos.inRangeTo(target, 3)) {
+        const repairResult = creep.repair(target);
+        if (repairResult === ERR_NOT_IN_RANGE) {
             creep.travelTo(target);
-        } else {
-            creep.repair(target);
+        } else if (repairResult === OK) {
+            // roads for some reason get stuck, so release on finish
+            if (target.structureType === STRUCTURE_ROAD) {
+                releaseTask(creep); // Release the task if the road is repaired successfully
+            }
         }
     }
 }

@@ -3,7 +3,6 @@ import * as hive from './hive';
 import * as cli from './cli';
 import * as debug from './debug';
 import * as creeps from './creeps';
-import * as perfTracking from './utils/PerformanceTracking';
 
 // require legacy libraries
 require('Traveler');
@@ -23,6 +22,9 @@ console.log(`Screeps bot initialized. Current game tick is ${Game.time}`);
 function runTick() {
     debugLog(`Current game tick is ${Game.time}`);
 
+    // patch the global every tick call
+    cli.patchGlobal();
+
     // build the counts for creeps
     creeps.indexCreeps();
 
@@ -38,9 +40,6 @@ function runTick() {
     // Automatically delete memory of missing creeps
     for (const name in Memory.creeps) {
         if (!(name in Game.creeps)) {
-            // track the number of tasks this creep completed in its lifetime
-            perfTracking.onCreepDeath(name);
-
             delete Memory.creeps[name];
         }
     }
@@ -49,18 +48,20 @@ function runTick() {
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 export const loop = () => {
-    if (typeof Memory.debugDisplay === 'undefined') {
-        runTick();
+    if (Memory.perfMode) {
+        profiler.wrap(function () {
+            runTick();
 
-        return;
+            if (typeof Memory.debugDisplay !== 'undefined') {
+                debug.drawDebugInfo();
+            }
+        });
     }
 
-    profiler.wrap(function () {
-        runTick();
+    runTick();
 
-        // draw debug information on the screen for each room
+    // draw debug information on the screen for each room
+    if (typeof Memory.debugDisplay !== 'undefined') {
         debug.drawDebugInfo();
-
-        perfTracking.captureTickData();
-    });
+    }
 };
