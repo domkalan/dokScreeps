@@ -179,18 +179,33 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         return;
     }
 
-    // if creep is full check for nearby container or link, otherwise drop
-    if (creep.store.getFreeCapacity() === 0) {
+    // If the creep is full, keep unloading until every carried resource has
+    // been cleared. A creep can only transfer or drop one resource type per
+    // tick, so the memory flag prevents it from resuming harvesting early.
+    if (creep.store.getFreeCapacity() === 0 || creep.memory.focusedOn === 'unloading') {
+        creep.memory.focusedOn = 'unloading';
+
+        const carriedResources = Object.keys(creep.store) as ResourceConstant[];
+        if (carriedResources.length === 0) {
+            delete creep.memory.focusedOn;
+            return;
+        }
+
+        const hasEnergy = creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
         const currentContext = GLOBAL_CONTEXT[creep.room.name];
         let nearbyLink: StructureLink | null = null;
         let closestRange = 5;
 
-        for (const link of currentContext?.links || []) {
-            if (link.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
-            const range = creep.pos.getRangeTo(link);
-            if (range < closestRange) {
-                nearbyLink = link;
-                closestRange = range;
+        // Links only accept energy. Once energy is gone, continue below and
+        // unload any remaining resource types into a container.
+        if (hasEnergy) {
+            for (const link of currentContext?.links || []) {
+                if (link.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
+                const range = creep.pos.getRangeTo(link);
+                if (range < closestRange) {
+                    nearbyLink = link;
+                    closestRange = range;
+                }
             }
         }
 
@@ -210,7 +225,7 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
         let nearbyContainer: StructureContainer | null = null;
         closestRange = 5;
         for (const container of currentContext?.containers || []) {
-            if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
+            if (container.store.getFreeCapacity() === 0) continue;
             const range = creep.pos.getRangeTo(container);
             if (range < closestRange) {
                 nearbyContainer = container;
@@ -224,15 +239,17 @@ export function runHarvester(creep: Creep, context: RoomContext): void {
                 return;
             }
 
-            if (creep.transfer(nearbyContainer, RESOURCE_ENERGY) === ERR_FULL) {
-                creep.drop(RESOURCE_ENERGY); // Drop energy if the storage is full
+            const resourceType = carriedResources[0];
+            if (creep.transfer(nearbyContainer, resourceType) === ERR_FULL) {
+                creep.drop(resourceType); // Drop the resource if the container is full
             }
 
             return;
         }
 
-        // if no nearby container or link, drop the energy on the ground
-        creep.drop(RESOURCE_ENERGY);
+        // If there is no nearby container or compatible link, drop one carried
+        // resource type and continue clearing the rest on subsequent ticks.
+        creep.drop(carriedResources[0]);
         return;
     }
 
