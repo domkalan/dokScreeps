@@ -196,6 +196,22 @@ export function mountCommands() {
         return `Structures of types ${structureTypes.join(', ')} in room ${roomName} have been removed.`;
     });
 
+    registerCommand('removeConstructionSites', 'Removes all construction sites of the specified types in the given room.', { roomName: { req: true }, structureTypes: { req: true } }, function (roomName: string, structureTypes: BuildableStructureConstant[]) {
+        const room = Game.rooms[roomName];
+
+        if (!room) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
+
+        for (const site of constructionSites) {
+            site.remove();
+        }
+
+        return `${constructionSites.length} construction sites from room ${roomName} have been removed.`;
+    });
+
     registerCommand('drainStructures', 'Creates drain tasks for all structures of the specified types in the given room that contain the specified resource type.', { roomName: { req: true }, resourceType: { req: true }, structureTypes: { req: true } }, function (roomName: string, resourceType: ResourceConstant, structureTypes: string[]) {
         const room = Game.rooms[roomName];
         if (!room) {
@@ -257,6 +273,7 @@ export function mountCommands() {
             created: Game.time,
             expires: Game.time + 1000
         };
+        existingRoomMemory.expandTo = roomName; // set the expandTo property to the new room
 
         return `Claim task for room ${roomName} has been added to home room ${existingRoom}.`;
     });
@@ -284,6 +301,70 @@ export function mountCommands() {
         return `Add remote task for room ${roomName} has been added to home room ${existingRoom}.`;
     });
 
+    registerCommand('lockoutRoom', 'Locks out the specified room, preventing any logic or spawning for that room.', { roomName: { req: true }, value: { req: true } }, function (roomName: string, value: boolean) {
+        const roomMemory = Memory.rooms[roomName];
+
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        roomMemory.lockout = value;
+
+        if (!value) {
+            return `Room ${roomName} has been unlocked.`;
+        }
+
+        return `Room ${roomName} has been locked out.`;
+    });
+
+    registerCommand('leaveRoom', 'Unclaims and deletes a room from the hive.', { roomName: { req: true }, deleteStructures: { req: false } }, function (roomName: string, deleteStructures: boolean = false) {
+        const roomMemory = Memory.rooms[roomName];
+        const roomRef = Game.rooms[roomName];
+
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        // if the room is a remote, remove it from the parent room's childRooms array
+        if (roomMemory.type === 'remote' && roomMemory.parentRoom) {
+            const parentRoomMemory = Memory.rooms[roomMemory.parentRoom];
+            if (parentRoomMemory && parentRoomMemory.childRooms) {
+                parentRoomMemory.childRooms = parentRoomMemory.childRooms.filter(childRoom => childRoom !== roomName);
+            }
+        }
+
+        // do we want to delete all structures in the room?
+        if (deleteStructures) {
+            // delete all structures in the room
+            for (const structure of roomRef.find(FIND_STRUCTURES)) {
+                structure.destroy();
+            }
+        }
+
+        for (const creepName in Game.creeps) {
+            const creep = Game.creeps[creepName];
+
+            if (creep.memory.room === roomName) {
+                creep.suicide();
+            }
+        }
+
+        // unclaim the controller if we own it
+        if (roomRef && roomRef.controller && roomRef.controller.my) {
+            roomRef.controller.unclaim();
+        }
+
+        // delete the room from the hive's memory
+        if (Memory.hive && Memory.hive.rooms) {
+            delete Memory.hive.rooms[roomName];
+        }
+
+        // delete the room memory
+        Memory.rooms[roomName].type = undefined as any;
+
+        return `Room ${roomName} has been unclaimed and removed from the hive.`;
+    });
+
     registerCommand('resetCreepTask', 'Resets the task for the specified creep.', { creepName: { req: true } }, function (creepName: string) {
         const creep = Game.creeps[creepName];
         if (!creep) {
@@ -309,7 +390,44 @@ export function mountCommands() {
         return `Energy threshold override for room ${roomName} has been set to ${setting}.`;
     });
 
-    registerCommand('setRoomType', 'Sets the specified room type to either "home" or "remote". If setting to "remote", a parent room must be specified.', { roomName: { req: true }, type: { req: true } }, function (roomName: string, type: 'home' | 'remote', parentRoom?: string) {
+    registerCommand('transferOrder', 'Creates a transfer order for the specified resource and amount to the target room.', { roomName: { req: true }, resourceType: { req: true }, amount: { req: true }, targetRoom: { req: true } }, function (roomName: string, resourceType: ResourceConstant, amount: number, targetRoom: string) {
+        const roomMemory = Memory.rooms[roomName];
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        if (!roomMemory.transferOrders) {
+            roomMemory.transferOrders = [];
+        }
+
+        // calculate transfer cost based on distance and amount
+        const room = Game.rooms[roomName];
+        const targetRoomRef = Game.rooms[targetRoom];
+
+        if (!room || !targetRoomRef) {
+            return `One or both rooms not found: ${roomName}, ${targetRoom}.`;
+        }
+
+        const cost = Game.market.calcTransactionCost(amount, roomName, targetRoom);
+
+        if (amount + cost > 300000) {
+            return `Transfer order exceeds maximum allowed amount of 300,000 (including transaction cost of ${cost}).`;
+        }
+
+        roomMemory.transferOrders.push({
+            resource: resourceType,
+            amount,
+            target: targetRoom,
+            type: 'export'
+        });
+
+        // processTransfers fills the terminal with transaction energy as part
+        // of this order. A second export order would send that energy away.
+
+        return `Transfer order for ${amount} ${resourceType} from room ${roomName} to room ${targetRoom} has been created.`;
+    });
+
+    registerCommand('setRoomType', 'Sets the specified room type to either "home" or "remote". If setting to "remote", a parent room must be specified.', { roomName: { req: true }, type: { req: true } }, function (roomName: string, type: 'home' | 'remote' | 'shill', parentRoom?: string) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
@@ -318,10 +436,11 @@ export function mountCommands() {
         // reset the room to clear any existing tasks and spawn queue
         resetRoom(room);
 
-        // set the room type to 'home'
+        // set the room type to 'home' or 'shill'
 
-
-        if (type === 'remote') {
+        if (type === 'home' || type === 'shill') {
+            Memory.rooms[roomName].type = type;
+        } else if (type === 'remote') {
             if (!parentRoom) {
                 return `Parent room must be specified when setting room type to 'remote'.`;
             }
@@ -475,5 +594,50 @@ export function mountCommands() {
         Memory.hive.interShard.lastUpdated = Date.now();
 
         return `Hive expansion plan set for room ${room} on shard ${shard}.`;
+    });
+
+    // pixel generation command
+    registerCommand('setPixelGen', 'Enables or disables pixel generation mode.', { enabled: { req: true } }, function (enabled: boolean) {
+        Memory.pixelGen = enabled;
+
+        if (enabled) {
+            return `Pixel generation mode has been enabled.`;
+        } else {
+            return `Pixel generation mode has been disabled.`;
+        }
+    });
+
+    registerCommand('resetAvoid', 'Resets the avoid properties for all rooms in the hive and room memory.', {}, function () {
+        if (Memory.hive) {
+            for (const roomName in Memory.hive.rooms) {
+                const roomMemory = Memory.hive.rooms[roomName];
+                if (roomMemory) {
+                    roomMemory.hostile = false;
+                }
+            }
+
+            for (const roomName in Memory.rooms) {
+                const roomMemory = Memory.rooms[roomName];
+                if (roomMemory) {
+                    roomMemory.avoid = undefined;
+                }
+            }
+
+            return `Avoid properties for all rooms have been reset.`;
+        } else {
+            return `Hive not found.`;
+        }
+    });
+
+    registerCommand('setSpawnMultiplier', 'Sets the spawn energy multiplier for the specified room.', { roomName: { req: true }, multiplier: { req: true } }, function (roomName: string, multiplier: number) {
+        const roomMemory = Memory.rooms[roomName];
+
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        roomMemory.spawnEnergyMultiplier = multiplier;
+
+        return `Spawn energy multiplier for room ${roomName} has been set to ${multiplier}.`;
     });
 }

@@ -3,6 +3,39 @@ import { completeTask, findTaskForCreep, getTaskById, releaseTask, watchForStuck
 import { goForEnergy } from "./builder";
 import { runQueen } from "./queen";
 
+export function findResource(creep: Creep, context: RoomContext, resourceType: ResourceConstant = RESOURCE_ENERGY): void {
+    // search containers and storage for the resource
+    const resourceSources = [...context.containers, ...context.storages]
+        .filter(structure => structure.store.getUsedCapacity(resourceType) > 0);
+
+    if (resourceSources.length === 0) {
+        debugLog(`No ${resourceType} is available in storage or containers for filler ${creep.name}`);
+        if (Game.time % 25 === 0) creep.say(`NO ${resourceType}`);
+        return;
+    }
+
+    // find the closest resource source
+    const closestSource = creep.pos.findClosestByPath(resourceSources);
+    if (!closestSource) {
+        debugLog(`Filler ${creep.name} could not find a path to stored ${resourceType}`);
+        return;
+    }
+
+    // distance to the source, move to it
+    if (creep.pos.getRangeTo(closestSource) > 1) {
+        if (creep.fatigue === 0) creep.travelTo(closestSource);
+
+        return;
+    }
+
+    const withdrawResult = creep.withdraw(closestSource, resourceType);
+    if (withdrawResult === ERR_NOT_ENOUGH_RESOURCES) {
+        debugLog(`Creep ${creep.name} attempted to withdraw ${resourceType} from ${closestSource.id}, but it did not have enough resources.`);
+    } else if (withdrawResult !== OK) {
+        debugLog(`Creep ${creep.name} encountered an unexpected error while trying to withdraw ${resourceType} from ${closestSource.id}: ${withdrawResult}`);
+    }
+}
+
 /**
  * This task is responsible for running a hauler creep in fill mode.
  * 
@@ -10,7 +43,7 @@ import { runQueen } from "./queen";
  * @param creep 
  * @param context 
  */
-export function runFillTask(creep: Creep, context: RoomContext) {
+export function runFiller(creep: Creep, context: RoomContext) {
     // if creep does not have a task, attempt to find a task
     if (!creep.memory.taskId) {
         const task = findTaskForCreep(creep, 'fill');
@@ -35,8 +68,18 @@ export function runFillTask(creep: Creep, context: RoomContext) {
         return;
     }
 
-    // before running the task, make sure the creep has energy to carry
-    if (creep.store[RESOURCE_ENERGY] === 0) {
+    const resourceType = task.resourceType || RESOURCE_ENERGY;
+
+    // Indexed Store access can be undefined when a resource has no entry.
+    // getUsedCapacity() reliably reports zero for an empty creep.
+    if (creep.store.getUsedCapacity(resourceType) === 0) {
+        // other resource support
+        if (resourceType !== RESOURCE_ENERGY) {
+            findResource(creep, context, resourceType);
+
+            return;
+        }
+
         goForEnergy(creep, context);
 
         return;
@@ -68,7 +111,19 @@ export function runFillTask(creep: Creep, context: RoomContext) {
             return;
         }
 
-        const transferResult = creep.transfer(target, RESOURCE_ENERGY);
+        // Never request more than the creep is carrying. Screeps rejects the
+        // whole transfer with ERR_NOT_ENOUGH_RESOURCES when amount is too high.
+        const transferAmount = Math.min(
+            creep.store.getUsedCapacity(resourceType),
+            task.resourceAmount ?? Infinity
+        );
+
+        if (transferAmount <= 0) {
+            debugLog(`Filler ${creep.name} has no ${resourceType} to transfer to ${target.id}`);
+            return;
+        }
+
+        const transferResult = creep.transfer(target, resourceType, transferAmount);
         if (transferResult === ERR_FULL) {
             debugLog(`Target ${target.id} is full for creep ${creep.name}`);
 
@@ -81,6 +136,8 @@ export function runFillTask(creep: Creep, context: RoomContext) {
             releaseTask(creep);
         } else if (transferResult === OK) {
             completeTask(creep);
+        } else {
+            debugLog(`Unexpected result while filler ${creep.name} transferred ${resourceType} to ${target.id}: ${transferResult}`);
         }
     }
 }
@@ -144,7 +201,7 @@ export function runHauler(creep: Creep, context: RoomContext) {
             task.assigned = creep.name;
         } else {
             // no task was assigned, so the creep should idle
-            runFillTask(creep, context);
+            runFiller(creep, context);
 
             return;
         }
@@ -161,7 +218,7 @@ export function runHauler(creep: Creep, context: RoomContext) {
 
     // if the task is a fill task, run the fill task function
     if (task.type === 'fill') {
-        runFillTask(creep, context);
+        runFiller(creep, context);
 
         return;
     }

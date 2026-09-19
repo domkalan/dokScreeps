@@ -75,7 +75,7 @@ export function findTaskForCreep(creep: Creep, taskType: string): RoomTask | und
     return undefined;
 }
 
-export function createTask(room: Room, type: string, targetId: string, priority: number, roomId?: string, action?: string, expires?: number, resourceType?: ResourceConstant): RoomTask {
+export function createTask(room: Room, type: string, targetId: string, priority: number, roomId?: string, action?: string, expires?: number, resourceType?: ResourceConstant, resourceAmount?: number): RoomTask {
     if (!room.memory.tasks) room.memory.tasks = {};
 
     const taskId = `${type}-${targetId}`;
@@ -88,6 +88,7 @@ export function createTask(room: Room, type: string, targetId: string, priority:
         let changed = false;
         if (existing.priority !== priority) { existing.priority = priority; changed = true; }
         if (existing.resourceType !== resourceType) { existing.resourceType = resourceType; changed = true; }
+        if (existing.resourceAmount !== resourceAmount) { existing.resourceAmount = resourceAmount; changed = true; }
         if (existing.roomId !== (roomId || room.name)) { existing.roomId = roomId || room.name; changed = true; }
         if (existing.action !== action) { existing.action = action; changed = true; }
         if (existing.expires - Game.time < 50) { existing.expires = expiresAt; changed = true; }
@@ -104,6 +105,7 @@ export function createTask(room: Room, type: string, targetId: string, priority:
         roomId: roomId || room.name,
         action,
         resourceType,
+        resourceAmount: resourceAmount || Infinity,
         created: Game.time,
         expires: expiresAt
     };

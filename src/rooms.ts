@@ -17,19 +17,19 @@ export function getStoredEnergy(context: RoomContext): number {
 }
 
 // append more body parts depending on available energy and role
-function getCreepBodyParts(room: Room, role: string, context: RoomContext): [BodyPartConstant[], number] {
+function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], number] {
     let baseBody: BodyPartConstant[] = [WORK, CARRY, MOVE];
     let energyUsed: number = 200;
 
     // adjust energy available based on stored energy in the room
-    let energyAvailable = room.energyAvailable * 0.75;
+    let energyAvailable = room.energyAvailable * (room.memory.spawnEnergyMultiplier || 1);
 
     // if defender, we need a different base body
     if (role === 'defender' || role === 'attacker') {
         baseBody = [ATTACK, MOVE];
         energyUsed = 130; // ATTACK + MOVE costs 130 energy
     } else if (role === 'claimer') {
-        baseBody = [CLAIM, MOVE, CLAIM, MOVE];
+        baseBody = [CLAIM, MOVE];
         energyUsed = 1260; // CLAIM + MOVE + CLAIM + MOVE costs 1260 energy
     } else if (role === 'hauler' || role === 'filler') {
         baseBody = [WORK, CARRY, MOVE];
@@ -53,6 +53,8 @@ function getCreepBodyParts(room: Room, role: string, context: RoomContext): [Bod
             nextParts = [CARRY, MOVE];
         } else if (role === 'defender' || role === 'attacker') {
             nextParts = [TOUGH, MOVE, ATTACK];
+        } else if (role === 'claimer') {
+            nextParts = [CLAIM, MOVE];
         } else {
             break;
         }
@@ -81,6 +83,13 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     const roomControlLevel = context.room.controller?.level || 0;
     const roomEnergyAvailable = getStoredEnergy(context);
     const taskCounts = getTaskCounts(room);
+
+    // shill rooms operate like a home room, but with only 1 builder
+    if (context.room.memory.type === 'shill') {
+        return {
+            builder: { count: 1, priority: 10 }
+        };
+    }
 
     const idealCounts: { [role: string]: { count: number, priority: number } } = {
         harvester: { count: taskCounts.harvester, priority: 0 },
@@ -120,7 +129,7 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         idealCounts.filler.count = 1;
     }
 
-    if (taskCounts.claimer > 0 && roomEnergyAvailable >= 75000) {
+    if (taskCounts.claimer > 0 && (roomEnergyAvailable >= 75000 || typeof room.memory.expandTo !== 'undefined')) {
         idealCounts.claimer.count = taskCounts.claimer;
         idealCounts.claimer.priority = 7.5; // if we have claim tasks, increase the priority of claimers
     }
@@ -219,7 +228,7 @@ function spawnCreep(room: Room, role: string, context: RoomContext): [true, stri
 
     if (spawn) {
         // Define a basic body for the new creep
-        const [body, bodyEnergy] = getCreepBodyParts(room, role, context);
+        const [body, bodyEnergy] = getCreepBodyParts(room, role);
         const roleCounter = getRoleNameCounter(role);
         const creepName = `${role}-${roleCounter}`;
 
@@ -244,6 +253,109 @@ function spawnCreep(room: Room, role: string, context: RoomContext): [true, stri
     }
 
     return [false, null];
+}
+
+// transfer processing
+function processTransfers(room: Room, context: RoomContext): void {
+    if (!room.memory.transferOrders || room.memory.transferOrders.length === 0) {
+        return;
+    }
+
+    const transferOrder = room.memory.transferOrders[0];
+    const terminal = context.structuresByType[STRUCTURE_TERMINAL]?.[0] as StructureTerminal | undefined;
+
+    if (!terminal) {
+        debugLog(`No terminal found in room ${room.name}. Cannot process transfer orders.`);
+
+        return;
+    }
+
+    // get the store amount of the resource in the terminal
+    const storeAmount = terminal.store.getUsedCapacity(transferOrder.resource);
+
+    if (transferOrder.type === 'export') {
+        const transactionCost = Game.market.calcTransactionCost(transferOrder.amount, room.name, transferOrder.target);
+        const requiredResourceAmount = transferOrder.amount +
+            (transferOrder.resource === RESOURCE_ENERGY ? transactionCost : 0);
+
+        // Fill the exported resource first. Energy exports must contain both
+        // the sent amount and the transaction cost in the terminal.
+        if (storeAmount < requiredResourceAmount) {
+            createTask(room, 'fill', terminal.id, 0, room.name, undefined, 105,
+                transferOrder.resource, requiredResourceAmount - storeAmount);
+            return;
+        }
+
+        // Non-energy exports also need transaction energy in the terminal.
+        if (transferOrder.resource !== RESOURCE_ENERGY) {
+            const terminalEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+            if (terminalEnergy < transactionCost) {
+                createTask(room, 'fill', terminal.id, 0, room.name, undefined, 105,
+                    RESOURCE_ENERGY, transactionCost - terminalEnergy);
+                return;
+            }
+        }
+
+        if (terminal.cooldown === 0) {
+            const transferResult = terminal.send(transferOrder.resource, transferOrder.amount, transferOrder.target);
+
+            if (transferResult === OK) {
+                debugLog(`Successfully exported ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}.`);
+
+                // Remove the completed export. Older versions of transferOrder()
+                // also queued the transaction cost as a second energy export;
+                // discard that legacy companion order instead of sending it.
+                const legacyEnergyOrder = room.memory.transferOrders[1];
+                if (legacyEnergyOrder &&
+                    legacyEnergyOrder.type === 'export' &&
+                    legacyEnergyOrder.resource === RESOURCE_ENERGY &&
+                    legacyEnergyOrder.target === transferOrder.target &&
+                    legacyEnergyOrder.amount === transactionCost) {
+                    room.memory.transferOrders.splice(1, 1);
+                }
+                room.memory.transferOrders.shift();
+
+                // create the import order in the target room's memory
+                const targetRoomMemory = Memory.rooms[transferOrder.target];
+
+                if (!targetRoomMemory) {
+                    debugLog(`Target room ${transferOrder.target} does not exist in hive memory. Cannot create import order.`);
+
+                    return;
+                }
+
+                // make sure the target room has a transferOrders array
+                if (!targetRoomMemory.transferOrders) {
+                    targetRoomMemory.transferOrders = [];
+                }
+
+                // add the import order to the target room's memory
+                targetRoomMemory.transferOrders.push({
+                    resource: transferOrder.resource,
+                    amount: transferOrder.amount,
+                    target: room.name,
+                    type: 'import',
+                });
+            } else {
+                debugLog(`Failed to export ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}. Error code: ${transferResult}`);
+            }
+        }
+
+        return;
+    } else {
+        // if the store is empty, we can consider the transfer complete and remove the order
+        if (storeAmount == 0) {
+            debugLog(`Import order for ${transferOrder.amount} ${transferOrder.resource} from room ${transferOrder.target} to room ${room.name} is complete.`);
+
+            // remove task
+            room.memory.transferOrders.shift();
+
+            return;
+        }
+
+        // create a haul task to move the resource from the terminal to storage or other structures
+        createTask(room, 'haul', terminal.id, 0, room.name, undefined, 105, transferOrder.resource, storeAmount); // high priority for hauling from terminal
+    }
 }
 
 // scan a room for energy sources and update its memory
@@ -272,6 +384,16 @@ function scanRoom(room: Room, context: RoomContext): void {
             const remoteSource = room.memory.remoteEnergySources[source];
 
             createTask(room, 'harvest', source, 10, remoteSource.room); // low priority for remote harvesting
+        }
+    }
+
+    // do we have an extractor in the room? if so, create a mineral harvest task for each mineral
+    const extractor = context.structuresByType[STRUCTURE_EXTRACTOR]?.[0];
+    if (extractor && room.memory.mineralSource) {
+        const mineral = Game.getObjectById(room.memory.mineralSource) as Mineral | null;
+
+        if (mineral) {
+            createTask(room, 'harvest', room.memory.mineralSource, 5, undefined, 'mineralHarvest', 100); // medium priority for mineral harvesting
         }
     }
 
@@ -491,6 +613,12 @@ function runColony(room: Room): void {
         scanRoom(room, context);
     }
 
+    // Transfer orders need tick-level progress for hauling, terminal cooldowns,
+    // and sends; tying this to the 100-tick room scan makes them appear stalled.
+    if (room.memory.transferOrders && room.memory.transferOrders.length > 0) {
+        processTransfers(room, context);
+    }
+
     // every 10 ticks, we should transfer energy from links to the link closet to storage
     if (Game.time % 10 === 0 && room.memory.storageLink) {
         for (const link of context.links) {
@@ -607,6 +735,23 @@ function scanRemoteRoom(room: Room, context: RoomContext, parentRoom: Room): voi
         if (container.store.getUsedCapacity(RESOURCE_ENERGY) <= container.store.getCapacity(RESOURCE_ENERGY) * 0.25) continue;
         createTask(parentRoom, 'haul', container.id, 10, room.name, undefined, 105, RESOURCE_ENERGY); // medium priority for hauling from remote containers
     }
+
+    // check if the room has an InvaderCore structure and if so, create a task to attack it
+    const invaderCores = context.structuresByType[STRUCTURE_INVADER_CORE] || [];
+    for (const core of invaderCores) {
+        createTask(parentRoom, 'attack', core.id, 0, room.name); // high priority for attacking invader cores
+    }
+
+    // remote mineral harvesting
+    // do we have an extractor in the room? if so, create a mineral harvest task for each mineral
+    const extractor = context.structuresByType[STRUCTURE_EXTRACTOR]?.[0];
+    if (extractor && room.memory.mineralSource) {
+        const mineral = Game.getObjectById(room.memory.mineralSource) as Mineral | null;
+
+        if (mineral && mineral.mineralAmount > 0) {
+            createTask(parentRoom, 'harvest', room.memory.mineralSource, 5, room.name, 'mineralHarvest', 100); // medium priority for mineral harvesting
+        }
+    }
 }
 
 function runRemote(room: Room): void {
@@ -662,7 +807,7 @@ export function runRooms() {
             const room = Game.rooms[roomName];
             const needsFullContext =
                 (room.controller?.my === true && room.memory.type === 'home') ||
-                room.memory.type === 'remote';
+                room.memory.type === 'remote' || room.memory.type === 'shill';
             buildRoomContext(room, !needsFullContext);
         } catch (error) {
             debugLog(`Error building context for room ${roomName}: ${error}`);
@@ -675,10 +820,17 @@ export function runRooms() {
             const room = Game.rooms[roomName];
             const roomCpuStart = trackIndividualCpu ? Game.cpu.getUsed() : 0;
 
+            // if the room is locked out, skip it
+            if (room.memory.lockout) {
+                continue;
+            }
+
             if (room.controller && room.controller.my && room.memory.type === 'home') {
                 runColony(room);
             } else if (room.memory.type === 'remote') {
                 runRemote(room);
+            } else if (room.memory.type === 'shill') {
+                runColony(room);
             }
 
             if (trackIndividualCpu) {

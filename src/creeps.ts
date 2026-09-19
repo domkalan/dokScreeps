@@ -3,14 +3,16 @@ import { GLOBAL_CONTEXT, RoomContext } from "utils/Context";
 import { runHarvester } from "roles/harvester";
 import { runBuilder } from "roles/builder";
 import { runQueen } from "roles/queen";
-import { runScout } from "roles/scout";
-import { runHauler } from "roles/hauler";
+import { runHauler, runFiller } from "roles/hauler";
 import { runDefender } from "roles/defender";
 import { runAttacker } from "roles/attacker";
 import { runClaimer } from "roles/claimer";
 import { completeTask } from "utils/TaskManager";
-import { runHiveExpansionCreep } from "roles/hive/expansion";
+
 import { runGoat } from "roles/goat";
+
+import { runScout } from "roles/scout";
+import { runHiveExpansionCreep } from "roles/hive/expansion";
 
 export let CREEP_COUNTS: {
     [room: string]: { [role: string]: number } | undefined
@@ -130,6 +132,8 @@ export function runHiveCreep(creep: Creep, context: RoomContext): void {
         // expansion creeps operate under different logic, so we will handle them separately
         if (creep.name.startsWith('hive-expansion')) {
             runHiveExpansionCreep(creep, context);
+        } else if (creep.name.startsWith('hive-scout')) {
+            runScout(creep, context);
         }
     } catch (error) {
         console.error('[CREEP] Error running on hive creep:', error);
@@ -186,6 +190,8 @@ export function runCreeps(): void {
                     runScout(creep, context);
                     break;
                 case 'filler':
+                    runFiller(creep, context);
+                    break;
                 case 'hauler':
                     runHauler(creep, context);
                     break;

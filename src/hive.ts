@@ -151,67 +151,58 @@ export function scanRoom(room: Room): void {
     discoverRooms(room.name);
 }
 
-export function spawnInRoom(role: string, body: BodyPartConstant[], limit: number = 1): void {
-    let spawnedCount = 0;
-    let spawnSuccess = false;
+export function spawnInRoom(room: Room, role: string, body: BodyPartConstant[]): boolean {
+    let spawnSuccess: boolean = false;
+    const roomStandbyEnergy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
 
-    for (const roomName in Game.rooms) {
-        const room = Game.rooms[roomName];
-        const roomStandbyEnergy = getStoredEnergy(GLOBAL_CONTEXT[room.name]);
+    /*if (roomStandbyEnergy < 75000) {
+        return false;
+    }*/
 
-        if (roomStandbyEnergy < 75000) {
-            continue;
-        }
+    if (room.controller && room.controller.my) {
+        for (const spawn of GLOBAL_CONTEXT[room.name].spawns) {
+            if (spawn && !spawn.spawning) {
+                const roleName = `hive-${role}-${getRoleNameCounter(role)}`;
+                const spawnResult = spawn.spawnCreep(body, roleName, { memory: { role: role, room: room.name } });
 
-        if (room.controller && room.controller.my) {
-            for (const spawn of GLOBAL_CONTEXT[room.name].spawns) {
-                if (spawn && !spawn.spawning) {
-                    const roleName = `hive-${role}-${getRoleNameCounter(role)}`;
-                    const spawnResult = spawn.spawnCreep(body, roleName, { memory: { role: role, room: room.name } });
+                debugLog(`Attempting to spawn ${roleName} in ${room.name}: ${spawnResult}`);
 
-                    debugLog(`Attempting to spawn ${roleName} in ${room.name}: ${spawnResult}`);
+                if (spawnResult === OK) {
+                    console.log(`[HIVE] Spawned ${roleName} in ${room.name}`);
 
-                    if (spawnResult === OK) {
-                        console.log(`[HIVE] Spawned ${roleName} in ${room.name}`);
-
-                        // reset portals jumped for this creep in inter-shard data
-                        if (!Memory.hive.interShard.portalsJumped) {
-                            Memory.hive.interShard.portalsJumped = {};
-                        }
-                        Memory.hive.interShard.portalsJumped[roleName] = [];
-
-                        // Expansion spawn history is used to throttle future
-                        // waves and also gives us a timestamp for pruning old
-                        // portal-history records.
-                        if (role === 'expansion' && Memory.hive.interShard.expansionPlan) {
-                            const plan = Memory.hive.interShard.expansionPlan;
-                            if (!plan.spawned) {
-                                plan.spawned = {};
-                            }
-                            plan.spawned[roleName] = {
-                                role,
-                                spawnedAt: Game.time
-                            };
-                        }
-
-                        markInterShardUpdated();
-
-                        spawnSuccess = true;
-                        spawnedCount++;
-                        if (spawnedCount >= limit) {
-                            return;
-                        }
+                    // reset portals jumped for this creep in inter-shard data
+                    if (!Memory.hive.interShard.portalsJumped) {
+                        Memory.hive.interShard.portalsJumped = {};
                     }
+                    Memory.hive.interShard.portalsJumped[roleName] = [];
+
+                    // Expansion spawn history is used to throttle future
+                    // waves and also gives us a timestamp for pruning old
+                    // portal-history records.
+                    if (role === 'expansion' && Memory.hive.interShard.expansionPlan) {
+                        const plan = Memory.hive.interShard.expansionPlan;
+                        if (!plan.spawned) {
+                            plan.spawned = {};
+                        }
+
+                        plan.spawned[roleName] = {
+                            role,
+                            spawnedAt: Game.time
+                        };
+                    }
+
+                    markInterShardUpdated();
                 }
+
+                console.log(`[HIVE] Spawn result for ${roleName} in ${room.name}: ${spawnResult}`);
+
+                spawnSuccess = spawnResult === OK;
+                break;
             }
         }
     }
 
-    if (!spawnSuccess) {
-        console.log(`[HIVE] Failed to spawn ${role} in any room. All spawns are busy or insufficient energy.`);
-    } else {
-        console.log(`[HIVE] Spawned ${spawnedCount} ${role}(s) across available rooms.`);
-    }
+    return spawnSuccess;
 }
 
 export function runHiveScan() {
@@ -290,8 +281,18 @@ export function runHiveScan() {
         }
 
         if (hasScoutTask) {
-            // spawn a scout in the first room we own
-            spawnInRoom('scout', [MOVE], 1);
+            for (const roomName in Memory.rooms) {
+                if (Memory.rooms[roomName].type !== 'home') {
+                    continue;
+                }
+
+                const spawnResult = spawnInRoom(Game.rooms[roomName], 'scout', [MOVE]);
+
+                if (spawnResult) {
+                    console.log(`[HIVE] Spawned scout in ${roomName}`);
+                    break;
+                }
+            }
         }
     }
 }
@@ -324,17 +325,65 @@ export function runHiveExpansionPlan() {
 
     // if we have not spawned an expansion creep in the last 750 ticks, spawn one
     if (lastExpansionSpawn === 0 || Game.time - lastExpansionSpawn > 750) {
-        console.log('Requesting new expansion creep to be spawned...');
+        console.log('[HIVE] Requesting new expansion creep to be spawned...');
+        const [portalShard, portalRoom, portalId]: [string, string, string] = plan.portals[0];
 
         if (plan.phase === 'settle') {
-            spawnInRoom('expansion', [CLAIM, MOVE, WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], 1);
+            // find the closet room to the target room that is a home room and spawn an expansion creep there
+            let closestRoom: Room | null = null;
+            let closestDistance = Infinity;
+
+            for (const roomName in Memory.rooms) {
+                const roomMemory = Memory.rooms[roomName];
+
+                if (roomMemory.type !== 'home') {
+                    continue;
+                }
+
+                const distance = Game.map.getRoomLinearDistance(roomName, portalRoom);
+
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestRoom = Game.rooms[roomName];
+                }
+            }
+
+            if (closestRoom) {
+                let baseBody: BodyPartConstant[] = [CLAIM, MOVE];
+
+                if (closestRoom.energyCapacityAvailable >= 1400) {
+                    baseBody = [CLAIM, MOVE, WORK, MOVE, CARRY, MOVE, ATTACK, MOVE];
+                }
+
+                const spawnResult = spawnInRoom(closestRoom, 'expansion', baseBody);
+
+                console.log(`[HIVE] Spawning expansion creep in ${closestRoom.name} to settle ${portalRoom} on ${portalShard}`, spawnResult, closestRoom.energyCapacityAvailable);
+
+            }
         } else if (plan.phase === 'build') {
-            spawnInRoom('expansion', [WORK, MOVE, CARRY, MOVE, ATTACK, MOVE], 1);
+            for (const roomName in Memory.rooms) {
+                const roomMemory = Memory.rooms[roomName];
+
+                if (roomMemory.type !== 'home') {
+                    continue;
+                }
+
+                console.log(`[HIVE] Spawning expansion creep in ${roomName} to build in ${portalRoom} on ${portalShard}`);
+
+                if (spawnInRoom(Game.rooms[roomName], 'expansion', [WORK, CARRY, MOVE, MOVE, ATTACK, MOVE])) {
+                    break;
+                }
+            }
         }
     }
 }
 
 export function syncHiveInterShard() {
+    if (!InterShardMemory) {
+        console.error('InterShardMemory is not available. Cannot sync inter-shard data.');
+        return;
+    }
+
     // set each shard we should iterate through and send the inter-shard data to
     const shards = ['shard0', 'shard1', 'shard2', 'shard3'];
 

@@ -8,6 +8,35 @@ function isRoomEdge(pos: RoomPosition): boolean {
     return pos.x === 0 || pos.x === 49 || pos.y === 0 || pos.y === 49;
 }
 
+export function runIdleWork(creep: Creep, context: RoomContext): void {
+    // the beginning of the idle work routine for shill rooms
+    if (context.room.memory.type === 'shill') {
+        if (creep.ticksToLive && creep.ticksToLive > 1200) {
+            // attempt to fill towers in the room
+            let tower: StructureTower | undefined;
+
+            for (const towerCandidate of context.towers || []) {
+                if (towerCandidate.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                    tower = towerCandidate;
+                    break;
+                }
+            }
+
+            if (tower) {
+                if (creep.pos.isNearTo(tower)) {
+                    creep.transfer(tower, RESOURCE_ENERGY);
+                } else {
+                    moveBuilderTo(creep, tower.pos, 1);
+                }
+
+                return;
+            }
+        };
+    }
+
+    runQueen(creep, context); // Attempt to upgrade the controller if no build tasks are available
+}
+
 /**
  * Builder-specific movement wrapper. Builders normally only need range 3 for
  * build/repair/upgrade intents, so do not make Traveler solve a path all the
@@ -301,10 +330,23 @@ export function runBuilder(creep: Creep, context: RoomContext): void {
         } else {
             debugLog(`No available build tasks for creep ${creep.name}`);
 
-            runQueen(creep, context); // Attempt to upgrade the controller if no build tasks are available
+            runIdleWork(creep, context);
 
             return;
         }
+    }
+
+    // make sure the controller does not get under 1000 ticks to downgrade
+    if (context.room.controller && context.room.controller.ticksToDowngrade < 1000 || creep.memory.focusedOn === 'controller') {
+        creep.memory.focusedOn = 'controller';
+
+        if (context.room.controller && creep.pos.inRangeTo(context.room.controller, 3)) {
+            creep.upgradeController(context.room.controller);
+        } else if (context.room.controller) {
+            moveBuilderTo(creep, context.room.controller, 3);
+        }
+
+        return;
     }
 
     const task = getTaskById(creep.memory.room, creep.memory.taskId);

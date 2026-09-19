@@ -37,11 +37,23 @@ export function runDefender(creep: Creep, context: RoomContext): void {
             }
         }
     } else {
+        if (!creep.memory.kv) {
+            creep.memory.kv = {};
+        }
+
+        if (!creep.memory.kv.defenderIdle || creep.memory.kv.defenderIdle < 100) {
+            creep.memory.kv.defenderIdle = (creep.memory.kv.defenderIdle || 0) + 1;
+
+            return;
+        }
+
         // if there are no hostiles, move to a defensive position near the room controller or spawn
         const defensivePosition = creep.room.controller || context.spawns[0]?.pos;
 
         if (defensivePosition && creep.pos.getRangeTo(defensivePosition) > 5) {
             if (creep.fatigue === 0) creep.travelTo(defensivePosition);
+        } else {
+            creep.memory.kv.defenderIdle = 0;
         }
     }
 }

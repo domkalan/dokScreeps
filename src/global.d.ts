@@ -61,7 +61,10 @@ declare global {
         // maintained by the hive scout whenever the room is scanned.
         avoid?: boolean;
 
-        type: 'home' | 'remote';
+        type: 'home' | 'remote' | 'shill';
+
+        // lockout means that we will not tick, spawn, or do any logic for this room
+        lockout?: boolean;
 
         // last time we scanned this room
         lastScan: number;
@@ -74,10 +77,22 @@ declare global {
         energyThresholdOverride?: boolean;
         // track remote energy sources that are in other rooms, keyed by source id
         remoteEnergySources?: { [sourceId: string]: { room: string; id: string } };
+        // store the spawn multiplayer for this room
+        spawnEnergyMultiplier?: number;
+
+        // transfer orders
+        transferOrders?: { resource: ResourceConstant; amount: number, target: string, type: 'export' | 'import' }[],
+
+        // mineral sources in the room
+        mineralSource?: string;
+        mineralType?: MineralConstant;
 
         // child rooms that are near this room
         childRooms?: string[];
         parentRoom?: string | null; // the name of the parent room, if any
+
+        // automated expansion planning for this room, if any
+        expandTo?: string | null; // the name of the room that this room is expanding to, if any
 
         // the room's controller level, if any
         controllerLevel?: number;
@@ -113,6 +128,7 @@ declare global {
         roomId: string;
         action?: string; // optional action to perform, e.g., for hauler tasks, this could be the room name to haul to
         resourceType?: ResourceConstant; // optional resource type for tasks that involve resources, e.g., for hauler tasks
+        resourceAmount?: number; // optional resource amount for tasks that involve resources, e.g., for hauler tasks
 
         created: number;
         expires: number;
@@ -130,6 +146,7 @@ declare global {
         debugDisplay: string | undefined; // what room the debug display will show in
         cacheMode: boolean; // whether cache mode is enabled or not
         perfMode: boolean; // whether performance tracking mode is enabled or not
+        pixelGen: boolean; // whether pixel generation mode is enabled or not
     }
 }
 

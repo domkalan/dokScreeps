@@ -47,6 +47,46 @@ export function buildConstructionSite(creep: Creep): void {
     if (creep.store[RESOURCE_ENERGY] === 0 || creep.memory.focusedOn === 'energy') {
         creep.memory.focusedOn = 'energy';
 
+        // find the closest energy source to get energy from
+        if (!creep.memory.kv?.ignoreStorage) {
+            let closestStorageSource: StructureStorage | StructureContainer | null = null;
+            let closestStorageRange = Infinity;
+
+            for (const storage of GLOBAL_CONTEXT[creep.room.name].energyStores) {
+                if (storage.store[RESOURCE_ENERGY] < 100) {
+                    continue;
+                }
+
+                const range = creep.pos.getRangeTo(storage);
+                if (range < closestStorageRange) {
+                    closestStorageRange = range;
+                    closestStorageSource = storage;
+                }
+            }
+
+            if (closestStorageSource) {
+                if (creep.pos.getRangeTo(closestStorageSource) > 1) {
+                    if (creep.fatigue === 0) creep.travelTo(closestStorageSource);
+                    return;
+                }
+
+                const withdrawResult = creep.withdraw(closestStorageSource, RESOURCE_ENERGY);
+
+                if (withdrawResult === OK) {
+                    delete creep.memory.focusedOn;
+
+                    return;
+                } else {
+                    // if we failed to withdraw from storage, mark it as ignored for this creep
+                    if (!creep.memory.kv) {
+                        creep.memory.kv = {};
+                    }
+
+                    creep.memory.kv.ignoreStorage = true;
+                }
+            }
+        }
+
         // go get energy from the closest energy source
         let closestEnergySource: string | null = null;
         let closestRange = Infinity;
@@ -102,6 +142,17 @@ export function buildConstructionSite(creep: Creep): void {
     const constructionSites = GLOBAL_CONTEXT[creep.room.name].constructionSites;
 
     if (constructionSites.length === 0) {
+        if (controller && controller.my) {
+            if (creep.pos.getRangeTo(controller) > 3) {
+                if (creep.fatigue === 0) creep.travelTo(controller);
+                return;
+            }
+
+            creep.upgradeController(controller);
+
+            return;
+        }
+
         creep.say('NO_SITES!');
         return;
     }
@@ -134,7 +185,7 @@ export function buildConstructionSite(creep: Creep): void {
         return;
     }
 
-    if (creep.pos.getRangeTo(closestConstructionSite) > 1) {
+    if (creep.pos.getRangeTo(closestConstructionSite) > 2) {
         if (creep.fatigue === 0) creep.travelTo(closestConstructionSite);
         return;
     }
@@ -184,6 +235,8 @@ export function claimController(creep: Creep, context: RoomContext, plan: HiveEx
             spawnQueue: [],
             defenseMode: false
         };
+
+        Game.notify(`Hive expansion creep ${creep.name} has claimed room ${creep.room.name} on shard ${Game.shard.name}.`);
     }
 }
 
@@ -299,5 +352,5 @@ export function runHiveExpansionCreep(creep: Creep, contextRaw: RoomContext) {
         return;
     }
 
-    creep.say('USELESS!')
+    creep.suicide();
 }

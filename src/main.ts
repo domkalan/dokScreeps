@@ -48,6 +48,13 @@ function runTick() {
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 export const loop = () => {
+    // if we can generate pixels, do so if we have enough CPU bucket and pause for this tick
+    if (Memory.pixelGen && Game.cpu.bucket >= 10000) {
+        Game.cpu.generatePixel();
+
+        return;
+    }
+
     if (Memory.perfMode) {
         profiler.wrap(function () {
             runTick();

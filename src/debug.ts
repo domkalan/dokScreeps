@@ -37,9 +37,10 @@ export function drawRoomDebugInfo() {
     let textOffset = 0;
     for (const taskId in roomMemory.tasks) {
         const task = roomMemory.tasks[taskId];
-        Game.rooms[roomDisplay].visual.text(`Task: ${task.type} ${task.completed ? '✅' : '❌'} - pri=${task.priority}, ttl=${Game.time - task.expires}`, 0.5, textOffset, { align: 'left', font: 0.5 });
-        textOffset += 0.5;
+        Game.rooms[roomDisplay].visual.text(`Task: ${task.type} ${task.completed ? '✅' : '❌'} - pri=${task.priority}, ttl=${Game.time - task.expires}`, 0.75, textOffset, { align: 'left', font: 0.35 });
+        textOffset += 0.4;
     }
+    textOffset += 0.3;
 
     // display counts for each task type across all rooms
     const taskCounts: { [taskType: string]: number } = {};
@@ -60,39 +61,6 @@ export function drawRoomDebugInfo() {
     }
     Game.rooms[roomDisplay].visual.text(taskCountText.slice(0, -3), 0.5, textOffset, { align: 'left', font: 0.5 });
     textOffset += 1;
-
-    // draw all creeps that belong to this room and their roles
-    let creepsInRoom = 0;
-    for (const creepName in Game.creeps) {
-        const creep = Game.creeps[creepName];
-        if (creep.memory.room === roomDisplay) {
-            Game.rooms[roomDisplay].visual.text(`Creep: ${creep.name} (${creep.memory.role}), ttl=${creep.ticksToLive}, room=${creep.room.name}`, 0.5, textOffset, { align: 'left', font: 0.5 });
-            textOffset += 0.5;
-            creepsInRoom++;
-        }
-    }
-
-    Game.rooms[roomDisplay].visual.text(`Creep Counts: ${creepsInRoom}/${Object.keys(Game.creeps).length}`, 0.5, textOffset, { align: 'left', font: 0.5 });
-    textOffset += 0.5;
-
-    // display counts for each role of creep across all rooms
-    const roleCounts: { [role: string]: number } = {};
-    for (const roomName in CREEP_COUNTS) {
-        const roomCounts = CREEP_COUNTS[roomName];
-        for (const role in roomCounts) {
-            if (!roleCounts[role]) {
-                roleCounts[role] = 0;
-            }
-            roleCounts[role] += roomCounts[role] || 0;
-        }
-    }
-
-    let roleCountText = `Creep Counts: `;
-    for (const role in roleCounts) {
-        roleCountText += `${role}: ${roleCounts[role]} | `;
-    }
-    Game.rooms[roomDisplay].visual.text(roleCountText.slice(0, -3), 0.5, textOffset, { align: 'left', font: 0.5 });
-    textOffset += 0.5;
 
     // draw the spawn queue for this room
     for (const spawnTask of roomMemory.spawnQueue || []) {
@@ -139,9 +107,12 @@ export function drawCpuDebugInfo() {
     let textOffset = 0;
 
     for (const roomName in ROOM_CPU) {
-        Game.rooms[roomDisplay].visual.text(`Room CPU: ${roomName} - ${ROOM_CPU[roomName].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.5 });
-        textOffset += 0.5;
+        Game.rooms[roomDisplay].visual.text(`${roomName} - ${ROOM_CPU[roomName].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.35 });
+        textOffset += 0.3;
+        Game.rooms[roomDisplay].visual.text(`scan:${(Game.time - (Memory.rooms[roomName]?.lastScan || 0)) - 100}`, 48.75, textOffset, { align: 'right', font: 0.25, color: '#aaaaaa' });
+        textOffset += 0.4;
     }
+    textOffset += 0.30;
 
     // display total cpu usage for all rooms
     Game.rooms[roomDisplay].visual.text(`Total Room CPU: ${ROOM_TOTAL_CPU.toFixed(2)}`, 49, textOffset, { align: 'right', font: 0.5 });
@@ -149,9 +120,12 @@ export function drawCpuDebugInfo() {
 
     // display cpu usage for each creep
     for (const creepName in CREEP_CPU) {
-        Game.rooms[roomDisplay].visual.text(`Creep CPU: ${creepName} - ${CREEP_CPU[creepName].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.5 });
-        textOffset += 0.5;
+        Game.rooms[roomDisplay].visual.text(`${creepName} - ${CREEP_CPU[creepName].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.35 });
+        textOffset += 0.30;
+        Game.rooms[roomDisplay].visual.text(`home:${Memory.creeps[creepName]?.room || 'hive'} - room:${Game.creeps[creepName]?.room?.name || 'unknown'}`, 48.75, textOffset, { align: 'right', font: 0.25, color: '#aaaaaa' });
+        textOffset += 0.4;
     }
+    textOffset += 0.30;
 
     // display total cpu usage for all creeps
     Game.rooms[roomDisplay].visual.text(`Total Creep CPU: ${CREEP_CPU_TOTAL.toFixed(2)}`, 49, textOffset, { align: 'right', font: 0.5 });
@@ -163,16 +137,25 @@ export function drawCpuDebugInfo() {
 
     // tally up cpu usage by role for all creeps and display it
     const roleCpuUsage: { [role: string]: number } = {};
+    const roleCounts: { [role: string]: number } = {};
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
+
+        // count cpu usage by role
         if (!roleCpuUsage[creep.memory.role]) {
             roleCpuUsage[creep.memory.role] = 0;
         }
         roleCpuUsage[creep.memory.role] += CREEP_CPU[creepName] || 0;
+
+        // count how many roles
+        if (!roleCounts[creep.memory.role]) {
+            roleCounts[creep.memory.role] = 0;
+        }
+        roleCounts[creep.memory.role] += 1;
     }
 
     for (const role in roleCpuUsage) {
-        Game.rooms[roomDisplay].visual.text(`Role CPU: ${role} - ${roleCpuUsage[role].toFixed(2)}`, 48.75, textOffset, { align: 'right', font: 0.5 });
+        Game.rooms[roomDisplay].visual.text(`Role CPU: ${role} - ${roleCpuUsage[role].toFixed(2)} (x${roleCounts[role]})`, 48.75, textOffset, { align: 'right', font: 0.5 });
         textOffset += 0.5;
     }
 }
