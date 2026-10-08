@@ -8,6 +8,7 @@ import { runDefender } from "roles/defender";
 import { runAttacker } from "roles/attacker";
 import { runClaimer } from "roles/claimer";
 import { completeTask } from "utils/TaskManager";
+import { runHealer } from "roles/healer";
 
 import { runGoat } from "roles/goat";
 
@@ -206,6 +207,9 @@ export function runCreeps(): void {
                     break;
                 case 'goat':
                     runGoat(creep, context);
+                    break;
+                case 'healer':
+                    runHealer(creep, context);
                     break;
                 default:
                     if (Game.time % 25 === 0) {

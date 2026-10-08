@@ -155,25 +155,15 @@ export function mountCommands() {
         return `Attack tasks for ${totalStructures} structures in room ${roomName} have been added to home room ${parentRoomName}.`;
     });
 
-    registerCommand('attackStructureById', 'Creates an attack task for the specified structure ID in the given room.', { roomName: { req: true }, structureId: { req: true } }, function (roomName: string, structureId: string) {
+    registerCommand('attackStructureById', 'Creates an attack task for the specified structure ID in the given room.', { roomName: { req: true }, structureId: { req: true } }, function (roomName: string, structureId: string, remoteRoom: string, expiresInTicks: number) {
         const room = Game.rooms[roomName];
         if (!room) {
             return `No room found with name ${roomName}.`;
         }
 
-        const parentRoomName = room.memory.parentRoom;
-        if (!parentRoomName) {
-            return `No parent room found for room ${roomName}.`;
-        }
+        createTask(room, 'attack', structureId, 5, remoteRoom || room.name, undefined, expiresInTicks); // high priority for attacking structures
 
-        const parentRoom = Game.rooms[parentRoomName];
-        if (!parentRoom) {
-            return `No parent room found with name ${parentRoomName}.`;
-        }
-
-        createTask(parentRoom, 'attack', structureId, 5, room.name); // high priority for attacking structures
-
-        return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${parentRoomName}.`;
+        return `Attack task for structure ${structureId} in room ${roomName} has been added to home room ${room}.`;
     });
 
     registerCommand('removeStructures', 'Removes all structures of the specified types in the given room.', { roomName: { req: true }, structureTypes: { req: true } }, function (roomName: string, structureTypes: BuildableStructureConstant[]) {
@@ -210,6 +200,18 @@ export function mountCommands() {
         }
 
         return `${constructionSites.length} construction sites from room ${roomName} have been removed.`;
+    });
+
+    registerCommand('standbyHealer', 'Stations a healer on standby at a given location in the specified room.', { parentRoom: { req: true }, target: { req: true }, targetRoom: { req: true } }, function (parentRoom: string, targetRoom: string, target: string, expires?: number) {
+        const pRoom = Game.rooms[parentRoom];
+
+        if (!pRoom) {
+            return `No parent room found with name ${parentRoom}.`;
+        }
+
+        createTask(pRoom, 'heal', target, 5, targetRoom, `standby`, expires); // high priority for healers on standby
+
+        return `Standby heal task for target ${target} in room ${targetRoom} has been added to home room ${parentRoom}.`;
     });
 
     registerCommand('drainStructures', 'Creates drain tasks for all structures of the specified types in the given room that contain the specified resource type.', { roomName: { req: true }, resourceType: { req: true }, structureTypes: { req: true } }, function (roomName: string, resourceType: ResourceConstant, structureTypes: string[]) {
@@ -402,7 +404,7 @@ export function mountCommands() {
 
         // calculate transfer cost based on distance and amount
         const room = Game.rooms[roomName];
-        const targetRoomRef = Game.rooms[targetRoom];
+        const targetRoomRef = targetRoom === 'market' ? room : Game.rooms[targetRoom];
 
         if (!room || !targetRoomRef) {
             return `One or both rooms not found: ${roomName}, ${targetRoom}.`;
@@ -425,6 +427,88 @@ export function mountCommands() {
         // of this order. A second export order would send that energy away.
 
         return `Transfer order for ${amount} ${resourceType} from room ${roomName} to room ${targetRoom} has been created.`;
+    });
+
+    registerCommand('removeTransferOrder', 'Removes a transfer order for the specified resource and target room.', { roomName: { req: true }, resourceType: { req: true }, targetRoom: { req: true } }, function (roomName: string, resourceType: ResourceConstant, targetRoom: string) {
+        const roomMemory = Memory.rooms[roomName];
+
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        if (!roomMemory.transferOrders) {
+            return `No transfer orders found for room ${roomName}.`;
+        }
+
+        roomMemory.transferOrders = roomMemory.transferOrders.filter((order: any) => !(order.resource === resourceType && order.target === targetRoom));
+
+        return `Transfer order for ${resourceType} to room ${targetRoom} has been removed from room ${roomName}.`;
+    })
+
+    registerCommand('createFactoryOrder', 'Creates a factory order for the specified resource and thresholds.', { roomName: { req: true }, resourceType: { req: true }, thresholds: { req: true } }, function (roomName: string, resourceType: ResourceConstant, thresholds: [ResourceConstant, number][]) {
+        const roomMemory = Memory.rooms[roomName];
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        if (!roomMemory.factoryOrders) {
+            roomMemory.factoryOrders = [];
+        }
+
+        roomMemory.factoryOrders.push({
+            resource: resourceType,
+            thresholds
+        });
+
+        return `Factory order for ${resourceType} has been created.`;
+    });
+
+    registerCommand('removeFactoryOrder', 'Removes a factory order for the specified resource.', { roomName: { req: true }, resourceType: { req: true } }, function (roomName: string, resourceType: ResourceConstant) {
+        const roomMemory = Memory.rooms[roomName];
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        if (!roomMemory.factoryOrders) {
+            return `No factory orders found for room ${roomName}.`;
+        }
+
+        roomMemory.factoryOrders = roomMemory.factoryOrders.filter((order: any) => order.resource !== resourceType);
+
+        return `Factory order for ${resourceType} has been removed.`;
+    });
+
+    registerCommand('createLabOrder', 'Creates a lab order for the specified inputs and output.', { roomName: { req: true }, inputs: { req: true }, output: { req: true } }, function (roomName: string, inputs: [ResourceConstant, number, string][], output: [ResourceConstant, string]) {
+        const roomMemory = Memory.rooms[roomName];
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        if (!roomMemory.labOrders) {
+            roomMemory.labOrders = [];
+        }
+
+        roomMemory.labOrders.push({
+            inputs,
+            output
+        });
+
+        return `Lab order has been created.`;
+    });
+
+    registerCommand('removeLabOrder', 'Removes a lab order for the specified output resource.', { roomName: { req: true }, outputResource: { req: true } }, function (roomName: string, outputResource: ResourceConstant) {
+        const roomMemory = Memory.rooms[roomName];
+        if (!roomMemory) {
+            return `No room found with name ${roomName}.`;
+        }
+
+        if (!roomMemory.labOrders) {
+            return `No lab orders found for room ${roomName}.`;
+        }
+
+        roomMemory.labOrders = roomMemory.labOrders.filter((order: any) => order.output[0] !== outputResource);
+
+        return `Lab order for ${outputResource} has been removed.`;
     });
 
     registerCommand('setRoomType', 'Sets the specified room type to either "home" or "remote". If setting to "remote", a parent room must be specified.', { roomName: { req: true }, type: { req: true } }, function (roomName: string, type: 'home' | 'remote' | 'shill', parentRoom?: string) {
@@ -639,5 +723,15 @@ export function mountCommands() {
         roomMemory.spawnEnergyMultiplier = multiplier;
 
         return `Spawn energy multiplier for room ${roomName} has been set to ${multiplier}.`;
+    });
+
+    registerCommand('toggleScouting', 'Toggles scouting for the hive.', {}, function () {
+        Memory.hive.scoutingDisabled = !Memory.hive.scoutingDisabled;
+
+        if (Memory.hive.scoutingDisabled) {
+            return `Scouting for the hive has been disabled.`;
+        } else {
+            return `Scouting for the hive has been enabled.`;
+        }
     });
 }

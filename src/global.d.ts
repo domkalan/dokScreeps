@@ -81,7 +81,11 @@ declare global {
         spawnEnergyMultiplier?: number;
 
         // transfer orders
-        transferOrders?: { resource: ResourceConstant; amount: number, target: string, type: 'export' | 'import' }[],
+        transferOrders?: { resource: ResourceConstant; amount: number, target: string, type: 'export', orderId?: string }[],
+        // factory orders
+        factoryOrders?: { resource: ResourceConstant; thresholds: [ResourceConstant, number][] }[],
+        // lab orders
+        labOrders?: { inputs: [ResourceConstant, number, string][], output: [ResourceConstant, string] }[],
 
         // mineral sources in the room
         mineralSource?: string;

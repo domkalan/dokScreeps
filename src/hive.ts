@@ -259,38 +259,41 @@ export function runHiveScan() {
         }
     }
 
-    // check if we have a current scout creep
-    let hasScout = false;
-    for (const creepName in Game.creeps) {
-        const creep = Game.creeps[creepName];
-        if (creep.memory.role === 'scout') {
-            hasScout = true;
-            break;
-        }
-    }
-
-    // if we do not have a scout, spawn one only if we have scout tasks
-    if (!hasScout) {
-        let hasScoutTask = false;
-        for (const taskId in Memory.hive.tasks) {
-            const task = Memory.hive.tasks[taskId];
-            if ((task.type === 'scan' || task.type === 'jump') && !task.assigned) {
-                hasScoutTask = true;
+    // are we doing scouting? if so, skip spawning a scout
+    if (!Memory.hive.scoutingDisabled) {
+        // check if we have a current scout creep
+        let hasScout = false;
+        for (const creepName in Game.creeps) {
+            const creep = Game.creeps[creepName];
+            if (creep.memory.role === 'scout') {
+                hasScout = true;
                 break;
             }
         }
 
-        if (hasScoutTask) {
-            for (const roomName in Memory.rooms) {
-                if (Memory.rooms[roomName].type !== 'home') {
-                    continue;
-                }
-
-                const spawnResult = spawnInRoom(Game.rooms[roomName], 'scout', [MOVE]);
-
-                if (spawnResult) {
-                    console.log(`[HIVE] Spawned scout in ${roomName}`);
+        // if we do not have a scout, spawn one only if we have scout tasks
+        if (!hasScout) {
+            let hasScoutTask = false;
+            for (const taskId in Memory.hive.tasks) {
+                const task = Memory.hive.tasks[taskId];
+                if ((task.type === 'scan' || task.type === 'jump') && !task.assigned) {
+                    hasScoutTask = true;
                     break;
+                }
+            }
+
+            if (hasScoutTask) {
+                for (const roomName in Memory.rooms) {
+                    if (Memory.rooms[roomName].type !== 'home') {
+                        continue;
+                    }
+
+                    const spawnResult = spawnInRoom(Game.rooms[roomName], 'scout', [MOVE]);
+
+                    if (spawnResult) {
+                        console.log(`[HIVE] Spawned scout in ${roomName}`);
+                        break;
+                    }
                 }
             }
         }
@@ -368,10 +371,9 @@ export function runHiveExpansionPlan() {
                     continue;
                 }
 
-                console.log(`[HIVE] Spawning expansion creep in ${roomName} to build in ${portalRoom} on ${portalShard}`);
-
                 if (spawnInRoom(Game.rooms[roomName], 'expansion', [WORK, CARRY, MOVE, MOVE, ATTACK, MOVE])) {
-                    break;
+                    //break;
+                    console.log(`[HIVE] Spawning expansion creep in ${roomName} to build in ${portalRoom} on ${portalShard}`);
                 }
             }
         }

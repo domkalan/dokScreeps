@@ -20,6 +20,7 @@ export function getStoredEnergy(context: RoomContext): number {
 function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], number] {
     let baseBody: BodyPartConstant[] = [WORK, CARRY, MOVE];
     let energyUsed: number = 200;
+    const randomRoll = Math.random();
 
     // adjust energy available based on stored energy in the room
     let energyAvailable = room.energyAvailable * (room.memory.spawnEnergyMultiplier || 1);
@@ -34,6 +35,15 @@ function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], numbe
     } else if (role === 'hauler' || role === 'filler') {
         baseBody = [WORK, CARRY, MOVE];
         energyUsed = 200; // WORK + CARRY + MOVE costs 200 energy
+    } else if (role === 'healer') {
+        baseBody = [HEAL, MOVE];
+        energyUsed = 150; // HEAL + MOVE costs 150 energy
+    }
+
+    // random chance for attacker to have ranged attack parts
+    if (role === 'attacker' && randomRoll < 0.5) {
+        baseBody = [RANGED_ATTACK, MOVE];
+        energyUsed = 200; // RANGED_ATTACK + MOVE costs 200 energy
     }
 
     // Create an array of additional body parts based on the role
@@ -51,12 +61,18 @@ function getCreepBodyParts(room: Room, role: string): [BodyPartConstant[], numbe
             nextParts = [WORK, CARRY, MOVE];
         } else if (role === 'queen' || role === 'hauler' || role === 'filler') {
             nextParts = [CARRY, MOVE];
+        } else if (role === 'healer') {
+            nextParts = [HEAL, MOVE];
         } else if (role === 'defender' || role === 'attacker') {
-            nextParts = [TOUGH, MOVE, ATTACK];
+            nextParts = [TOUGH, MOVE, ATTACK, MOVE];
         } else if (role === 'claimer') {
             nextParts = [CLAIM, MOVE];
         } else {
             break;
+        }
+
+        if (role === 'attacker' && randomRoll < 0.5) {
+            nextParts = [RANGED_ATTACK, MOVE, TOUGH, MOVE];
         }
 
         const nextCost = nextParts.reduce(
@@ -102,6 +118,7 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
         scout: { count: 0, priority: 10 }, // only spawn a scout if we have a remote room to scout, medium priority,
         filler: { count: 0, priority: 15 }, // filler creeps are only spawned if we have a fill task and sufficient energy, medium priority
         goat: { count: 0, priority: 5 }, // goat creeps are only spawned if we have a goat task and sufficient energy, medium priority
+        healer: { count: 0, priority: 5 }, // healer creeps are only spawned if we have a heal task and sufficient energy, medium priority
     };
 
     // if we have more than 10 builder tasks, spawn more builders, but not more than the room control level
@@ -148,6 +165,11 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     if (roomEnergyAvailable >= 500000 && (roleCounts.goat || 0) < 1) {
         idealCounts.goat.count = 1;
         idealCounts.goat.priority = 5;
+    }
+
+    // only spawn a healer if we have a heal task
+    if (taskCounts.healer > 0) {
+        idealCounts.healer.count = taskCounts.healer;
     }
 
     return idealCounts;
@@ -257,12 +279,21 @@ function spawnCreep(room: Room, role: string, context: RoomContext): [true, stri
 
 // transfer processing
 function processTransfers(room: Room, context: RoomContext): void {
+    const terminal = context.structuresByType[STRUCTURE_TERMINAL]?.[0] as StructureTerminal | undefined;
+
+    // if no transfer orders exist
     if (!room.memory.transferOrders || room.memory.transferOrders.length === 0) {
+        // if the terminal has contents, create a haul task to empty it into storage
+        if (terminal && terminal.store.getUsedCapacity() > 0) {
+            for (const resourceType in terminal.store) {
+                createTask(room, 'haul', terminal.id, 5, room.name, undefined, 105, resourceType as ResourceConstant, terminal.store.getUsedCapacity(resourceType as ResourceConstant)); // medium priority for hauling from terminal to storage
+            }
+        }
+
         return;
     }
 
     const transferOrder = room.memory.transferOrders[0];
-    const terminal = context.structuresByType[STRUCTURE_TERMINAL]?.[0] as StructureTerminal | undefined;
 
     if (!terminal) {
         debugLog(`No terminal found in room ${room.name}. Cannot process transfer orders.`);
@@ -281,6 +312,8 @@ function processTransfers(room: Room, context: RoomContext): void {
         // Fill the exported resource first. Energy exports must contain both
         // the sent amount and the transaction cost in the terminal.
         if (storeAmount < requiredResourceAmount) {
+            console.log(`Terminal in room ${room.name} does not have enough ${transferOrder.resource} to fulfill export order. Required: ${requiredResourceAmount}, Available: ${storeAmount}. Creating fill task.`);
+
             createTask(room, 'fill', terminal.id, 0, room.name, undefined, 105,
                 transferOrder.resource, requiredResourceAmount - storeAmount);
             return;
@@ -290,29 +323,20 @@ function processTransfers(room: Room, context: RoomContext): void {
         if (transferOrder.resource !== RESOURCE_ENERGY) {
             const terminalEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
             if (terminalEnergy < transactionCost) {
+                console.log(`Terminal in room ${room.name} does not have enough energy to fulfill export order. Required: ${transactionCost}, Available: ${terminalEnergy}. Creating fill task.`);
                 createTask(room, 'fill', terminal.id, 0, room.name, undefined, 105,
                     RESOURCE_ENERGY, transactionCost - terminalEnergy);
                 return;
             }
         }
 
-        if (terminal.cooldown === 0) {
+        if (terminal.cooldown === 0 && transferOrder.target !== 'market') {
             const transferResult = terminal.send(transferOrder.resource, transferOrder.amount, transferOrder.target);
+            console.log(`Attempting to export ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}.`);
 
             if (transferResult === OK) {
-                debugLog(`Successfully exported ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}.`);
+                console.log(`Successfully exported ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}.`);
 
-                // Remove the completed export. Older versions of transferOrder()
-                // also queued the transaction cost as a second energy export;
-                // discard that legacy companion order instead of sending it.
-                const legacyEnergyOrder = room.memory.transferOrders[1];
-                if (legacyEnergyOrder &&
-                    legacyEnergyOrder.type === 'export' &&
-                    legacyEnergyOrder.resource === RESOURCE_ENERGY &&
-                    legacyEnergyOrder.target === transferOrder.target &&
-                    legacyEnergyOrder.amount === transactionCost) {
-                    room.memory.transferOrders.splice(1, 1);
-                }
                 room.memory.transferOrders.shift();
 
                 // create the import order in the target room's memory
@@ -328,33 +352,150 @@ function processTransfers(room: Room, context: RoomContext): void {
                 if (!targetRoomMemory.transferOrders) {
                     targetRoomMemory.transferOrders = [];
                 }
-
-                // add the import order to the target room's memory
-                targetRoomMemory.transferOrders.push({
-                    resource: transferOrder.resource,
-                    amount: transferOrder.amount,
-                    target: room.name,
-                    type: 'import',
-                });
             } else {
-                debugLog(`Failed to export ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}. Error code: ${transferResult}`);
+                console.log(`Failed to export ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}. Error code: ${transferResult}`);
+            }
+        } else if (transferOrder.target === 'market' && terminal.cooldown === 0) {
+            // get the average selling price of the resource in the market
+            const marketSellOrders = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: transferOrder.resource });
+            const averagePrice = marketSellOrders.reduce((sum, order) => sum + order.price, 0) / marketSellOrders.length;
+
+            let marketOrder = Game.market.getAllOrders({ type: ORDER_BUY, resourceType: transferOrder.resource });
+            let highestTransactionCost = 0;
+
+            // sort the market orders by price, highest first
+            console.log(`market report for ${room.name} for ${transferOrder.resource}: price: ${averagePrice} ± ${averagePrice * 0.5}`);
+            for (const marketAsk of marketOrder) {
+                // only accept that have a room name associated with them, since we need to calculate the transaction cost
+                if (!marketAsk.roomName) continue;
+
+                const transferCost = Game.market.calcTransactionCost(transferOrder.amount, room.name, marketAsk.roomName);
+                console.log(`\t${transferCost} to send ${transferOrder.amount} ${transferOrder.resource} to ${marketAsk.roomName}`);
+
+                if (transferCost > highestTransactionCost) {
+                    highestTransactionCost = transferCost;
+                }
+            }
+
+            // fill the terminal to the highest transaction cost if we don't have enough energy in the terminal to cover it
+            if (highestTransactionCost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) {
+                const neededEnergy = highestTransactionCost - terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+
+                if (neededEnergy > terminal.store.getFreeCapacity(RESOURCE_ENERGY)) {
+                    console.log(`Not enough free capacity in terminal to fill energy for market transfer. Needed: ${neededEnergy}, Free: ${terminal.store.getFreeCapacity(RESOURCE_ENERGY)}`);
+
+                    // If we don't have enough free capacity, we can't fill the terminal
+                    return;
+                }
+
+                console.log(`Requesting terminal in room ${room.name} to fill ${neededEnergy} energy for market transfer.`);
+
+                createTask(room, 'fill', terminal.id, 0, room.name, undefined, 105, RESOURCE_ENERGY, neededEnergy);
+                return;
+            }
+
+            // filter the market orders, removing anything 10% below the average price
+            marketOrder = marketOrder.filter(order => order.price >= averagePrice * 0.5);
+
+            if (marketOrder.length > 0) {
+                // find the best order to sell to, based on price and amount
+                const bestOrder = marketOrder.reduce((best, order) => {
+                    if (order.price > best.price || (order.price === best.price && order.amount > best.amount)) {
+                        return order;
+                    }
+                    return best;
+                }, marketOrder[0]);
+
+                if (bestOrder && bestOrder.roomName) {
+                    const dealResult = Game.market.deal(bestOrder.id, transferOrder.amount, room.name);
+                    console.log(`Deal result: ${dealResult}`);
+
+                    if (dealResult === OK) {
+                        console.log(`Successfully sold ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName} for ${bestOrder.price} credits each.`);
+
+                        Game.notify(`Sold ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName} for ${bestOrder.price} credits each.`);
+                    } else {
+                        console.log(`Failed to sell ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName}. Error: ${dealResult}`);
+                    }
+                }
             }
         }
 
         return;
-    } else {
-        // if the store is empty, we can consider the transfer complete and remove the order
-        if (storeAmount == 0) {
-            debugLog(`Import order for ${transferOrder.amount} ${transferOrder.resource} from room ${transferOrder.target} to room ${room.name} is complete.`);
+    }
+}
 
-            // remove task
-            room.memory.transferOrders.shift();
+function processProduction(room: Room, context: RoomContext): void {
+    // get the factory orders and lab orders from the room memory
+    const factoryOrders = room.memory.factoryOrders || [];
+    const factory = context.structuresByType[STRUCTURE_FACTORY]?.[0] as StructureFactory | undefined;
 
-            return;
+    const labOrders = room.memory.labOrders || [];
+    const labs = context.structuresByType[STRUCTURE_LAB] as StructureLab[] | undefined;
+
+    // if we have factory orders, process them
+    if (factoryOrders.length > 0 && factory && factory.cooldown === 0) {
+        const factoryOrder = factoryOrders[0];
+
+        if (factory.store.getUsedCapacity(factoryOrder.resource) > 0) {
+            // factory has produced, lets create a haul task to move the produced resource to storage
+            createTask(room, 'haul', factory.id, 5, room.name, undefined, 105, factoryOrder.resource as ResourceConstant, factory.store.getUsedCapacity(factoryOrder.resource));
+        } else {
+            let allThresholdsMet = true;
+
+            for (const [resourceType, threshold] of factoryOrder.thresholds) {
+                if (factory.store.getUsedCapacity(resourceType) < threshold) {
+                    // create a fill task for the factory to fill the resource
+                    createTask(room, 'fill', factory.id, 0, room.name, undefined, 105, resourceType as ResourceConstant, threshold - factory.store.getUsedCapacity(resourceType));
+
+                    allThresholdsMet = false;
+                }
+            }
+
+            // if all thresholds are met, run the factory production
+            if (allThresholdsMet) {
+                factory.produce(factoryOrder.resource as any);
+            }
+        }
+    }
+
+    // if we have lab orders
+    if (labOrders.length > 0 && labs && labs.length >= 3) {
+        const labOrder = labOrders[0];
+        // Process the lab order
+
+        // if our input lab is met, push it to array
+        const labs: StructureLab[] = [];
+
+        // check if the inputs are met
+        for (const [inputResource, inputAmount, labId] of labOrder.inputs) {
+            const lab = Game.getObjectById(labId) as StructureLab | null;
+
+            if (!lab) continue;
+            if (lab.store.getUsedCapacity(inputResource) || 0 < inputAmount) {
+                // create a fill task for the lab to fill the input resource
+                createTask(room, 'fill', lab.id, 0, room.name, undefined, 105, inputResource as ResourceConstant, inputAmount - (lab.store.getUsedCapacity(inputResource) || 0));
+
+                continue;
+            };
+
+            labs.push(lab);
         }
 
-        // create a haul task to move the resource from the terminal to storage or other structures
-        createTask(room, 'haul', terminal.id, 0, room.name, undefined, 105, transferOrder.resource, storeAmount); // high priority for hauling from terminal
+        if (labs.length === labOrder.inputs.length) {
+            const [outputResource, outputLabId] = labOrder.output;
+
+            const outputLab = Game.getObjectById(outputLabId) as StructureLab | null;
+            if (outputLab && outputLab.cooldown === 0) {
+                // if we produced the output resource, create a haul task to move it to storage
+                if ((outputLab.store.getUsedCapacity(outputResource) || 0) > 0) {
+                    createTask(room, 'haul', outputLab.id, 5, room.name, undefined, 105, outputResource as ResourceConstant, (outputLab.store.getUsedCapacity(outputResource) || 0));
+                } else {
+                    // if we have not produced, attempt to produce the output resource
+                    outputLab.runReaction(labs[0], labs[1]);
+                }
+            }
+        }
     }
 }
 
@@ -476,17 +617,22 @@ function scanRoom(room: Room, context: RoomContext): void {
         }
     }
 
-    // request containers with 25% fill to be hauled to parent room
+    // request containers with resources to be hauled if they are above a certain threshold
     for (const container of context.containers) {
-        if (container.store.getUsedCapacity(RESOURCE_ENERGY) <= container.store.getCapacity(RESOURCE_ENERGY) * 0.25) continue;
-        createTask(room, 'haul', container.id, 10, room.name, undefined, 105, RESOURCE_ENERGY); // medium priority for hauling from remote containers
+        if (container.store.getUsedCapacity() <= 0) continue;
+        // for each resource in the container, create a haul task for it
+        for (const resourceType in container.store) {
+            if (resourceType === RESOURCE_ENERGY && container.store[resourceType] < 500) continue; // only haul energy if there is at least 500 energy in the container
+
+            createTask(room, 'haul', container.id, 10, room.name, undefined, 105, resourceType as ResourceConstant); // medium priority for hauling from remote containers
+        }
     }
 
     // get all spawns and extensions that are not full and create a fill task for them
-    for (const structure of context.spawnEnergyReceivers) {
+    /*for (const structure of context.spawnEnergyReceivers) {
         if (structure.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
         createTask(room, 'fill', structure.id, 5, room.name); // medium priority for filling spawns and extensions
-    }
+    }*/
 
     // get total count of stored energy from storage if it exists
     const storedEnergy = getStoredEnergy(context);
@@ -498,6 +644,10 @@ function scanRoom(room: Room, context: RoomContext): void {
     }
 
     debugLog(`Room ${room.name} scanned. Found ${context.sources.length} energy sources.`);
+
+    // conduct business logic for the room, such as processing transfers and production
+    processTransfers(room, context);
+    processProduction(room, context);
 }
 
 export function resetRoom(room: Room): void {
@@ -571,10 +721,10 @@ function runColonyDefense(room: Room, context: RoomContext): void {
         spawnCreep(room, 'defender', context);
     }
 
-    for (const structure of context.energyReceivers) {
+    /*for (const structure of context.energyReceivers) {
         if (structure.store.getFreeCapacity(RESOURCE_ENERGY) === 0) continue;
         createTask(room, 'fill', structure.id, 5); // medium priority for filling structures
-    }
+    }*/
 
     // have harvesters continue to harvest
     for (const source of context.sources) {
@@ -613,11 +763,6 @@ function runColony(room: Room): void {
         scanRoom(room, context);
     }
 
-    // Transfer orders need tick-level progress for hauling, terminal cooldowns,
-    // and sends; tying this to the 100-tick room scan makes them appear stalled.
-    if (room.memory.transferOrders && room.memory.transferOrders.length > 0) {
-        processTransfers(room, context);
-    }
 
     // every 10 ticks, we should transfer energy from links to the link closet to storage
     if (Game.time % 10 === 0 && room.memory.storageLink) {

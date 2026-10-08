@@ -85,6 +85,25 @@ export function runFiller(creep: Creep, context: RoomContext) {
         return;
     }
 
+    // check if the creep is holding onto other resources that are not the task's resource type, and take them to storage if so
+    const creepResources = Object.keys(creep.store)
+    if (creepResources.length > 0) {
+        for (const res of creepResources) {
+            if (res === resourceType) continue;
+
+            if (creep.pos.getRangeTo(context.room.storage!) > 1) {
+                if (creep.fatigue === 0) creep.travelTo(context.room.storage!);
+
+                return;
+            }
+
+            const transferResult = creep.transfer(context.room.storage!, res as ResourceConstant);
+            if (transferResult !== OK) {
+                debugLog(`Creep ${creep.name} encountered an unexpected error while trying to transfer ${res} to storage: ${transferResult}`);
+            }
+        }
+    }
+
     // travel to the room of the task if not already there
     if (creep.room.name !== task.roomId) {
         if (creep.fatigue === 0) creep.travelTo(new RoomPosition(25, 25, task.roomId));
@@ -271,6 +290,9 @@ export function runHauler(creep: Creep, context: RoomContext) {
         }
 
         const withdrawResult = creep.withdraw(target, task.resourceType || RESOURCE_ENERGY);
+
+        creep.say(`${withdrawResult}, ${task.resourceType || RESOURCE_ENERGY}`);
+
         if (withdrawResult === ERR_NOT_ENOUGH_RESOURCES) {
             debugLog(`Target ${target.id} does not have enough resources for creep ${creep.name}`);
 

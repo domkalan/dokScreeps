@@ -34,6 +34,8 @@ function buildTaskIndex(roomName: string): TaskIndexEntry {
             case 'fill': counts.filler = (counts.filler || 0) + 1; break;
             case 'build': counts.builder = (counts.builder || 0) + 1; break;
             case 'attack': counts.attacker = (counts.attacker || 0) + 1; break;
+            case 'heal': counts.healer = (counts.healer || 0) + 1; break;
+            case 'defend': counts.defender = (counts.defender || 0) + 1; break;
             case 'claim':
             case 'reserve':
                 counts.claimer = (counts.claimer || 0) + 1;

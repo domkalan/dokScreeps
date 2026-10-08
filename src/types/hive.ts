@@ -48,4 +48,5 @@ export interface HiveMemory {
     interShard: HiveIntershardData;
     lastScan: number;
     scoutingRoom?: string;
+    scoutingDisabled?: boolean;
 }

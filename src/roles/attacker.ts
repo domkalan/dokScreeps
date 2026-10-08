@@ -1,4 +1,4 @@
-import { RoomContext } from "utils/Context";
+import { RoomContext, GLOBAL_CONTEXT } from "utils/Context";
 import { completeTask, findTaskForCreep, getTaskById } from '../utils/TaskManager';
 import { runDefender } from './defender';
 
@@ -39,6 +39,46 @@ export function runAttacker(creep: Creep, context: RoomContext): void {
         debugLog(`Creep ${creep.name} has no valid target to attack.`);
 
         completeTask(creep); // Mark the task as complete if the target is invalid
+
+        return;
+    }
+
+    // if structure is an invader core, handle it differently
+    if (target instanceof Structure && target.structureType === STRUCTURE_INVADER_CORE) {
+        // Handle invader core specific logic
+
+        if (creep.pos.getRangeTo(target) > 12) {
+            if (creep.fatigue === 0) {
+                creep.travelTo(target);
+
+                return;
+            }
+
+            // scan for creeps in this room within 18 range of the invader core
+            const nearbyHostiles = GLOBAL_CONTEXT[creep.room.name].hostiles.filter(hostile => hostile.pos.getRangeTo(target) <= 8);
+
+            if (nearbyHostiles.length > 0) {
+                return;
+            }
+
+            // if we have ranged attack, attack the invader core from range
+            if (creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+                const rangedAttackResult = creep.rangedAttack(nearbyHostiles[0]);
+
+                if (rangedAttackResult === ERR_NOT_IN_RANGE) {
+                    if (creep.fatigue === 0) creep.travelTo(nearbyHostiles[0]);
+                }
+
+                return;
+            } else {
+                // if we don't have ranged attack, move towards the invader core and attack
+                const attackResult = creep.attack(nearbyHostiles[0]);
+
+                if (attackResult === ERR_NOT_IN_RANGE) {
+                    if (creep.fatigue === 0) creep.travelTo(nearbyHostiles[0]);
+                }
+            }
+        }
 
         return;
     }
