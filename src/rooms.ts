@@ -141,9 +141,9 @@ function getIdealCreepCount(room: Room, context: RoomContext, roleCounts: { [rol
     }
 
     // if we have any filler jobs, spawn a filler creep if we have enough energy
-    if (Math.max(taskCounts.filler + taskCounts.filler, 1) > idealCounts.filler.count && roomEnergyAvailable >= 75000) {
+    if (Math.max(taskCounts.filler, 1) > idealCounts.filler.count && roomEnergyAvailable >= 75000) {
         // increase the number of fillers to match the number of tasks, but not more than the room control level
-        idealCounts.filler.count = 1;
+        idealCounts.filler.count = roomControlLevel >= 6 ? 2 : 1;
     }
 
     if (taskCounts.claimer > 0 && (roomEnergyAvailable >= 75000 || typeof room.memory.expandTo !== 'undefined')) {
@@ -356,6 +356,15 @@ function processTransfers(room: Room, context: RoomContext): void {
                 console.log(`Failed to export ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to ${transferOrder.target}. Error code: ${transferResult}`);
             }
         } else if (transferOrder.target === 'market' && terminal.cooldown === 0) {
+            // terminal should have minimum 1000 energy to fulfill market export orders, if not, create a fill task for the terminal
+            if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) < 1000) {
+                console.log(`Terminal in room ${room.name} does not have enough energy to fulfill market export order. Required: 1000, Available: ${terminal.store.getUsedCapacity(RESOURCE_ENERGY)}. Creating fill task.`);
+
+                createTask(room, 'fill', terminal.id, 0, room.name, undefined, 105, RESOURCE_ENERGY, 1000 - terminal.store.getUsedCapacity(RESOURCE_ENERGY));
+
+                return;
+            }
+
             // get the average selling price of the resource in the market
             const marketSellOrders = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: transferOrder.resource });
             const averagePrice = marketSellOrders.reduce((sum, order) => sum + order.price, 0) / marketSellOrders.length;
@@ -413,7 +422,15 @@ function processTransfers(room: Room, context: RoomContext): void {
                     if (dealResult === OK) {
                         console.log(`Successfully sold ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName} for ${bestOrder.price} credits each.`);
 
-                        Game.notify(`Sold ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName} for ${bestOrder.price} credits each.`);
+                        Game.notify(`Sold ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName} for ${bestOrder.price} credits each. Total credits: ${transferOrder.amount * bestOrder.price}`);
+
+                        if (room.memory.transferOrders.length > 1) {
+                            const order = room.memory.transferOrders.shift();
+                            // put order at the end of the array so we can process the next order
+                            if (order) {
+                                room.memory.transferOrders.push(order);
+                            }
+                        }
                     } else {
                         console.log(`Failed to sell ${transferOrder.amount} ${transferOrder.resource} from room ${room.name} to market order in ${bestOrder.roomName}. Error: ${dealResult}`);
                     }
@@ -454,7 +471,18 @@ function processProduction(room: Room, context: RoomContext): void {
 
             // if all thresholds are met, run the factory production
             if (allThresholdsMet) {
-                factory.produce(factoryOrder.resource as any);
+                const result = factory.produce(factoryOrder.resource as any);
+
+                if (result === OK) {
+                    debugLog(`Factory in room ${room.name} produced ${factoryOrder.resource}.`);
+
+                    const order = factoryOrders.shift();
+
+                    if (order) {
+                        // put order at the end of the array so we can process the next order
+                        factoryOrders.push(order);
+                    }
+                }
             }
         }
     }
@@ -644,10 +672,6 @@ function scanRoom(room: Room, context: RoomContext): void {
     }
 
     debugLog(`Room ${room.name} scanned. Found ${context.sources.length} energy sources.`);
-
-    // conduct business logic for the room, such as processing transfers and production
-    processTransfers(room, context);
-    processProduction(room, context);
 }
 
 export function resetRoom(room: Room): void {
@@ -764,7 +788,7 @@ function runColony(room: Room): void {
     }
 
 
-    // every 10 ticks, we should transfer energy from links to the link closet to storage
+    // every 10 ticks, we should transfer energy from links to the link closet to storage, and run factory and transfer ops
     if (Game.time % 10 === 0 && room.memory.storageLink) {
         for (const link of context.links) {
             // if the link is the storage link, request haul if full
@@ -787,6 +811,10 @@ function runColony(room: Room): void {
                 debugLog(`Failed to transfer energy from link ${link.id} to storage link ${room.memory.storageLink} in room ${room.name}. Error code: ${transferResult}`);
             }
         }
+
+        // conduct business logic for the room, such as processing transfers and production
+        processTransfers(room, context);
+        processProduction(room, context);
     }
 
     // monitor the roles of creeps in the room

@@ -11,6 +11,10 @@ export function findResource(creep: Creep, context: RoomContext, resourceType: R
     if (resourceSources.length === 0) {
         debugLog(`No ${resourceType} is available in storage or containers for filler ${creep.name}`);
         if (Game.time % 25 === 0) creep.say(`NO ${resourceType}`);
+
+        // drop the task since there is no resource available, and let the hauler find a new task
+        completeTask(creep);
+
         return;
     }
 
@@ -18,6 +22,9 @@ export function findResource(creep: Creep, context: RoomContext, resourceType: R
     const closestSource = creep.pos.findClosestByPath(resourceSources);
     if (!closestSource) {
         debugLog(`Filler ${creep.name} could not find a path to stored ${resourceType}`);
+
+        completeTask(creep);
+
         return;
     }
 
